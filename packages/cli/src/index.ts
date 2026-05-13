@@ -778,7 +778,22 @@ async function commandDeploy(
   }
   lines.push(runCheckedCommand(deployCommand, cwd, runner));
   lines.push(`deployed with wrangler${envFlag}`);
+  lines.push(deploymentSummary());
   return lines.join("\n");
+}
+
+function deploymentSummary(): string {
+  return [
+    "Auth endpoints:",
+    "- /auth/signup",
+    "- /auth/login",
+    "- /auth/logout",
+    "- /auth/user",
+    "- /auth/magic-link/request",
+    "- /auth/password-reset/request",
+    "- /auth/email-verification/request",
+    "Cloudflare Email/DNS: verify sender and domain readiness in docs/cloudflare-email.md.",
+  ].join("\n");
 }
 
 function runCommand(

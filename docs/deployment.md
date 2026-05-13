@@ -45,6 +45,11 @@ not the generated secret. Provide `--previous-from-env NAME` or
 `--previous-from-stdin` when rotating without invalidating existing sessions and
 email tokens.
 
+After a successful deploy, the CLI prints the mounted auth endpoints and a
+Cloudflare Email/DNS readiness reminder. Treat that reminder as external setup:
+Wrangler can verify the binding exists, but sender/domain readiness still lives
+in Cloudflare Email configuration.
+
 Deploying without `--env` fails unless `doctor` proves the top-level Wrangler config is intentionally production-safe.
 
 The Deploy to Cloudflare button readiness checklist is tracked in `docs/deploy-to-cloudflare.md`.

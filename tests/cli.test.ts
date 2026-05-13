@@ -713,6 +713,9 @@ describe("CLI MVP", () => {
     expect(output.join("\n")).toContain(
       "deployed with wrangler --env production",
     );
+    expect(output.join("\n")).toContain("Auth endpoints:");
+    expect(output.join("\n")).toContain("/auth/password-reset/request");
+    expect(output.join("\n")).toContain("Cloudflare Email/DNS");
   });
 
   it("executes remote migrations before deploy when requested", async () => {

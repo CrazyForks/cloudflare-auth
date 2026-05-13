@@ -331,9 +331,34 @@ async function commandDeploy(parsed: ParsedArgs, cwd: string): Promise<string> {
       "Only deploy --dry-run is implemented in this local CLI build.",
     );
   }
-  await readWrangler(cwd);
+  const config = await readWrangler(cwd);
+  if (hasNamedEnvironments(config) && !envName) {
+    throw new Error(
+      "Deploy requires --env when Wrangler config uses named environments.",
+    );
+  }
+  const doctor = await commandDoctor(parsed, cwd);
+  if (!doctor.ok) {
+    throw new Error(`doctor failed before deploy:\n${doctor.lines.join("\n")}`);
+  }
+  const migrationStatus = await commandMigrate(
+    {
+      command: "migrate",
+      positionals: [],
+      flags: {
+        status: true,
+        remote: true,
+        ...(envName ? { env: envName } : {}),
+      },
+    },
+    cwd,
+  );
   const envFlag = envName ? ` --env ${envName}` : "";
-  return `doctor -> migrate status -> wrangler deploy${envFlag}`;
+  return [
+    `doctor --env ${envName ?? "default"}: ok`,
+    migrationStatus,
+    `wrangler deploy${envFlag}`,
+  ].join("\n");
 }
 
 function commandGenerate(parsed: ParsedArgs): string {

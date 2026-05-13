@@ -151,9 +151,19 @@ describe("CLI MVP", () => {
       cwd,
       stdout: (line) => deploy.push(line),
     });
-    expect(deploy[0]).toBe(
-      "doctor -> migrate status -> wrangler deploy --env production",
+    expect(deploy.join("\n")).toContain("doctor --env production: ok");
+    expect(deploy.join("\n")).toContain(
+      "wrangler d1 migrations list app-auth --remote --env production",
     );
+    expect(deploy.join("\n")).toContain("wrangler deploy --env production");
+
+    const ambiguous: string[] = [];
+    const deployCode = await runCli(["deploy", "--dry-run"], {
+      cwd,
+      stderr: (line) => ambiguous.push(line),
+    });
+    expect(deployCode).toBe(1);
+    expect(ambiguous.join("\n")).toContain("Deploy requires --env");
 
     const recovery: string[] = [];
     await runCli(

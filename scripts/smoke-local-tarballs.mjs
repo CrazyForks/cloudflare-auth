@@ -50,6 +50,7 @@ appPackage.dependencies["@cf-auth/hono"] = fileSpec("@cf-auth/hono");
 appPackage.dependencies["@cf-auth/worker"] = fileSpec("@cf-auth/worker");
 appPackage.devDependencies["@cf-auth/cli"] = fileSpec("@cf-auth/cli");
 appPackage.pnpm = {
+  ...(appPackage.pnpm ?? {}),
   overrides: Object.fromEntries(
     Array.from(tarballs.keys())
       .filter((name) => name.startsWith("@cf-auth/"))

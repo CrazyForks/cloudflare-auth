@@ -17,6 +17,7 @@ describe("CLI MVP", () => {
     const app = join(cwd, "my-app");
     expect(code).toBe(0);
     expect(existsSync(join(app, "src", "auth.config.ts"))).toBe(true);
+    expect(existsSync(join(app, "pnpm-workspace.yaml"))).toBe(true);
     expect(existsSync(join(app, "tsconfig.json"))).toBe(true);
     expect(existsSync(join(app, ".dev.vars"))).toBe(true);
     expect(existsSync(join(app, "migrations", "0001_initial.sql"))).toBe(true);
@@ -26,11 +27,23 @@ describe("CLI MVP", () => {
       name: string;
       dependencies: Record<string, string>;
       scripts: Record<string, string>;
+      pnpm: { onlyBuiltDependencies: string[] };
     };
     expect(generatedPackage.name).toBe("my-app");
     expect(generatedPackage.dependencies["@cf-auth/hono"]).toBe("0.0.0");
     expect(generatedPackage.dependencies["@cf-auth/worker"]).toBe("0.0.0");
     expect(generatedPackage.scripts.test).toBe("vitest run --passWithNoTests");
+    expect(generatedPackage.pnpm.onlyBuiltDependencies).toEqual([
+      "esbuild",
+      "sharp",
+      "workerd",
+    ]);
+    const pnpmWorkspace = await readFile(
+      join(app, "pnpm-workspace.yaml"),
+      "utf8",
+    );
+    expect(pnpmWorkspace).toContain("allowBuilds:");
+    expect(pnpmWorkspace).toContain("workerd: true");
     expect(JSON.stringify(generatedPackage)).not.toContain("workspace:");
     const tsconfig = await readFile(join(app, "tsconfig.json"), "utf8");
     expect(tsconfig).toContain('"module": "NodeNext"');

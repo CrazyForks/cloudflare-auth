@@ -117,7 +117,7 @@ async function commandInit(
   const target = resolve(cwd, parsed.positionals[0] ?? ".");
   if (parsed.flags["dry-run"]) {
     out(
-      "Would write package.json, tsconfig.json, auth.config.ts, wrangler.jsonc, migrations, .gitignore, .dev.vars, .dev.vars.example, and route mount snippets.",
+      "Would write package.json, pnpm-workspace.yaml, tsconfig.json, auth.config.ts, wrangler.jsonc, migrations, .gitignore, .dev.vars, .dev.vars.example, and route mount snippets.",
     );
     out(
       "Hono mount: app.route(authConfig.basePath, createAuthRoutes(authConfig));",
@@ -134,6 +134,10 @@ async function commandInit(
       null,
       2,
     ) + "\n",
+  );
+  await writeIfMissing(
+    join(target, "pnpm-workspace.yaml"),
+    pnpmWorkspaceTemplate(),
   );
   await writeIfMissing(join(target, "tsconfig.json"), tsconfigTemplate());
   await writeIfMissing(
@@ -520,7 +524,18 @@ function templatePackageJson(name: string) {
       vitest: "4.1.6",
     },
     engines: { node: ">=22.12.0" },
+    pnpm: {
+      onlyBuiltDependencies: ["esbuild", "sharp", "workerd"],
+    },
   };
+}
+
+function pnpmWorkspaceTemplate(): string {
+  return `allowBuilds:
+  esbuild: true
+  sharp: true
+  workerd: true
+`;
 }
 
 function authConfigTemplate(): string {

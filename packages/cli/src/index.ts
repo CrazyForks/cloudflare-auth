@@ -126,7 +126,7 @@ export async function runCli(
         );
         return 0;
       case "clean":
-        out(commandClean(parsed));
+        out(await commandClean(parsed, cwd, io.runCommand ?? runCommand));
         return 0;
       case "users":
       case "sessions":
@@ -967,11 +967,58 @@ async function readStdin(): Promise<string> {
   return value;
 }
 
-function commandClean(parsed: ParsedArgs): string {
+async function commandClean(
+  parsed: ParsedArgs,
+  cwd: string,
+  runner: CommandRunner,
+): Promise<string> {
   const target = targetMode(parsed);
-  const envFlag = parsed.flags.env ? ` --env ${parsed.flags.env}` : "";
+  const envName = parsed.flags.env as string | undefined;
+  const config = await readWrangler(cwd);
+  if (target.remote && hasNamedEnvironments(config) && !envName) {
+    throw new Error(
+      "Remote cleanup requires --env when Wrangler config uses named environments.",
+    );
+  }
+  const database = selectD1(config, envName);
   const remoteFlag = target.remote ? "--remote" : "--local";
-  return `wrangler d1 execute AUTH_DB ${remoteFlag}${envFlag} --command <redacted cleanup SQL>`;
+  const envArgs = target.remote && envName ? ["--env", envName] : [];
+  const command = {
+    command: "wrangler",
+    args: [
+      "d1",
+      "execute",
+      database.database_name,
+      remoteFlag,
+      ...envArgs,
+      "--yes",
+      "--command",
+      cleanupSql(Date.now()),
+    ],
+  };
+  const display = `wrangler d1 execute ${database.database_name} ${remoteFlag}${envArgs.length ? ` --env ${envName}` : ""} --command <redacted cleanup SQL>`;
+  if (parsed.flags["dry-run"]) {
+    return [
+      "Dry run only. Would execute cleanup with default retention windows.",
+      display,
+    ].join("\n");
+  }
+  const result = runCheckedCommand(command, cwd, runner);
+  return `${result}\ncleanup completed`;
+}
+
+function cleanupSql(now: number): string {
+  const day = 24 * 60 * 60 * 1000;
+  const sessionCutoff = now - 7 * day;
+  const tokenCutoff = now - 7 * day;
+  const rateLimitCutoff = now - day;
+  const eventCutoff = now - 90 * day;
+  return [
+    `DELETE FROM sessions WHERE expires_at < ${sessionCutoff} OR (revoked_at IS NOT NULL AND revoked_at < ${sessionCutoff})`,
+    `DELETE FROM verification_tokens WHERE expires_at < ${tokenCutoff} OR (used_at IS NOT NULL AND used_at < ${tokenCutoff}) OR (revoked_at IS NOT NULL AND revoked_at < ${tokenCutoff})`,
+    `DELETE FROM rate_limits WHERE reset_at < ${rateLimitCutoff}`,
+    `DELETE FROM auth_events WHERE created_at < ${eventCutoff}`,
+  ].join("; ");
 }
 
 function commandRecovery(parsed: ParsedArgs): string {

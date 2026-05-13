@@ -349,6 +349,63 @@ describe("CLI MVP", () => {
     expect(recovery.join("\n")).not.toMatch(/cfauth\.|cookie=.*cfauth/i);
   });
 
+  it("runs clean through Wrangler and keeps dry-runs redacted", async () => {
+    const cwd = await tempDir();
+    await writeWrangler(cwd);
+    const dryRun: string[] = [];
+    const dryRunCode = await runCli(
+      ["clean", "--dry-run", "--remote", "--env", "production"],
+      {
+        cwd,
+        stdout: (line) => dryRun.push(line),
+      },
+    );
+    expect(dryRunCode).toBe(0);
+    expect(dryRun.join("\n")).toContain(
+      "wrangler d1 execute app-auth --remote --env production --command <redacted cleanup SQL>",
+    );
+    expect(dryRun.join("\n")).not.toContain("DELETE FROM");
+
+    const calls: Array<{ args: string[]; sql: string }> = [];
+    const cleanCode = await runCli(["clean", "--local"], {
+      cwd,
+      runCommand: (_command, args) => {
+        calls.push({
+          args,
+          sql: args.at(-1) ?? "",
+        });
+        return { status: 0, stdout: "cleaned", stderr: "" };
+      },
+    });
+    expect(cleanCode).toBe(0);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.args.slice(0, -1)).toEqual([
+      "d1",
+      "execute",
+      "app-auth-dev",
+      "--local",
+      "--yes",
+      "--command",
+    ]);
+    expect(calls[0]?.sql).toContain("DELETE FROM sessions");
+    expect(calls[0]?.sql).toContain("DELETE FROM verification_tokens");
+    expect(calls[0]?.sql).toContain("DELETE FROM rate_limits");
+    expect(calls[0]?.sql).toContain("DELETE FROM auth_events");
+  });
+
+  it("rejects remote clean without an explicit named environment", async () => {
+    const cwd = await tempDir();
+    await writeWrangler(cwd);
+    const errors: string[] = [];
+    const code = await runCli(["clean", "--remote"], {
+      cwd,
+      stderr: (line) => errors.push(line),
+    });
+
+    expect(code).toBe(1);
+    expect(errors.join("\n")).toContain("Remote cleanup requires --env");
+  });
+
   it("doctor reports missing remote production secrets", async () => {
     const cwd = await tempDir();
     await writeWrangler(cwd);

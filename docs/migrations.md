@@ -34,3 +34,10 @@ await env.AUTH_DB.batch([
 ```
 
 Keep `auth_events` according to your product's audit-retention policy. If you do purge it, use `created_at` and a documented retention window rather than deleting all rows.
+
+The CLI cleanup wrapper applies the default v1 retention windows:
+
+```bash
+npx cf-auth@latest clean --dry-run --remote --env production
+npx cf-auth@latest clean --remote --env production
+```

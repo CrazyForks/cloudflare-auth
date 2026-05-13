@@ -1549,6 +1549,9 @@ async function handlePasswordResetConfirm(
     );
   if (!active?.user_id)
     return errorResponse("Invalid token", 400, "invalid_token");
+  const activeUser = await runtime.repos.users.findUserById(active.user_id);
+  if (!activeUser || activeUser.disabled_at !== null)
+    return errorResponse("Invalid token", 400, "invalid_token");
   const passwordHash = await passwordSemaphore(runtime).run(() =>
     hashPassword(body.password, {
       profile: runtime.config.passwordHashing.profile,
@@ -1563,6 +1566,11 @@ async function handlePasswordResetConfirm(
       now: Date.now(),
     });
   if (!consumed?.user_id)
+    return errorResponse("Invalid token", 400, "invalid_token");
+  const userBeforeUpdate = await runtime.repos.users.findUserById(
+    consumed.user_id,
+  );
+  if (!userBeforeUpdate || userBeforeUpdate.disabled_at !== null)
     return errorResponse("Invalid token", 400, "invalid_token");
   await runtime.repos.users.updatePasswordHash(
     consumed.user_id,

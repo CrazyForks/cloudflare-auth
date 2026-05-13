@@ -336,6 +336,45 @@ describe("auth HTTP runtime", () => {
     await expect(oldSession.json()).resolves.toEqual({ user: null });
   });
 
+  it("rejects password reset confirmation for disabled users", async () => {
+    const { authFetch, email, db } = await setup();
+    await signup(authFetch, "disabled-reset@example.com");
+    await authFetch("/auth/password/reset/request", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "disabled-reset@example.com" }),
+    });
+    const reset =
+      email.messages.find((item) => item.type === "reset")?.token ?? "";
+    const before = await db
+      .prepare("SELECT password_hash FROM users WHERE normalized_email = ?")
+      .bind("disabled-reset@example.com")
+      .first<{ password_hash: string }>();
+    await db
+      .prepare("UPDATE users SET disabled_at = ? WHERE normalized_email = ?")
+      .bind(Date.now(), "disabled-reset@example.com")
+      .run();
+
+    const confirm = await authFetch("/auth/password/reset/confirm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token: reset,
+        password: "new correct horse battery staple",
+      }),
+    });
+
+    expect(confirm.status).toBe(400);
+    await expect(confirm.json()).resolves.toMatchObject({
+      error: { code: "invalid_token" },
+    });
+    const after = await db
+      .prepare("SELECT password_hash FROM users WHERE normalized_email = ?")
+      .bind("disabled-reset@example.com")
+      .first<{ password_hash: string }>();
+    expect(after?.password_hash).toBe(before?.password_hash);
+  });
+
   it("rejects unsafe redirects, oversized bodies, missing production origins, and disallowed preflights", async () => {
     const limited = await setup({
       request: { maxBodyBytes: 8, requireOriginOnUnsafeMethods: true },

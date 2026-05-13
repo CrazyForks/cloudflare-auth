@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -176,6 +176,9 @@ describe("CLI MVP", () => {
             stdout: "",
             stderr: "not logged in as person@example.com",
           };
+        }
+        if (args[0] === "d1" && args[1] === "execute") {
+          return { status: 0, stdout: migrationStateJson(), stderr: "" };
         }
         return {
           status: 0,
@@ -360,6 +363,9 @@ describe("CLI MVP", () => {
         if (args[0] === "whoami") {
           return { status: 0, stdout: healthyWhoamiJson(), stderr: "" };
         }
+        if (args[0] === "d1" && args[1] === "execute") {
+          return { status: 0, stdout: migrationStateJson(), stderr: "" };
+        }
         return { status: 0, stdout: "[]", stderr: "" };
       },
     });
@@ -367,6 +373,44 @@ describe("CLI MVP", () => {
     expect(code).toBe(1);
     expect(errors.join("\n")).toContain("AUTH_SECRET is missing remotely");
     expect(errors.join("\n")).not.toContain("k_dev.");
+  });
+
+  it("doctor reports unapplied remote D1 migrations", async () => {
+    const cwd = await tempDir();
+    await writeWrangler(cwd);
+    const errors: string[] = [];
+    const code = await runCli(["doctor", "--env", "production"], {
+      cwd,
+      stderr: (line) => errors.push(line),
+      runCommand: (_command, args) => {
+        if (args[0] === "--version") {
+          return { status: 0, stdout: "4.90.1\n", stderr: "" };
+        }
+        if (args[0] === "whoami") {
+          return { status: 0, stdout: healthyWhoamiJson(), stderr: "" };
+        }
+        if (args[0] === "d1" && args[1] === "execute") {
+          return {
+            status: 0,
+            stdout: migrationStateJson(["0001"], "1"),
+            stderr: "",
+          };
+        }
+        return {
+          status: 0,
+          stdout: JSON.stringify([{ name: "AUTH_SECRET" }]),
+          stderr: "",
+        };
+      },
+    });
+
+    expect(code).toBe(1);
+    expect(errors.join("\n")).toContain(
+      "D1 migration 0002 has not been applied remotely",
+    );
+    expect(errors.join("\n")).toContain(
+      "npx cf-auth@latest migrate --remote --env production",
+    );
   });
 
   it("executes deploy through Wrangler after doctor and migration status", async () => {
@@ -384,6 +428,9 @@ describe("CLI MVP", () => {
         }
         if (args[0] === "whoami") {
           return { status: 0, stdout: healthyWhoamiJson(), stderr: "" };
+        }
+        if (args[0] === "d1" && args[1] === "execute") {
+          return { status: 0, stdout: migrationStateJson(), stderr: "" };
         }
         return {
           status: 0,
@@ -406,6 +453,21 @@ describe("CLI MVP", () => {
       {
         command: "wrangler",
         args: ["whoami", "--json"],
+        cwd,
+      },
+      {
+        command: "wrangler",
+        args: [
+          "d1",
+          "execute",
+          "app-auth",
+          "--remote",
+          "--env",
+          "production",
+          "--json",
+          "--command",
+          migrationStateSql(),
+        ],
         cwd,
       },
       {
@@ -452,6 +514,9 @@ describe("CLI MVP", () => {
         if (args[0] === "whoami") {
           return { status: 0, stdout: healthyWhoamiJson(), stderr: "" };
         }
+        if (args[0] === "d1" && args[1] === "execute") {
+          return { status: 0, stdout: migrationStateJson(), stderr: "" };
+        }
         return {
           status: 0,
           stdout:
@@ -467,6 +532,7 @@ describe("CLI MVP", () => {
     expect(calls).toEqual([
       "wrangler --version",
       "wrangler whoami --json",
+      `wrangler d1 execute app-auth --remote --env production --json --command ${migrationStateSql()}`,
       "wrangler secret list --format json --env production",
       "wrangler d1 migrations list app-auth --remote --env production",
       "wrangler d1 migrations apply app-auth --remote --env production",
@@ -591,6 +657,9 @@ async function tempDir() {
 }
 
 async function writeWrangler(cwd: string) {
+  await mkdir(join(cwd, "migrations"), { recursive: true });
+  await writeFile(join(cwd, "migrations", "0001_initial.sql"), "-- test\n");
+  await writeFile(join(cwd, "migrations", "0002_indexes.sql"), "-- test\n");
   await writeFile(
     join(cwd, "wrangler.jsonc"),
     JSON.stringify(
@@ -637,12 +706,26 @@ function remoteSecretRunner(accounts = [{ id: "acct_prod" }]) {
     if (args[0] === "whoami") {
       return { status: 0, stdout: healthyWhoamiJson(accounts), stderr: "" };
     }
+    if (args[0] === "d1" && args[1] === "execute") {
+      return { status: 0, stdout: migrationStateJson(), stderr: "" };
+    }
     return {
       status: 0,
       stdout: JSON.stringify([{ name: "AUTH_SECRET" }]),
       stderr: "",
     };
   };
+}
+
+function migrationStateSql() {
+  return "SELECT version FROM auth_schema_migrations ORDER BY version; SELECT value FROM auth_meta WHERE key = 'schema_version';";
+}
+
+function migrationStateJson(versions = ["0001", "0002"], schemaVersion = "2") {
+  return JSON.stringify([
+    { results: versions.map((version) => ({ version })) },
+    { results: [{ value: schemaVersion }] },
+  ]);
 }
 
 function healthyWhoamiJson(accounts = [{ id: "acct_prod" }]) {

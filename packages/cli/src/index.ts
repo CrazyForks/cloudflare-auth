@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { readFile, mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { randomBytes } from "node:crypto";
@@ -239,6 +239,11 @@ async function commandDoctor(
   const checks: DoctorCheck[] = [];
   let ok = true;
   let config: WranglerConfig | null = null;
+  let d1: {
+    binding: string;
+    database_name: string;
+    database_id?: string;
+  } | null = null;
   const envName = parsed.flags.env as string | undefined;
   const addCheck = (check: DoctorCheck) => {
     checks.push(check);
@@ -279,7 +284,8 @@ async function commandDoctor(
       report: buildDoctorReport(checks, envName),
     };
   }
-  const d1 = selected?.d1_databases?.find((item) => item.binding === "AUTH_DB");
+  d1 =
+    selected?.d1_databases?.find((item) => item.binding === "AUTH_DB") ?? null;
   if (!d1) {
     addCheck({
       id: "d1_binding",
@@ -301,7 +307,23 @@ async function commandDoctor(
       message: "D1 binding AUTH_DB configured",
     });
   }
+  const localMigrationVersions = await readLocalMigrationVersions(cwd);
+  if (localMigrationVersions.length === 0) {
+    addCheck({
+      id: "migration_files",
+      status: "fail",
+      message: "Local migration files are missing",
+      fix: "npx cf-auth@latest init --repair",
+    });
+  } else {
+    addCheck({
+      id: "migration_files",
+      status: "pass",
+      message: "Local migration files found",
+    });
+  }
   const vars = selected?.vars ?? {};
+  const remoteTarget = vars.AUTH_ENV === "production" || Boolean(envName);
   if (!vars.AUTH_ENV) {
     addCheck({
       id: "auth_env",
@@ -330,8 +352,22 @@ async function commandDoctor(
       message: "Public origin configured",
     });
   }
-  if (vars.AUTH_ENV === "production" || envName) {
+  if (remoteTarget) {
     addCheck(checkCloudflareAccount(cwd, runner, config));
+  }
+  if (d1 && localMigrationVersions.length > 0) {
+    addCheck(
+      checkD1MigrationState({
+        cwd,
+        runner,
+        databaseName: d1.database_name,
+        envName,
+        remote: remoteTarget,
+        localMigrationVersions,
+      }),
+    );
+  }
+  if (remoteTarget) {
     const email = selected?.send_email?.find(
       (item) => item.name === "AUTH_EMAIL",
     );
@@ -546,6 +582,127 @@ function parseWhoamiResult(
     };
   }
   return { ok: true, accounts };
+}
+
+function checkD1MigrationState(options: {
+  cwd: string;
+  runner: CommandRunner;
+  databaseName: string;
+  envName: string | undefined;
+  remote: boolean;
+  localMigrationVersions: string[];
+}): DoctorCheck {
+  const modeFlag = options.remote ? "--remote" : "--local";
+  const result = options.runner(
+    "wrangler",
+    [
+      "d1",
+      "execute",
+      options.databaseName,
+      modeFlag,
+      ...(options.remote && options.envName ? ["--env", options.envName] : []),
+      "--json",
+      "--command",
+      migrationStateSql(),
+    ],
+    { cwd: options.cwd },
+  );
+  const target = options.remote ? "remote" : "local";
+  if (result.status !== 0) {
+    return {
+      id: "d1_migrations",
+      status: "fail",
+      message: `D1 ${target} migration state could not be read`,
+      fix: migrationFix(options.remote, options.envName),
+    };
+  }
+  const remoteState = parseD1MigrationState(result.stdout);
+  if (!remoteState.ok) return remoteState.check;
+  const applied = new Set(remoteState.versions);
+  const missing = options.localMigrationVersions.filter(
+    (version) => !applied.has(version),
+  );
+  if (missing.length > 0) {
+    return {
+      id: "d1_migrations",
+      status: "fail",
+      message: `D1 migration ${missing[0]} has not been applied ${target}ly`,
+      fix: migrationFix(options.remote, options.envName),
+    };
+  }
+  const latest = options.localMigrationVersions.at(-1);
+  const expectedSchemaVersion = latest
+    ? String(Number.parseInt(latest, 10))
+    : undefined;
+  if (
+    expectedSchemaVersion &&
+    remoteState.schemaVersion !== expectedSchemaVersion
+  ) {
+    return {
+      id: "d1_migrations",
+      status: "fail",
+      message: `D1 auth_meta schema_version is ${remoteState.schemaVersion ?? "missing"}; expected ${expectedSchemaVersion}`,
+      fix: migrationFix(options.remote, options.envName),
+    };
+  }
+  return {
+    id: "d1_migrations",
+    status: "pass",
+    message: `D1 migrations are applied ${target}ly`,
+  };
+}
+
+function migrationStateSql(): string {
+  return "SELECT version FROM auth_schema_migrations ORDER BY version; SELECT value FROM auth_meta WHERE key = 'schema_version';";
+}
+
+function migrationFix(remote: boolean, envName: string | undefined): string {
+  return remote
+    ? `npx cf-auth@latest migrate --remote${envName ? ` --env ${envName}` : ""}`
+    : "npx cf-auth@latest migrate --local";
+}
+
+function parseD1MigrationState(
+  stdout: string,
+):
+  | { ok: true; versions: string[]; schemaVersion: string | undefined }
+  | { ok: false; check: DoctorCheck } {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    return {
+      ok: false,
+      check: {
+        id: "d1_migrations",
+        status: "fail",
+        message: "D1 migration state response could not be parsed",
+        fix: "rerun doctor after confirming wrangler d1 execute --json works",
+      },
+    };
+  }
+  const state = collectD1MigrationState(parsed);
+  return { ok: true, ...state };
+}
+
+function collectD1MigrationState(value: unknown): {
+  versions: string[];
+  schemaVersion: string | undefined;
+} {
+  const versions = new Set<string>();
+  let schemaVersion: string | undefined;
+  const visit = (item: unknown) => {
+    if (Array.isArray(item)) {
+      for (const child of item) visit(child);
+      return;
+    }
+    if (!isRecord(item)) return;
+    if (typeof item.version === "string") versions.add(item.version);
+    if (typeof item.value === "string") schemaVersion = item.value;
+    for (const key of ["result", "results"]) visit(item[key]);
+  };
+  visit(value);
+  return { versions: [...versions].sort(), schemaVersion };
 }
 
 async function commandDeploy(
@@ -867,6 +1024,20 @@ interface WranglerConfig {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+async function readLocalMigrationVersions(cwd: string): Promise<string[]> {
+  try {
+    const files = await readdir(join(cwd, "migrations"));
+    return files
+      .flatMap((file) => {
+        const match = file.match(/^(\d+)_.*\.sql$/);
+        return match?.[1] ? [match[1]] : [];
+      })
+      .sort();
+  } catch {
+    return [];
+  }
 }
 
 async function readWrangler(cwd: string): Promise<WranglerConfig> {

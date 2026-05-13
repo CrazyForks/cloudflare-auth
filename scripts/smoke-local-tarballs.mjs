@@ -48,6 +48,9 @@ const appPackagePath = join(appDir, "package.json");
 const appPackage = JSON.parse(await readFile(appPackagePath, "utf8"));
 appPackage.dependencies["@cf-auth/hono"] = fileSpec("@cf-auth/hono");
 appPackage.dependencies["@cf-auth/worker"] = fileSpec("@cf-auth/worker");
+appPackage.dependencies["@cf-auth/email-cloudflare"] = fileSpec(
+  "@cf-auth/email-cloudflare",
+);
 appPackage.devDependencies["@cf-auth/cli"] = fileSpec("@cf-auth/cli");
 appPackage.devDependencies["@cf-auth/testing"] = fileSpec("@cf-auth/testing");
 appPackage.pnpm = {

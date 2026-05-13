@@ -7,6 +7,7 @@
   },
   "dependencies": {
     "@cf-auth/client": "workspace:*",
+    "@cf-auth/email-cloudflare": "workspace:*",
     "@cf-auth/hono": "workspace:*",
     "@cf-auth/worker": "workspace:*",
     "hono": "4.12.18"

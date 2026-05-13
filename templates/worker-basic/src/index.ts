@@ -1,13 +1,25 @@
 import {
+  byEnvironment,
   createAuthHandler,
   defineAuthConfig,
   terminalEmail,
 } from "@cf-auth/worker";
+import { cloudflareEmail } from "@cf-auth/email-cloudflare";
 
 const authConfig = defineAuthConfig({
   appName: "My App",
   basePath: "/auth",
-  email: terminalEmail({ outbox: true }),
+  email: byEnvironment({
+    development: terminalEmail({ outbox: true }),
+    preview: cloudflareEmail({
+      binding: "AUTH_EMAIL",
+      from: { email: "auth@example.com", name: "My App" },
+    }),
+    production: cloudflareEmail({
+      binding: "AUTH_EMAIL",
+      from: { email: "auth@example.com", name: "My App" },
+    }),
+  }),
 });
 const authHandler = createAuthHandler(authConfig);
 

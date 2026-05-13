@@ -50,6 +50,9 @@ importers:
 
   examples/hono-basic:
     dependencies:
+      '@cf-auth/email-cloudflare':
+        specifier: workspace:*
+        version: link:../../packages/email-cloudflare
       '@cf-auth/hono':
         specifier: workspace:*
         version: link:../../packages/hono
@@ -75,6 +78,9 @@ importers:
       '@cf-auth/client':
         specifier: workspace:*
         version: link:../../packages/client
+      '@cf-auth/email-cloudflare':
+        specifier: workspace:*
+        version: link:../../packages/email-cloudflare
       '@cf-auth/hono':
         specifier: workspace:*
         version: link:../../packages/hono
@@ -97,6 +103,9 @@ importers:
 
   examples/worker-basic:
     dependencies:
+      '@cf-auth/email-cloudflare':
+        specifier: workspace:*
+        version: link:../../packages/email-cloudflare
       '@cf-auth/worker':
         specifier: workspace:*
         version: link:../../packages/worker
@@ -182,6 +191,9 @@ importers:
 
   templates/hono-basic:
     dependencies:
+      '@cf-auth/email-cloudflare':
+        specifier: workspace:*
+        version: link:../../packages/email-cloudflare
       '@cf-auth/hono':
         specifier: workspace:*
         version: link:../../packages/hono
@@ -207,6 +219,9 @@ importers:
       '@cf-auth/client':
         specifier: workspace:*
         version: link:../../packages/client
+      '@cf-auth/email-cloudflare':
+        specifier: workspace:*
+        version: link:../../packages/email-cloudflare
       '@cf-auth/hono':
         specifier: workspace:*
         version: link:../../packages/hono
@@ -229,6 +244,9 @@ importers:
 
   templates/worker-basic:
     dependencies:
+      '@cf-auth/email-cloudflare':
+        specifier: workspace:*
+        version: link:../../packages/email-cloudflare
       '@cf-auth/worker':
         specifier: workspace:*
         version: link:../../packages/worker

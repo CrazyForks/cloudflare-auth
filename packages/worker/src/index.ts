@@ -806,6 +806,41 @@ export function terminalEmail(
   };
 }
 
+export function byEnvironment<Env = unknown>(adapters: {
+  development: AuthEmailAdapter<Env>;
+  preview: AuthEmailAdapter<Env>;
+  production: AuthEmailAdapter<Env>;
+}): AuthEmailAdapter<Env> {
+  for (const mode of ["development", "preview", "production"] as const) {
+    const adapter = adapters[mode];
+    if (
+      !adapter?.sendMagicLink ||
+      !adapter.sendEmailVerification ||
+      !adapter.sendPasswordReset
+    ) {
+      throw new AuthCryptoError(
+        `missing ${mode} email adapter`,
+        "invalid_email_adapter",
+      );
+    }
+  }
+  function select(runtime: AuthEmailRuntime<Env>) {
+    return adapters[runtime.mode];
+  }
+  return {
+    kind: "by-environment",
+    sendMagicLink(input, runtime) {
+      return select(runtime).sendMagicLink(input, runtime);
+    },
+    sendEmailVerification(input, runtime) {
+      return select(runtime).sendEmailVerification(input, runtime);
+    },
+    sendPasswordReset(input, runtime) {
+      return select(runtime).sendPasswordReset(input, runtime);
+    },
+  };
+}
+
 function assertTurnstileEndpoints(endpoints: readonly string[]): void {
   for (const endpoint of endpoints) {
     if (!turnstileEndpointNames.includes(endpoint as TurnstileEndpointName)) {

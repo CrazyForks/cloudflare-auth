@@ -11,6 +11,7 @@
     "dev": "wrangler dev"
   },
   "dependencies": {
+    "@cf-auth/email-cloudflare": "workspace:*",
     "@cf-auth/hono": "workspace:*",
     "@cf-auth/worker": "workspace:*",
     "hono": "4.12.18"

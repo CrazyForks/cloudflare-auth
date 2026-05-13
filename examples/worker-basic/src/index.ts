@@ -1,8 +1,10 @@
 import {
+  byEnvironment,
   createAuthHandler,
   defineAuthConfig,
   terminalEmail,
 } from "@cf-auth/worker";
+import { cloudflareEmail } from "@cf-auth/email-cloudflare";
 
 const authConfig = defineAuthConfig({
   appName: "Worker Basic",
@@ -11,7 +13,17 @@ const authConfig = defineAuthConfig({
     profile: "development-fast",
     maxConcurrentHashesPerIsolate: 1,
   },
-  email: terminalEmail({ outbox: true }),
+  email: byEnvironment({
+    development: terminalEmail({ outbox: true }),
+    preview: cloudflareEmail({
+      binding: "AUTH_EMAIL",
+      from: { email: "auth@example.com", name: "Worker Basic" },
+    }),
+    production: cloudflareEmail({
+      binding: "AUTH_EMAIL",
+      from: { email: "auth@example.com", name: "Worker Basic" },
+    }),
+  }),
 });
 const authHandler = createAuthHandler(authConfig);
 

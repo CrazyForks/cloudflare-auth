@@ -24,6 +24,25 @@ cloudflareEmail({
 
 The adapter sends plaintext and HTML messages, includes the app name and expiration time, and does not add tracking pixels or third-party assets.
 
+Generated apps should select adapters by runtime environment:
+
+```ts
+import { cloudflareEmail } from "@cf-auth/email-cloudflare";
+import { byEnvironment, terminalEmail } from "@cf-auth/worker";
+
+byEnvironment({
+  development: terminalEmail({ outbox: true }),
+  preview: cloudflareEmail({
+    binding: "AUTH_EMAIL",
+    from: { email: "auth@example.com", name: "My App" },
+  }),
+  production: cloudflareEmail({
+    binding: "AUTH_EMAIL",
+    from: { email: "auth@example.com", name: "My App" },
+  }),
+});
+```
+
 Template hooks can override each message type:
 
 ```ts

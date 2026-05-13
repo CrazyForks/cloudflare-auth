@@ -6,6 +6,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@cf-auth/email-cloudflare": "workspace:*",
     "@cf-auth/worker": "workspace:*"
   },
   "devDependencies": {

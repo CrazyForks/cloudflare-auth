@@ -13,6 +13,7 @@ Important keys:
 - `redirects.allowedOrigins`: post-auth redirect allowlist
 - `request.maxBodyBytes`: default `16384`
 - `passwordHashing.profile`: default `workers-balanced`; tests and examples may opt into `development-fast`
+- `email`: use `byEnvironment(...)` to keep terminal email local and Cloudflare/custom adapters in preview and production
 - `turnstile.mode`: `disabled`, `optional`, or `required`
 - `turnstile.endpoints`: endpoint names that require or accept Turnstile
 

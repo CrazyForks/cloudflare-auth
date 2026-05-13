@@ -1111,6 +1111,18 @@ async function inspectAuthSource(cwd: string): Promise<AuthSourceInspection> {
   const configText = configFile?.text ?? "";
   const routeSource = sourceFiles.map((file) => file.text).join("\n");
   const turnstileText = extractObjectPropertyText(configText, "turnstile");
+  const byEnvironmentEmailText = extractCallArgumentText(
+    configText,
+    "byEnvironment",
+  );
+  const remoteEmailText = byEnvironmentEmailText
+    ? [
+        extractPropertyExpression(byEnvironmentEmailText, "preview"),
+        extractPropertyExpression(byEnvironmentEmailText, "production"),
+      ]
+        .filter(Boolean)
+        .join("\n")
+    : configText;
   return {
     sourceFileCount: sourceFiles.length,
     configFound: Boolean(configFile),
@@ -1121,8 +1133,8 @@ async function inspectAuthSource(cwd: string): Promise<AuthSourceInspection> {
       routeSource.includes('"/auth/auth') ||
       routeSource.includes("'/auth/auth") ||
       routeSource.includes("`/auth/auth"),
-    usesTerminalEmail: /\bterminalEmail\s*\(/u.test(configText),
-    usesDevOutbox: /\boutbox\s*:\s*true\b/u.test(configText),
+    usesTerminalEmail: /\bterminalEmail\s*\(/u.test(remoteEmailText),
+    usesDevOutbox: /\boutbox\s*:\s*true\b/u.test(remoteEmailText),
     turnstileRequiresSecret: Boolean(
       turnstileText &&
       /\bmode\s*:\s*["']required["']/u.test(turnstileText) &&
@@ -1331,6 +1343,67 @@ function extractObjectPropertyText(
     if (text[index] !== "{") continue;
     const end = findMatchingDelimiter(text, index, "{", "}");
     if (end !== null) return text.slice(index + 1, end);
+  }
+  return null;
+}
+
+function extractCallArgumentText(text: string, callee: string): string | null {
+  const pattern = new RegExp(`\\b${callee}\\s*\\(`, "gu");
+  for (const match of text.matchAll(pattern)) {
+    const openIndex = (match.index ?? 0) + match[0].length - 1;
+    const closeIndex = findMatchingDelimiter(text, openIndex, "(", ")");
+    if (closeIndex !== null) return text.slice(openIndex + 1, closeIndex);
+  }
+  return null;
+}
+
+function extractPropertyExpression(
+  text: string,
+  property: string,
+): string | null {
+  const pattern = new RegExp(`\\b${property}\\s*:`, "gu");
+  for (const match of text.matchAll(pattern)) {
+    let index = (match.index ?? 0) + match[0].length;
+    const start = index;
+    let depth = 0;
+    let quote: string | null = null;
+    for (; index < text.length; index += 1) {
+      const char = text[index];
+      const next = text[index + 1];
+      if (quote) {
+        if (char === "\\") {
+          index += 1;
+        } else if (char === quote) {
+          quote = null;
+        }
+        continue;
+      }
+      if (char === "/" && next === "/") {
+        while (index < text.length && text[index] !== "\n") index += 1;
+        continue;
+      }
+      if (char === "/" && next === "*") {
+        index += 2;
+        while (
+          index < text.length - 1 &&
+          !(text[index] === "*" && text[index + 1] === "/")
+        ) {
+          index += 1;
+        }
+        index += 1;
+        continue;
+      }
+      if (char === '"' || char === "'" || char === "`") {
+        quote = char;
+        continue;
+      }
+      if (char === "(" || char === "{" || char === "[") depth += 1;
+      if (char === ")" || char === "}" || char === "]") depth -= 1;
+      if (depth < 0 || (depth === 0 && char === ",")) {
+        return text.slice(start, index).trim();
+      }
+    }
+    return text.slice(start).trim();
   }
   return null;
 }
@@ -1904,6 +1977,7 @@ function templatePackageJson(name: string) {
       test: "vitest run --passWithNoTests",
     },
     dependencies: {
+      "@cf-auth/email-cloudflare": generatedPackageVersion,
       "@cf-auth/hono": generatedPackageVersion,
       "@cf-auth/worker": generatedPackageVersion,
       hono: "4.12.18",
@@ -1929,7 +2003,8 @@ function pnpmWorkspaceTemplate(): string {
 }
 
 function authConfigTemplate(): string {
-  return `import { defineAuthConfig, terminalEmail } from "@cf-auth/worker";
+  return `import { byEnvironment, defineAuthConfig, terminalEmail } from "@cf-auth/worker";
+import { cloudflareEmail } from "@cf-auth/email-cloudflare";
 
 export default defineAuthConfig({
   appName: "My App",
@@ -1938,7 +2013,17 @@ export default defineAuthConfig({
     profile: "development-fast",
     maxConcurrentHashesPerIsolate: 1
   },
-  email: terminalEmail({ outbox: true })
+  email: byEnvironment({
+    development: terminalEmail({ outbox: true }),
+    preview: cloudflareEmail({
+      binding: "AUTH_EMAIL",
+      from: { email: "auth@example.com", name: "My App" }
+    }),
+    production: cloudflareEmail({
+      binding: "AUTH_EMAIL",
+      from: { email: "auth@example.com", name: "My App" }
+    })
+  })
 });
 `;
 }

@@ -5,6 +5,7 @@ import { cloudflareEmail } from "@cf-auth/email-cloudflare";
 import { applyD1Migrations, createSqliteD1Database } from "@cf-auth/testing";
 import {
   type AuthEmailAdapter,
+  byEnvironment,
   createAuthHandler,
   defineAuthConfig,
   terminalEmail,
@@ -37,6 +38,25 @@ describe("email adapters and templates", () => {
     await expect(
       adapter.sendMagicLink(sampleEmail(), runtime("production")),
     ).rejects.toThrow(AuthCryptoError);
+  });
+
+  it("selects email adapters by runtime environment", async () => {
+    const calls: string[] = [];
+    const adapter = byEnvironment({
+      development: recordingEmailAdapter("dev", calls),
+      preview: recordingEmailAdapter("preview", calls),
+      production: recordingEmailAdapter("prod", calls),
+    });
+
+    await adapter.sendMagicLink(sampleEmail(), runtime("development"));
+    await adapter.sendEmailVerification(sampleEmail(), runtime("preview"));
+    await adapter.sendPasswordReset(sampleEmail(), runtime("production"));
+
+    expect(calls).toEqual([
+      "dev:magic:development",
+      "preview:verify:preview",
+      "prod:reset:production",
+    ]);
   });
 
   it("serves the dev outbox only in development", async () => {
@@ -225,6 +245,24 @@ function sampleEmail() {
     url: `https://example.com/auth/magic-link/verify?token=${token}`,
     redirectTo: "/dashboard",
     expiresAt: Date.now() + 1_000,
+  };
+}
+
+function recordingEmailAdapter(
+  name: string,
+  calls: string[],
+): AuthEmailAdapter {
+  return {
+    kind: name,
+    async sendMagicLink(_input, selectedRuntime) {
+      calls.push(`${name}:magic:${selectedRuntime.mode}`);
+    },
+    async sendEmailVerification(_input, selectedRuntime) {
+      calls.push(`${name}:verify:${selectedRuntime.mode}`);
+    },
+    async sendPasswordReset(_input, selectedRuntime) {
+      calls.push(`${name}:reset:${selectedRuntime.mode}`);
+    },
   };
 }
 

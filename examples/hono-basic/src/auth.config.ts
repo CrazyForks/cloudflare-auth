@@ -1,4 +1,9 @@
-import { defineAuthConfig, terminalEmail } from "@cf-auth/worker";
+import { cloudflareEmail } from "@cf-auth/email-cloudflare";
+import {
+  byEnvironment,
+  defineAuthConfig,
+  terminalEmail,
+} from "@cf-auth/worker";
 
 export default defineAuthConfig({
   appName: "Hono Basic",
@@ -7,5 +12,15 @@ export default defineAuthConfig({
     profile: "development-fast",
     maxConcurrentHashesPerIsolate: 1,
   },
-  email: terminalEmail({ outbox: true }),
+  email: byEnvironment({
+    development: terminalEmail({ outbox: true }),
+    preview: cloudflareEmail({
+      binding: "AUTH_EMAIL",
+      from: { email: "auth@example.com", name: "Hono Basic" },
+    }),
+    production: cloudflareEmail({
+      binding: "AUTH_EMAIL",
+      from: { email: "auth@example.com", name: "Hono Basic" },
+    }),
+  }),
 });

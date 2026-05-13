@@ -30,6 +30,9 @@ describe("CLI MVP", () => {
       pnpm: { onlyBuiltDependencies: string[] };
     };
     expect(generatedPackage.name).toBe("my-app");
+    expect(generatedPackage.dependencies["@cf-auth/email-cloudflare"]).toBe(
+      "0.0.0",
+    );
     expect(generatedPackage.dependencies["@cf-auth/hono"]).toBe("0.0.0");
     expect(generatedPackage.dependencies["@cf-auth/worker"]).toBe("0.0.0");
     expect(generatedPackage.scripts.test).toBe("vitest run --passWithNoTests");
@@ -337,6 +340,38 @@ export default defineAuthConfig({
     );
     expect(errors.join("\n")).toContain(
       "Redirect allowedOrigins contains an invalid exact origin",
+    );
+  });
+
+  it("doctor accepts byEnvironment terminal email for development only", async () => {
+    const cwd = await tempDir();
+    await writeWrangler(cwd);
+    await writeAuthSource(
+      cwd,
+      `import { byEnvironment, defineAuthConfig, terminalEmail } from "@cf-auth/worker";
+import { cloudflareEmail } from "@cf-auth/email-cloudflare";
+
+export default defineAuthConfig({
+  appName: "My App",
+  basePath: "/auth",
+  email: byEnvironment({
+    development: terminalEmail({ outbox: true }),
+    preview: cloudflareEmail({ binding: "AUTH_EMAIL", from: "auth@example.com" }),
+    production: cloudflareEmail({ binding: "AUTH_EMAIL", from: "auth@example.com" })
+  })
+});
+`,
+    );
+    const output: string[] = [];
+    const code = await runCli(["doctor", "--env", "production"], {
+      cwd,
+      stdout: (line) => output.push(line),
+      runCommand: remoteSecretRunner(),
+    });
+
+    expect(code).toBe(0);
+    expect(output.join("\n")).toContain(
+      "Production email adapter source does not use terminal email",
     );
   });
 

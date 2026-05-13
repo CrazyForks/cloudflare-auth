@@ -80,6 +80,19 @@ describe("security hardening helpers", () => {
     ).toThrow(/unknown Turnstile endpoint/);
   });
 
+  it("rejects invalid password hashing concurrency at config definition time", () => {
+    expect(() =>
+      defineAuthConfig({
+        appName: "Security Test",
+        basePath: "/auth",
+        passwordHashing: {
+          profile: "workers-balanced",
+          maxConcurrentHashesPerIsolate: 0,
+        },
+      }),
+    ).toThrow(/invalid password hash concurrency/);
+  });
+
   it("enforces Turnstile before account-specific validation", async () => {
     const required = await setup({
       turnstile: {

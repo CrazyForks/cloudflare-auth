@@ -671,7 +671,7 @@ const resetConfirmSchema = z.object({
   password: z.string(),
 });
 
-const hashSemaphore = new PasswordHashSemaphore(1, 2_000);
+const hashSemaphores = new Map<number, PasswordHashSemaphore>();
 
 export function defineAuthConfig(
   config: MinimalAuthConfig & Partial<AuthConfig>,
@@ -686,6 +686,20 @@ export function defineAuthConfig(
     ...config.turnstile,
   } satisfies AuthConfig["turnstile"];
   assertTurnstileEndpoints(turnstile.endpoints);
+  const passwordHashing = {
+    profile: "workers-balanced",
+    maxConcurrentHashesPerIsolate: 1,
+    ...config.passwordHashing,
+  } satisfies AuthConfig["passwordHashing"];
+  if (
+    !Number.isInteger(passwordHashing.maxConcurrentHashesPerIsolate) ||
+    passwordHashing.maxConcurrentHashesPerIsolate < 1
+  ) {
+    throw new AuthCryptoError(
+      "invalid password hash concurrency",
+      "invalid_password_hash_concurrency",
+    );
+  }
   return {
     appName: config.appName,
     basePath,
@@ -714,11 +728,7 @@ export function defineAuthConfig(
       allowedPreviewRequestOrigins: [],
       ...config.security,
     },
-    passwordHashing: {
-      profile: "workers-balanced",
-      maxConcurrentHashesPerIsolate: 1,
-      ...config.passwordHashing,
-    },
+    passwordHashing,
     signup: {
       enabled: true,
       requireEmailVerificationBeforeSession: false,
@@ -934,7 +944,7 @@ async function handleSignup(
     60 * 60 * 1000,
     request,
   );
-  const passwordHash = await hashSemaphore.run(() =>
+  const passwordHash = await passwordSemaphore(runtime).run(() =>
     hashPassword(body.password, {
       profile: runtime.config.passwordHashing.profile,
     }),
@@ -1009,18 +1019,22 @@ async function handleLogin(
       user = await runtime.repos.users.findUserByNormalizedUsername(normalized);
     }
   } catch {
-    await dummyVerifyPassword(body.password, {
-      profile: runtime.config.passwordHashing.profile,
-    });
+    await passwordSemaphore(runtime).run(() =>
+      dummyVerifyPassword(body.password, {
+        profile: runtime.config.passwordHashing.profile,
+      }),
+    );
     return errorResponse("Invalid credentials", 401, "invalid_credentials");
   }
   if (!user?.password_hash) {
-    await dummyVerifyPassword(body.password, {
-      profile: runtime.config.passwordHashing.profile,
-    });
+    await passwordSemaphore(runtime).run(() =>
+      dummyVerifyPassword(body.password, {
+        profile: runtime.config.passwordHashing.profile,
+      }),
+    );
     return errorResponse("Invalid credentials", 401, "invalid_credentials");
   }
-  const ok = await hashSemaphore.run(() =>
+  const ok = await passwordSemaphore(runtime).run(() =>
     verifyPassword(body.password, user.password_hash ?? ""),
   );
   if (!ok)
@@ -1345,7 +1359,7 @@ async function handlePasswordResetConfirm(
     );
   if (!active?.user_id)
     return errorResponse("Invalid token", 400, "invalid_token");
-  const passwordHash = await hashSemaphore.run(() =>
+  const passwordHash = await passwordSemaphore(runtime).run(() =>
     hashPassword(body.password, {
       profile: runtime.config.passwordHashing.profile,
     }),
@@ -1672,6 +1686,17 @@ async function rateLimit(
       "Too many attempts. Try again later.",
       "rate_limited",
     );
+}
+
+function passwordSemaphore(runtime: RuntimeContext): PasswordHashSemaphore {
+  const max = runtime.config.passwordHashing.maxConcurrentHashesPerIsolate;
+  const key = Number.isInteger(max) && max > 0 ? max : 1;
+  let semaphore = hashSemaphores.get(key);
+  if (!semaphore) {
+    semaphore = new PasswordHashSemaphore(key, 2_000);
+    hashSemaphores.set(key, semaphore);
+  }
+  return semaphore;
 }
 
 async function enforceTurnstile(

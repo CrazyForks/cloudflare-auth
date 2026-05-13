@@ -5,13 +5,97 @@ export interface AuthClientOptions {
   fetch?: typeof fetch;
 }
 
+export interface PublicAuthUser {
+  id: string;
+  email: string;
+  username: string | null;
+  emailVerified: boolean;
+  createdAt: number;
+}
+
+export class AuthClientError extends Error {
+  constructor(
+    readonly code: string,
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "AuthClientError";
+  }
+}
+
 export function createAuthClient(options: AuthClientOptions = {}) {
   const basePath = options.basePath ?? "/auth";
   const fetcher = options.fetch ?? fetch;
+  async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+    const response = await fetcher(`${basePath}${path}`, {
+      credentials: "include",
+      ...init,
+      headers: {
+        ...(init.body ? { "Content-Type": "application/json" } : {}),
+        ...Object.fromEntries(new Headers(init.headers)),
+      },
+    });
+    const text = await response.text();
+    const payload = text ? (JSON.parse(text) as unknown) : {};
+    if (!response.ok) {
+      const error = (payload as { error?: { code?: string; message?: string } })
+        .error;
+      throw new AuthClientError(
+        error?.code ?? "request_failed",
+        error?.message ?? "Request failed",
+        response.status,
+      );
+    }
+    return payload as T;
+  }
   return {
-    async getUser() {
-      return fetcher(`${basePath}/user`, { credentials: "include" }).then(
-        (response) => response.json(),
+    signUp(input: { email: string; username?: string; password: string }) {
+      return request<{ user?: PublicAuthUser; ok?: true }>("/signup", {
+        method: "POST",
+        body: JSON.stringify(input),
+      });
+    },
+    signInWithPassword(input: { identifier: string; password: string }) {
+      return request<{ user: PublicAuthUser }>("/login", {
+        method: "POST",
+        body: JSON.stringify(input),
+      });
+    },
+    signInWithMagicLink(input: { email: string; redirectTo?: string }) {
+      return request<{ ok: true }>("/magic-link/request", {
+        method: "POST",
+        body: JSON.stringify(input),
+      });
+    },
+    signOut() {
+      return request<{ ok: true }>("/logout", { method: "POST" });
+    },
+    getUser() {
+      return request<{ user: PublicAuthUser | null }>("/user");
+    },
+    requestEmailVerification(input: { email: string; redirectTo?: string }) {
+      return request<{ ok: true }>("/email/verify/request", {
+        method: "POST",
+        body: JSON.stringify(input),
+      });
+    },
+    requestPasswordReset(input: {
+      email: string;
+      afterResetRedirectTo?: string;
+    }) {
+      return request<{ ok: true }>("/password/reset/request", {
+        method: "POST",
+        body: JSON.stringify(input),
+      });
+    },
+    resetPassword(input: { token: string; password: string }) {
+      return request<{ user: PublicAuthUser; redirectTo: string }>(
+        "/password/reset/confirm",
+        {
+          method: "POST",
+          body: JSON.stringify(input),
+        },
       );
     },
   };

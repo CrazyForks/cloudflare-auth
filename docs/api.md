@@ -22,3 +22,22 @@ Browser pages:
 - `GET /auth/password/reset?token=...`
 
 Token `GET` pages parse only token shape and never consume tokens.
+
+## Browser Client
+
+```ts
+import { createAuthClient } from "@cf-auth/client";
+
+const auth = createAuthClient({ basePath: "/auth" });
+
+await auth.signUp({ email, username, password });
+await auth.signInWithPassword({ identifier, password });
+await auth.signInWithMagicLink({ email, redirectTo: "/dashboard" });
+await auth.signOut();
+await auth.getUser();
+await auth.requestEmailVerification({ email, redirectTo: "/dashboard" });
+await auth.requestPasswordReset({ email, afterResetRedirectTo: "/login" });
+await auth.resetPassword({ token, password });
+```
+
+The client sends `credentials: "include"` by default and throws `AuthClientError` with `code`, `message`, and `status`.

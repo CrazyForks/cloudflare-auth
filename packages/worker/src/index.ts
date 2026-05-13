@@ -851,6 +851,21 @@ export function createAuthHandler(
   };
 }
 
+export async function getAuthSessionFromRequest(
+  configInput: AuthConfig | (MinimalAuthConfig & Partial<AuthConfig>),
+  request: Request,
+  envInput?: unknown,
+  ctxInput?: ExecutionContext,
+): Promise<SessionWithUserRow | null> {
+  const config =
+    "runtime" in configInput
+      ? (configInput as AuthConfig)
+      : defineAuthConfig(configInput);
+  const ctx = ctxInput ?? ({ waitUntil() {} } as unknown as ExecutionContext);
+  const runtime = resolveRuntime(config, request, envInput, ctx);
+  return getSession(request, runtime);
+}
+
 async function handleSignup(
   request: Request,
   runtime: RuntimeContext,

@@ -1,0 +1,40 @@
+{
+  "name": "@cf-auth/hono",
+  "version": "0.0.0",
+  "description": "Hono adapter and route protection helpers for Cloudflare Auth.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "peerDependencies": {
+    "hono": ">=4.12.18 <5"
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm,cjs --clean --sourcemap && tsc -p tsconfig.json --emitDeclarationOnly",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@cf-auth/core": "workspace:*",
+    "@cf-auth/worker": "workspace:*"
+  },
+  "devDependencies": {
+    "hono": "4.12.18"
+  }
+}

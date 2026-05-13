@@ -1,0 +1,11 @@
+node_modules/
+.pnpm-store/
+dist/
+.turbo/
+.wrangler/
+.dev.vars
+.env
+*.log
+coverage/
+.DS_Store
+auth-doctor-report.json

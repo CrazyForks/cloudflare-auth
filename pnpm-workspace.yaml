@@ -1,0 +1,8 @@
+packages:
+  - "packages/*"
+  - "examples/*"
+  - "templates/*"
+allowBuilds:
+  esbuild: true
+  sharp: true
+  workerd: true

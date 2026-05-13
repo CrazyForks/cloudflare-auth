@@ -4,17 +4,17 @@ Cloudflare Auth uses the public package scope `@cf-auth/*` and the CLI binary na
 
 ## Packages
 
-| Package | Purpose |
-|---|---|
-| `cf-auth` | Thin unscoped CLI shim for `npx cf-auth@latest ...`. |
-| `@cf-auth/cli` | Real CLI implementation. |
-| `create-cloudflare-auth` | `npm create cloudflare-auth@latest my-app`. |
-| `@cf-auth/core` | Core auth contracts and logic. |
-| `@cf-auth/worker` | Cloudflare Worker runtime. |
-| `@cf-auth/hono` | Hono adapter. |
-| `@cf-auth/client` | Browser SDK. |
-| `@cf-auth/email-cloudflare` | Cloudflare Email adapter. |
-| `@cf-auth/testing` | Test helpers. |
+| Package                     | Purpose                                              |
+| --------------------------- | ---------------------------------------------------- |
+| `cf-auth`                   | Thin unscoped CLI shim for `npx cf-auth@latest ...`. |
+| `@cf-auth/cli`              | Real CLI implementation.                             |
+| `create-cloudflare-auth`    | `npm create cloudflare-auth@latest my-app`.          |
+| `@cf-auth/core`             | Core auth contracts and logic.                       |
+| `@cf-auth/worker`           | Cloudflare Worker runtime.                           |
+| `@cf-auth/hono`             | Hono adapter.                                        |
+| `@cf-auth/client`           | Browser SDK.                                         |
+| `@cf-auth/email-cloudflare` | Cloudflare Email adapter.                            |
+| `@cf-auth/testing`          | Test helpers.                                        |
 
 ## Availability Rules
 

@@ -1,0 +1,40 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "WebWorker"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "skipLibCheck": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "types": ["node", "@cloudflare/workers-types", "vitest/globals"],
+    "paths": {
+      "@cf-auth/client": ["./packages/client/src/index.ts"],
+      "@cf-auth/cli": ["./packages/cli/src/index.ts"],
+      "@cf-auth/core": ["./packages/core/src/index.ts"],
+      "@cf-auth/email-cloudflare": ["./packages/email-cloudflare/src/index.ts"],
+      "@cf-auth/hono": ["./packages/hono/src/index.ts"],
+      "@cf-auth/testing": ["./packages/testing/src/index.ts"],
+      "@cf-auth/worker": ["./packages/worker/src/index.ts"],
+      "cf-auth": ["./packages/cf-auth-shim/src/index.ts"],
+      "create-cloudflare-auth": [
+        "./packages/create-cloudflare-auth/src/index.ts"
+      ]
+    }
+  },
+  "include": [
+    "packages/**/*.ts",
+    "examples/**/*.ts",
+    "templates/**/*.ts",
+    "scripts/**/*.ts",
+    "scripts/**/*.mjs",
+    "tests/**/*.ts",
+    "vitest.config.ts"
+  ]
+}

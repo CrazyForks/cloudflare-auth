@@ -1,0 +1,24 @@
+{
+  "name": "cf-auth-example-react-vite-worker",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "dev": "wrangler dev"
+  },
+  "dependencies": {
+    "@cf-auth/client": "workspace:*",
+    "@cf-auth/hono": "workspace:*",
+    "@cf-auth/worker": "workspace:*",
+    "hono": "4.12.18"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3",
+    "vitest": "4.1.6",
+    "wrangler": "4.90.1"
+  }
+}

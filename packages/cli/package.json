@@ -1,0 +1,36 @@
+{
+  "name": "@cf-auth/cli",
+  "version": "0.0.0",
+  "description": "Cloudflare Auth CLI implementation.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "bin": {
+    "cf-auth": "./dist/index.js"
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm,cjs --clean --sourcemap && tsc -p tsconfig.json --emitDeclarationOnly",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@cf-auth/core": "workspace:*",
+    "wrangler": "4.90.1"
+  }
+}

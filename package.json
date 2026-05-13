@@ -20,6 +20,7 @@
     "version-matrix:check": "node scripts/version-matrix-check.mjs",
     "verify:examples": "node scripts/verify-examples.mjs",
     "verify:migrations": "node scripts/verify-migrations.mjs",
+    "smoke:tarballs": "node scripts/smoke-local-tarballs.mjs",
     "benchmark:password": "tsx scripts/benchmark-password-worker.ts"
   },
   "devDependencies": {

@@ -12,6 +12,7 @@
 - `pnpm version-matrix:check`
 - `pnpm verify:migrations`
 - `pnpm verify:examples`
+- `pnpm smoke:tarballs`
 - `pnpm benchmark:password`
 
 ## Prerelease

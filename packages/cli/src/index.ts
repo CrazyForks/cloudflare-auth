@@ -100,7 +100,14 @@ export async function runCli(
           io.runCommand ?? runCommand,
         );
         if (parsed.flags.report) {
-          out(JSON.stringify(result.report, null, 2));
+          const reportJson = JSON.stringify(result.report, null, 2) + "\n";
+          if (typeof parsed.flags.output === "string") {
+            const outputPath = resolve(cwd, parsed.flags.output);
+            await writeFile(outputPath, reportJson);
+            out(`Wrote doctor report to ${outputPath}`);
+          } else {
+            out(reportJson.trimEnd());
+          }
           return result.ok ? 0 : 1;
         }
         for (const line of result.lines) (result.ok ? out : err)(line);

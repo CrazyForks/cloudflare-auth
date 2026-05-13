@@ -199,6 +199,31 @@ describe("CLI MVP", () => {
     );
   });
 
+  it("writes doctor report JSON to an output file", async () => {
+    const cwd = await tempDir();
+    await writeWrangler(cwd);
+    const output: string[] = [];
+    const code = await runCli(
+      ["doctor", "--report", "--env", "production", "--output", "report.json"],
+      {
+        cwd,
+        stdout: (line) => output.push(line),
+        runCommand: remoteSecretRunner(),
+      },
+    );
+
+    expect(code).toBe(0);
+    expect(output.join("\n")).toContain("Wrote doctor report");
+    const report = JSON.parse(
+      await readFile(join(cwd, "report.json"), "utf8"),
+    ) as Record<string, unknown>;
+    expect(report).toMatchObject({
+      schemaVersion: 1,
+      ok: true,
+      environment: "production",
+    });
+  });
+
   it("prints deploy dry-run and safe recovery helper output", async () => {
     const cwd = await tempDir();
     await writeWrangler(cwd);

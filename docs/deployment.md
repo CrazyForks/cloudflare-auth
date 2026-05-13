@@ -25,6 +25,7 @@ For support and release records, emit the redaction-safe report:
 
 ```bash
 npx cf-auth@latest doctor --report --env production
+npx cf-auth@latest doctor --report --env production --output auth-doctor-report.json
 ```
 
 Required placeholders:

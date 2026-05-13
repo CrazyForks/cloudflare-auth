@@ -7,6 +7,10 @@ import {
 const authConfig = defineAuthConfig({
   appName: "Worker Basic",
   basePath: "/auth",
+  passwordHashing: {
+    profile: "development-fast",
+    maxConcurrentHashesPerIsolate: 1,
+  },
   email: terminalEmail({ outbox: true }),
 });
 const authHandler = createAuthHandler(authConfig);

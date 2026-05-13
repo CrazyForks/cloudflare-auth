@@ -32,4 +32,10 @@ Environment keys:
 - `AUTH_RATE_LIMITER`: optional Cloudflare rate-limit binding
 - `AUTH_EMAIL`: optional Cloudflare Email binding used by `@cf-auth/email-cloudflare`
 
+Defaults:
+
+- `passwordHashing.profile` defaults to `workers-balanced`
+- `turnstile.mode` defaults to `disabled`
+- `turnstile.endpoints` defaults to `[]` and unknown endpoint names are rejected
+
 Breaking config changes require an upgrade-guide entry and public API report update.

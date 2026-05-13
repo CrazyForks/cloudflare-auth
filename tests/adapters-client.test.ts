@@ -106,6 +106,10 @@ async function fixture() {
     appName: "Hono Test",
     basePath: "/auth",
     email: createMockEmailAdapter(),
+    passwordHashing: {
+      profile: "development-fast",
+      maxConcurrentHashesPerIsolate: 1,
+    },
   });
   const env = {
     AUTH_DB: db,

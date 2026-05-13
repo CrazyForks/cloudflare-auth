@@ -540,6 +540,19 @@ export interface AuthEmailAdapter<Env = unknown> {
 
 export type AuthRuntimeMode = "development" | "preview" | "production";
 
+export const turnstileEndpointNames = [
+  "signup",
+  "password_login",
+  "magic_link_request",
+  "magic_link_consume",
+  "email_verification_request",
+  "email_verification_consume",
+  "password_reset_request",
+  "password_reset_confirm",
+] as const;
+
+export type TurnstileEndpointName = (typeof turnstileEndpointNames)[number];
+
 export interface AuthConfig extends MinimalAuthConfig {
   runtime: {
     mode: AuthRuntimeMode | "from-env";
@@ -600,7 +613,7 @@ export interface AuthConfig extends MinimalAuthConfig {
   };
   turnstile: {
     mode: "disabled" | "optional" | "required";
-    endpoints: string[];
+    endpoints: TurnstileEndpointName[];
     verify?: (input: {
       token: string;
       request: Request;
@@ -667,6 +680,12 @@ export function defineAuthConfig(
   if (!/^\/(?!\/)(?!.*\/\/)(?!.*%2f)(?!.*%5c)[^?#]*[^/]$/iu.test(basePath)) {
     throw new AuthCryptoError("invalid auth basePath", "invalid_base_path");
   }
+  const turnstile = {
+    mode: "disabled",
+    endpoints: [],
+    ...config.turnstile,
+  } satisfies AuthConfig["turnstile"];
+  assertTurnstileEndpoints(turnstile.endpoints);
   return {
     appName: config.appName,
     basePath,
@@ -696,7 +715,7 @@ export function defineAuthConfig(
       ...config.security,
     },
     passwordHashing: {
-      profile: "development-fast",
+      profile: "workers-balanced",
       maxConcurrentHashesPerIsolate: 1,
       ...config.passwordHashing,
     },
@@ -736,11 +755,7 @@ export function defineAuthConfig(
       activeTokenPolicy: "invalidate-previous",
       ...config.emailVerification,
     },
-    turnstile: {
-      mode: "disabled",
-      endpoints: [],
-      ...config.turnstile,
-    },
+    turnstile,
     email: config.email ?? terminalEmail({ outbox: true }),
     redirects: {
       defaultAfterLogin: "/",
@@ -775,6 +790,17 @@ export function terminalEmail(
     sendEmailVerification: send,
     sendPasswordReset: send,
   };
+}
+
+function assertTurnstileEndpoints(endpoints: readonly string[]): void {
+  for (const endpoint of endpoints) {
+    if (!turnstileEndpointNames.includes(endpoint as TurnstileEndpointName)) {
+      throw new AuthCryptoError(
+        `unknown Turnstile endpoint: ${endpoint}`,
+        "invalid_turnstile_endpoint",
+      );
+    }
+  }
 }
 
 export function createAuthHandler(
@@ -1594,7 +1620,7 @@ async function rateLimit(
 
 async function enforceTurnstile(
   runtime: RuntimeContext,
-  endpoint: string,
+  endpoint: TurnstileEndpointName,
   body: Record<string, unknown>,
   request: Request,
 ): Promise<void> {

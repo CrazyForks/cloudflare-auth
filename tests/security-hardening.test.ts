@@ -37,6 +37,10 @@ async function setup(
       publicOrigin: "from-env",
       trustedHosts: ["localhost:8787"],
     },
+    passwordHashing: {
+      profile: "development-fast",
+      maxConcurrentHashesPerIsolate: 1,
+    },
     ...overrides,
   });
   const handler = createAuthHandler(config);
@@ -63,6 +67,19 @@ async function setup(
 }
 
 describe("security hardening helpers", () => {
+  it("rejects unknown Turnstile endpoint names at config definition time", () => {
+    expect(() =>
+      defineAuthConfig({
+        appName: "Security Test",
+        basePath: "/auth",
+        turnstile: {
+          mode: "required",
+          endpoints: ["unknown_endpoint" as never],
+        },
+      }),
+    ).toThrow(/unknown Turnstile endpoint/);
+  });
+
   it("enforces Turnstile before account-specific validation", async () => {
     const required = await setup({
       turnstile: {

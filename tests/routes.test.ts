@@ -32,6 +32,10 @@ async function setup(overrides: Partial<AuthConfig> = {}) {
       publicOrigin: "from-env",
       trustedHosts: ["localhost:8787", "example.com"],
     },
+    passwordHashing: {
+      profile: "development-fast",
+      maxConcurrentHashesPerIsolate: 1,
+    },
     redirects: {
       defaultAfterLogin: "/dashboard",
       defaultAfterLogout: "/",

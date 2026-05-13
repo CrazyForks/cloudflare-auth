@@ -45,6 +45,8 @@ validate secret values.
 checks when preview/production email config selects terminal email/dev outbox,
 when literal redirect origin allowlists are invalid, when auth routes are
 mounted more than once, or when an obvious `/auth/auth` double prefix exists.
+It also runs the configured password hashing profile benchmark locally and
+labels production results as local estimates.
 
 `cf-auth rotate-secret --apply --env production` generates a new `AUTH_SECRET`
 and sends it to Wrangler over stdin. It prints the Wrangler operation result,

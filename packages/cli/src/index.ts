@@ -1,11 +1,14 @@
 import { spawnSync } from "node:child_process";
+import { performance } from "node:perf_hooks";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { randomBytes } from "node:crypto";
 import {
   base64urlEncode,
+  hashPassword,
   normalizeEmail,
+  type PasswordHashProfileName,
   parseAuthKeyRing,
   resolveSessionCookie,
 } from "@cf-auth/core";
@@ -14,6 +17,10 @@ import cliPackageJson from "../package.json" with { type: "json" };
 export const cliPackageName = "@cf-auth/cli";
 const generatedPackageVersion = cliPackageJson.version;
 const supportedWranglerVersion = cliPackageJson.dependencies.wrangler;
+const passwordBenchmarkCache = new Map<
+  PasswordHashProfileName,
+  Promise<PasswordBenchmarkResult>
+>();
 
 export interface CliIO {
   cwd?: string;
@@ -74,6 +81,12 @@ interface DoctorReport {
     rawIps: "omitted";
     rawUserAgents: "omitted";
   };
+}
+
+interface PasswordBenchmarkResult {
+  profile: PasswordHashProfileName;
+  p50Ms: number;
+  p95Ms: number;
 }
 
 export async function runCli(
@@ -370,6 +383,7 @@ async function commandDoctor(
   for (const check of checkAuthSource(authSource, vars, remoteTarget)) {
     addCheck(check);
   }
+  addCheck(await checkPasswordBenchmark(authSource, remoteTarget));
   if (remoteTarget) {
     addCheck(checkCloudflareAccount(cwd, runner, config));
   }
@@ -1097,6 +1111,8 @@ interface AuthSourceInspection {
   usesTerminalEmail: boolean;
   usesDevOutbox: boolean;
   turnstileRequiresSecret: boolean;
+  passwordHashProfile: PasswordHashProfileName;
+  passwordHashConcurrency: number;
   redirectOrigins: Array<{ property: string; value: string }>;
   dynamicRedirectProperties: string[];
 }
@@ -1111,6 +1127,15 @@ async function inspectAuthSource(cwd: string): Promise<AuthSourceInspection> {
   const configText = configFile?.text ?? "";
   const routeSource = sourceFiles.map((file) => file.text).join("\n");
   const turnstileText = extractObjectPropertyText(configText, "turnstile");
+  const passwordHashingText = extractObjectPropertyText(
+    configText,
+    "passwordHashing",
+  );
+  const parsedPasswordProfile = parsePasswordProfile(
+    passwordHashingText
+      ? extractStringProperty(passwordHashingText, "profile")
+      : null,
+  );
   const byEnvironmentEmailText = extractCallArgumentText(
     configText,
     "byEnvironment",
@@ -1140,6 +1165,14 @@ async function inspectAuthSource(cwd: string): Promise<AuthSourceInspection> {
       /\bmode\s*:\s*["']required["']/u.test(turnstileText) &&
       !/\bverify\s*:/u.test(turnstileText),
     ),
+    passwordHashProfile: parsedPasswordProfile ?? "workers-balanced",
+    passwordHashConcurrency:
+      (passwordHashingText
+        ? extractNumberProperty(
+            passwordHashingText,
+            "maxConcurrentHashesPerIsolate",
+          )
+        : null) ?? 1,
     redirectOrigins: [
       ...extractStringArrayProperty(configText, "allowedOrigins").values.map(
         (value) => ({ property: "allowedOrigins", value }),
@@ -1236,6 +1269,90 @@ function checkAuthSource(
   const redirectCheck = checkRedirectOrigins(source, vars.AUTH_ENV);
   if (redirectCheck) checks.push(redirectCheck);
   return checks;
+}
+
+async function checkPasswordBenchmark(
+  source: AuthSourceInspection,
+  remoteTarget: boolean,
+): Promise<DoctorCheck> {
+  let result: PasswordBenchmarkResult;
+  try {
+    result = await benchmarkPasswordProfile(source.passwordHashProfile);
+  } catch {
+    return {
+      id: "password_benchmark",
+      status: "warn",
+      message: "Password hashing benchmark could not run",
+      fix: "run pnpm benchmark:password and inspect the failure before production deploy",
+    };
+  }
+  const queueBatches = Math.ceil(
+    2 / Math.max(source.passwordHashConcurrency, 1),
+  );
+  const queueEstimateMs = queueBatches * result.p95Ms;
+  const estimate = remoteTarget ? " local-estimate" : "";
+  if (remoteTarget && source.passwordHashProfile === "development-fast") {
+    return {
+      id: "password_benchmark",
+      status: "warn",
+      message: `Password hashing benchmark${estimate} ${result.profile} p95=${result.p95Ms}ms, but development-fast is configured for a remote target`,
+      fix: "use workers-balanced for preview/production unless a documented target Worker benchmark justifies different params",
+    };
+  }
+  if (result.p95Ms > 750) {
+    return {
+      id: "password_benchmark",
+      status: "warn",
+      message: `Password hashing benchmark${estimate} ${result.profile} p95=${result.p95Ms}ms exceeds 750ms`,
+      fix: "reduce passwordHashing profile or document a target Worker benchmark before production deploy",
+    };
+  }
+  if (queueEstimateMs > 2_000) {
+    return {
+      id: "password_benchmark",
+      status: "warn",
+      message: `Password hashing queue estimate is ${queueEstimateMs}ms for a two-request burst`,
+      fix: "increase maxConcurrentHashesPerIsolate only if Worker CPU and memory benchmarks support it, or reduce hash cost",
+    };
+  }
+  return {
+    id: "password_benchmark",
+    status: "pass",
+    message: `Password hashing benchmark${estimate} ${result.profile} p95=${result.p95Ms}ms`,
+  };
+}
+
+async function benchmarkPasswordProfile(
+  profile: PasswordHashProfileName,
+): Promise<PasswordBenchmarkResult> {
+  let cached = passwordBenchmarkCache.get(profile);
+  if (!cached) {
+    cached = runPasswordBenchmark(profile);
+    passwordBenchmarkCache.set(profile, cached);
+  }
+  return cached;
+}
+
+async function runPasswordBenchmark(
+  profile: PasswordHashProfileName,
+): Promise<PasswordBenchmarkResult> {
+  const samples: number[] = [];
+  for (let index = 0; index < 3; index += 1) {
+    await hashPassword("correct horse battery staple benchmark", { profile });
+  }
+  for (let index = 0; index < 10; index += 1) {
+    const started = performance.now();
+    await hashPassword("correct horse battery staple benchmark", { profile });
+    samples.push(performance.now() - started);
+  }
+  samples.sort((a, b) => a - b);
+  const p50 = samples[Math.floor(samples.length * 0.5)] ?? 0;
+  const p95 = samples[Math.floor(samples.length * 0.95)] ?? samples.at(-1) ?? 0;
+  return {
+    profile,
+    p50Ms: Math.round(p50),
+    p95Ms: Math.round(p95),
+  };
 }
 
 function checkRedirectOrigins(
@@ -1404,6 +1521,31 @@ function extractPropertyExpression(
       }
     }
     return text.slice(start).trim();
+  }
+  return null;
+}
+
+function extractStringProperty(text: string, property: string): string | null {
+  const pattern = new RegExp(`\\b${property}\\s*:\\s*["']([^"']+)["']`, "u");
+  return pattern.exec(text)?.[1] ?? null;
+}
+
+function extractNumberProperty(text: string, property: string): number | null {
+  const pattern = new RegExp(`\\b${property}\\s*:\\s*(\\d+)`, "u");
+  const value = pattern.exec(text)?.[1];
+  if (!value) return null;
+  return Number.parseInt(value, 10);
+}
+
+function parsePasswordProfile(
+  value: string | null,
+): PasswordHashProfileName | null {
+  if (
+    value === "development-fast" ||
+    value === "workers-balanced" ||
+    value === "high-cost"
+  ) {
+    return value;
   }
   return null;
 }
@@ -2010,7 +2152,7 @@ export default defineAuthConfig({
   appName: "My App",
   basePath: "/auth",
   passwordHashing: {
-    profile: "development-fast",
+    profile: "workers-balanced",
     maxConcurrentHashesPerIsolate: 1
   },
   email: byEnvironment({

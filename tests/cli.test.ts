@@ -373,6 +373,9 @@ export default defineAuthConfig({
     expect(output.join("\n")).toContain(
       "Production email adapter source does not use terminal email",
     );
+    expect(output.join("\n")).toContain(
+      "Password hashing benchmark local-estimate workers-balanced",
+    );
   });
 
   it("doctor reports required Turnstile secrets", async () => {

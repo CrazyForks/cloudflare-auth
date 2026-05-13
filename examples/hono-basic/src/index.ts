@@ -5,6 +5,23 @@ import authConfig from "./auth.config.js";
 const app = new Hono();
 
 app.route(authConfig.basePath, createAuthRoutes(authConfig));
-app.get("/", (c) => c.text("Cloudflare Auth Hono example"));
+app.get("/", (c) =>
+  c.html(`<!doctype html>
+<meta charset="utf-8">
+<title>Cloudflare Auth Hono Example</title>
+<main>
+  <h1>Cloudflare Auth</h1>
+  <form method="post" action="/auth/signup" enctype="application/json">
+    <input name="email" type="email" placeholder="email@example.com">
+    <input name="password" type="password" placeholder="Password">
+    <button type="submit">Sign up</button>
+  </form>
+  <form method="post" action="/auth/login" enctype="application/json">
+    <input name="identifier" placeholder="Email or username">
+    <input name="password" type="password" placeholder="Password">
+    <button type="submit">Sign in</button>
+  </form>
+</main>`),
+);
 
 export default app;

@@ -1,0 +1,21 @@
+{
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "build": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@cf-auth/hono": "workspace:*",
+    "@cf-auth/worker": "workspace:*",
+    "hono": "4.12.18"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3",
+    "vitest": "4.1.6",
+    "wrangler": "4.90.1"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

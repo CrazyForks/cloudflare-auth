@@ -89,6 +89,39 @@ describe("CLI MVP", () => {
     expect(errors.join("\n")).not.toMatch(/cfauth\.|AUTH_SECRET=/);
   });
 
+  it("emits redaction-safe doctor report JSON matching the checked-in schema id", async () => {
+    const cwd = await tempDir();
+    await writeWrangler(cwd);
+    const schema = JSON.parse(
+      await readFile("schemas/doctor-report.schema.json", "utf8"),
+    ) as { $id: string; required: string[] };
+    const output: string[] = [];
+    const code = await runCli(["doctor", "--report", "--env", "production"], {
+      cwd,
+      stdout: (line) => output.push(line),
+    });
+    const report = JSON.parse(output.join("\n")) as Record<string, unknown>;
+    expect(code).toBe(0);
+    expect(report.$schema).toBe(schema.$id);
+    for (const field of schema.required) expect(report).toHaveProperty(field);
+    expect(report).toMatchObject({
+      schemaVersion: 1,
+      ok: true,
+      environment: "production",
+      redaction: {
+        rawSecrets: "omitted",
+        rawTokens: "omitted",
+        rawCookies: "omitted",
+        rawEmails: "omitted",
+        rawIps: "omitted",
+        rawUserAgents: "omitted",
+      },
+    });
+    expect(JSON.stringify(report)).not.toMatch(
+      /AUTH_SECRET=|cfauth\.|person@example\.com|203\.0\.113\./,
+    );
+  });
+
   it("prints deploy dry-run and safe recovery helper output", async () => {
     const cwd = await tempDir();
     await writeWrangler(cwd);

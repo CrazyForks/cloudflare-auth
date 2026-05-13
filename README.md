@@ -52,6 +52,8 @@ npx cf-auth@latest deploy --env production
 
 Use `cf-auth deploy --migrate --env production` when you want the CLI to run migration checks during deployment.
 
+Run `npx cf-auth@latest doctor --report --env production` when you need redaction-safe JSON for support or release records.
+
 ## Security Defaults
 
 Cloudflare Auth stores only HMAC-hashed session and email tokens, uses versioned password hash envelopes, validates redirect targets before token creation, consumes magic and verification links only on `POST`, uses D1 rate limits with opaque derived keys, and keeps request-origin and redirect-origin allowlists separate.
@@ -63,6 +65,8 @@ The v1 surface supports Hono and plain Cloudflare Workers. The browser client SD
 ## Troubleshooting
 
 See [docs/troubleshooting.md](docs/troubleshooting.md) for missing D1 bindings, unapplied migrations, secret setup, cookie issues, email binding failures, and package-name fallback commands.
+
+Known v1 limitations are listed in [docs/known-limitations.md](docs/known-limitations.md).
 
 ## Non-Goals
 

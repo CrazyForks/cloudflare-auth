@@ -4,6 +4,7 @@
 | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | `npx cf-auth` fails                            | Ensure the `cf-auth` package exists; otherwise use `npx --package @cf-auth/cli@latest cf-auth`.                        |
 | Missing D1 binding                             | Run `npx cf-auth@latest init --repair` or add `AUTH_DB` to `wrangler.jsonc`.                                           |
+| Need support diagnostics                       | Run `npx cf-auth@latest doctor --report --env production` and attach the redaction-safe JSON.                          |
 | Migrations not applied                         | Run `npx cf-auth@latest migrate --local` or `npx cf-auth@latest migrate --remote --env production`.                    |
 | Schema version mismatch                        | Run migrations and inspect `auth_schema_migrations`.                                                                   |
 | Missing `AUTH_SECRET`                          | Run `npx cf-auth@latest rotate-secret --print` locally or `npx cf-auth@latest rotate-secret --apply --env production`. |

@@ -8,6 +8,12 @@ npx cf-auth@latest migrate --remote --env production
 npx cf-auth@latest deploy --env production
 ```
 
+For support and release records, emit the redaction-safe report:
+
+```bash
+npx cf-auth@latest doctor --report --env production
+```
+
 Required placeholders:
 
 - `AUTH_PUBLIC_ORIGIN`: exact production origin, for example `https://example.com`
@@ -16,3 +22,5 @@ Required placeholders:
 - `AUTH_EMAIL`: Cloudflare Email binding when using Cloudflare Email
 
 Deploying without `--env` fails unless `doctor` proves the top-level Wrangler config is intentionally production-safe.
+
+The Deploy to Cloudflare button readiness checklist is tracked in `docs/deploy-to-cloudflare.md`.

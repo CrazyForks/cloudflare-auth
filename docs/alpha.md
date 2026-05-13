@@ -1,0 +1,58 @@
+# Private Alpha
+
+Private alpha validates that a developer can start from a clean directory, complete local auth, and deploy to production using only documented commands.
+
+## Local Setup Script
+
+Run from an empty working directory:
+
+```bash
+npm create cloudflare-auth@alpha my-app
+cd my-app
+npm run dev
+```
+
+Fallback while the unscoped packages are unpublished:
+
+```bash
+npx --package @cf-auth/cli@alpha cf-auth init my-app --template hono-basic
+cd my-app
+pnpm install
+npx cf-auth migrate --local
+npm run dev
+```
+
+Success means:
+
+- signup works at `/auth/signup`
+- login works at `/auth/login`
+- `/auth/user` returns the signed-in user
+- terminal email links are printed locally
+- no maintainer-supplied shell command was needed outside this document
+
+Record setup time from the first scaffold command until the first successful signup/login.
+
+## Production Deploy Script
+
+Run from the generated app:
+
+```bash
+npx cf-auth@alpha doctor --report --env production
+npx cf-auth@alpha migrate --remote --env production
+npx cf-auth@alpha deploy --env production
+```
+
+Attach the `doctor --report` JSON to alpha feedback. The report schema is checked in at `schemas/doctor-report.schema.json`; reports omit raw secrets, tokens, cookies, emails, IPs, and user agents.
+
+## Feedback Triage
+
+For every setup or deploy failure, maintainers must classify the outcome before public beta:
+
+- already diagnosed by `doctor`
+- fixed by an existing troubleshooting entry
+- new troubleshooting entry needed
+- CLI diagnostic needed
+- code defect
+- external Cloudflare account or product setup issue
+
+Public beta is blocked until at least 80% of alpha failures have either a `doctor` diagnostic or a troubleshooting entry with an exact fix.

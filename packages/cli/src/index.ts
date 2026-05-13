@@ -19,6 +19,37 @@ interface ParsedArgs {
   flags: Record<string, string | boolean>;
 }
 
+type DoctorCheckStatus = "pass" | "fail" | "warn";
+
+interface DoctorCheck {
+  id: string;
+  status: DoctorCheckStatus;
+  message: string;
+  fix?: string;
+}
+
+interface DoctorReport {
+  $schema: string;
+  schemaVersion: 1;
+  ok: boolean;
+  generatedAt: string;
+  environment: string;
+  summary: {
+    pass: number;
+    fail: number;
+    warn: number;
+  };
+  checks: DoctorCheck[];
+  redaction: {
+    rawSecrets: "omitted";
+    rawTokens: "omitted";
+    rawCookies: "omitted";
+    rawEmails: "omitted";
+    rawIps: "omitted";
+    rawUserAgents: "omitted";
+  };
+}
+
 export async function runCli(
   args = process.argv.slice(2),
   io: CliIO = {},
@@ -44,6 +75,10 @@ export async function runCli(
         return 0;
       case "doctor": {
         const result = await commandDoctor(parsed, cwd);
+        if (parsed.flags.report) {
+          out(JSON.stringify(result.report, null, 2));
+          return result.ok ? 0 : 1;
+        }
         for (const line of result.lines) (result.ok ? out : err)(line);
         return result.ok ? 0 : 1;
       }
@@ -135,67 +170,158 @@ async function commandMigrate(
 async function commandDoctor(
   parsed: ParsedArgs,
   cwd: string,
-): Promise<{ ok: boolean; lines: string[] }> {
-  const lines: string[] = [];
+): Promise<{ ok: boolean; lines: string[]; report: DoctorReport }> {
+  const checks: DoctorCheck[] = [];
   let ok = true;
   let config: WranglerConfig | null = null;
+  const envName = parsed.flags.env as string | undefined;
+  const addCheck = (check: DoctorCheck) => {
+    checks.push(check);
+    if (check.status === "fail") ok = false;
+  };
   try {
     config = await readWrangler(cwd);
-    lines.push("✓ Wrangler config found");
+    addCheck({
+      id: "wrangler_config",
+      status: "pass",
+      message: "Wrangler config found",
+    });
   } catch {
+    addCheck({
+      id: "wrangler_config",
+      status: "fail",
+      message: "Wrangler config missing",
+      fix: "npx cf-auth@latest init --repair",
+    });
     return {
       ok: false,
-      lines: [
-        "✗ Wrangler config missing",
-        "  Fix: npx cf-auth@latest init --repair",
-      ],
+      lines: renderDoctorLines(checks),
+      report: buildDoctorReport(checks, envName),
     };
   }
-  const envName = parsed.flags.env as string | undefined;
   const selected = envName ? config.env?.[envName] : config;
   if (envName && !selected) {
+    addCheck({
+      id: "wrangler_environment",
+      status: "fail",
+      message: `Wrangler environment ${envName} missing`,
+      fix: `add env.${envName} to wrangler.jsonc`,
+    });
     return {
       ok: false,
-      lines: [
-        `✗ Wrangler environment ${envName} missing`,
-        `  Fix: add env.${envName} to wrangler.jsonc`,
-      ],
+      lines: renderDoctorLines(checks),
+      report: buildDoctorReport(checks, envName),
     };
   }
   const d1 = selected?.d1_databases?.find((item) => item.binding === "AUTH_DB");
   if (!d1) {
-    ok = false;
-    lines.push("✗ D1 binding AUTH_DB is missing");
-    lines.push(
-      "  Fix: npx cf-auth@latest init --repair or add d1_databases binding AUTH_DB",
-    );
+    addCheck({
+      id: "d1_binding",
+      status: "fail",
+      message: "D1 binding AUTH_DB is missing",
+      fix: "npx cf-auth@latest init --repair or add d1_databases binding AUTH_DB",
+    });
   } else if (d1.database_id?.startsWith("REPLACE_")) {
-    ok = false;
-    lines.push("✗ D1 database_id is still a placeholder");
-    lines.push("  Fix: set the real D1 database_id for AUTH_DB");
+    addCheck({
+      id: "d1_database_id",
+      status: "fail",
+      message: "D1 database_id is still a placeholder",
+      fix: "set the real D1 database_id for AUTH_DB",
+    });
   } else {
-    lines.push("✓ D1 binding AUTH_DB configured");
+    addCheck({
+      id: "d1_binding",
+      status: "pass",
+      message: "D1 binding AUTH_DB configured",
+    });
   }
   const vars = selected?.vars ?? {};
   if (!vars.AUTH_ENV) {
-    ok = false;
-    lines.push("✗ AUTH_ENV is missing");
-    lines.push(
-      "  Fix: set vars.AUTH_ENV to development, preview, or production",
-    );
+    addCheck({
+      id: "auth_env",
+      status: "fail",
+      message: "AUTH_ENV is missing",
+      fix: "set vars.AUTH_ENV to development, preview, or production",
+    });
+  } else {
+    addCheck({
+      id: "auth_env",
+      status: "pass",
+      message: "AUTH_ENV configured",
+    });
   }
   if ((vars.AUTH_ENV === "production" || envName) && !vars.AUTH_PUBLIC_ORIGIN) {
-    ok = false;
-    lines.push("✗ Production public origin is missing");
-    lines.push("  Fix: set AUTH_PUBLIC_ORIGIN=https://example.com");
+    addCheck({
+      id: "public_origin",
+      status: "fail",
+      message: "Production public origin is missing",
+      fix: "set AUTH_PUBLIC_ORIGIN=https://example.com",
+    });
+  } else if (vars.AUTH_PUBLIC_ORIGIN) {
+    addCheck({
+      id: "public_origin",
+      status: "pass",
+      message: "Public origin configured",
+    });
   }
   if (!existsSync(join(cwd, ".dev.vars")) && !envName) {
-    ok = false;
-    lines.push("✗ Local AUTH_SECRET is missing");
-    lines.push("  Fix: npx cf-auth@latest rotate-secret --print > .dev.vars");
+    addCheck({
+      id: "local_secret",
+      status: "fail",
+      message: "Local AUTH_SECRET is missing",
+      fix: "npx cf-auth@latest rotate-secret --print > .dev.vars",
+    });
   }
-  if (ok) lines.push("✓ Auth route mounted at /auth");
-  return { ok, lines };
+  if (ok)
+    addCheck({
+      id: "auth_route",
+      status: "pass",
+      message: "Auth route mounted at /auth",
+    });
+  return {
+    ok,
+    lines: renderDoctorLines(checks),
+    report: buildDoctorReport(checks, envName),
+  };
+}
+
+function renderDoctorLines(checks: DoctorCheck[]): string[] {
+  const lines: string[] = [];
+  for (const check of checks) {
+    const icon =
+      check.status === "pass" ? "✓" : check.status === "warn" ? "!" : "✗";
+    lines.push(`${icon} ${check.message}`);
+    if (check.fix) lines.push(`  Fix: ${check.fix}`);
+  }
+  return lines;
+}
+
+function buildDoctorReport(
+  checks: DoctorCheck[],
+  envName: string | undefined,
+): DoctorReport {
+  const summary = {
+    pass: checks.filter((check) => check.status === "pass").length,
+    fail: checks.filter((check) => check.status === "fail").length,
+    warn: checks.filter((check) => check.status === "warn").length,
+  };
+  return {
+    $schema: "https://cf-auth.dev/schemas/doctor-report.v1.json",
+    schemaVersion: 1,
+    ok: summary.fail === 0,
+    generatedAt: new Date().toISOString(),
+    environment: envName ?? "default",
+    summary,
+    checks,
+    redaction: {
+      rawSecrets: "omitted",
+      rawTokens: "omitted",
+      rawCookies: "omitted",
+      rawEmails: "omitted",
+      rawIps: "omitted",
+      rawUserAgents: "omitted",
+    },
+  };
 }
 
 async function commandDeploy(parsed: ParsedArgs, cwd: string): Promise<string> {

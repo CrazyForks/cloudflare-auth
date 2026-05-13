@@ -1,0 +1,43 @@
+name: Alpha feedback
+description: Report private-alpha setup or deploy feedback.
+title: "[alpha]: "
+labels: ["alpha-feedback"]
+body:
+  - type: dropdown
+    id: flow
+    attributes:
+      label: Flow
+      options:
+        - Local setup
+        - Production deploy
+        - Upgrade
+        - Documentation
+    validations:
+      required: true
+  - type: input
+    id: elapsed
+    attributes:
+      label: Setup time
+      description: Time from first documented command to successful signup/login, if applicable.
+      placeholder: "8 minutes"
+  - type: textarea
+    id: commands
+    attributes:
+      label: Commands used
+      description: Paste the documented commands you ran. Redact secrets and tokens.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: doctor_report
+    attributes:
+      label: doctor --report output
+      description: Paste redacted JSON from cf-auth doctor --report when relevant.
+      render: json
+  - type: textarea
+    id: result
+    attributes:
+      label: Result
+      description: What worked, what failed, and the exact error text.
+    validations:
+      required: true

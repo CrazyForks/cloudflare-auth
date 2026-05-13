@@ -12,3 +12,7 @@ Important keys:
 - `security.allowedRequestOrigins`: request-origin allowlist
 - `redirects.allowedOrigins`: post-auth redirect allowlist
 - `request.maxBodyBytes`: default `16384`
+- `turnstile.mode`: `disabled`, `optional`, or `required`
+- `turnstile.endpoints`: endpoint names that require or accept Turnstile
+
+The stable config surface is tracked in `docs/config-schema.md`.

@@ -41,3 +41,5 @@ await auth.resetPassword({ token, password });
 ```
 
 The client sends `credentials: "include"` by default and throws `AuthClientError` with `code`, `message`, and `status`.
+
+The release API surface is summarized in `docs/api-report.md`.

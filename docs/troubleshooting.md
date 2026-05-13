@@ -1,0 +1,23 @@
+# Troubleshooting
+
+| Problem | Fix |
+|---|---|
+| `npx cf-auth` fails | Ensure the `cf-auth` package exists; otherwise use `npx --package @cf-auth/cli@latest cf-auth`. |
+| Missing D1 binding | Run `npx cf-auth@latest init --repair` or add `AUTH_DB` to `wrangler.jsonc`. |
+| Migrations not applied | Run `npx cf-auth@latest migrate --local` or `npx cf-auth@latest migrate --remote --env production`. |
+| Schema version mismatch | Run migrations and inspect `auth_schema_migrations`. |
+| Missing `AUTH_SECRET` | Run `npx cf-auth@latest rotate-secret --print` locally or `npx cf-auth@latest rotate-secret --apply --env production`. |
+| Cloudflare Email binding missing | Add the `AUTH_EMAIL` send_email binding or switch to terminal/custom email. |
+| Sender/domain not ready | Follow `docs/cloudflare-email.md`. |
+| Cookie not set locally | Ensure the dev cookie is not `__Host-` on plain HTTP. |
+| Cookie not set in production | Check HTTPS, `Secure`, `__Host-`, `Path=/`, and no `Domain`. |
+| Cookie not sent | Check same-origin mode, SameSite, CORS, and fetch credentials. |
+| Magic link opens but does not log in | Submit the confirmation form; `GET` does not consume tokens. |
+| Magic link redirect rejected | Add the origin/path to the redirect allowlist, not the request-origin allowlist. |
+| Local dev behaves like production | Set top-level Wrangler `vars.AUTH_ENV` to `development`. |
+| Deploy uses development settings | Run `npx cf-auth@latest doctor --env production`; named environments must repeat vars and bindings. |
+| Password hashing timeout | Run the benchmark, reduce the profile explicitly, and inspect semaphore queue metrics. |
+| Reset email says OK but no email arrives | Check email adapter logs and `email_send_failed` auth events. |
+| JSON request returns `415` | Send `Content-Type: application/json`; charset parameters are allowed. |
+| Cross-site frontend cannot stay logged in | Use same-origin or explicit same-site cross-origin mode; v1 does not support `SameSite=None`. |
+| Reset token appears in analytics/referrer logs | Use the built-in reset page or strip the token before loading app code. |

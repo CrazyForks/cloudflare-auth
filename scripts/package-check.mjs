@@ -1,4 +1,4 @@
-import { readdir, readFile } from "node:fs/promises";
+import { access, readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 const packageDirs = (await readdir("packages", { withFileTypes: true }))
@@ -19,6 +19,19 @@ for (const dir of packageDirs) {
     failures.push(`${pkg.name}: publishable packages must not be private`);
   if (pkg.engines?.node !== ">=22.12.0")
     failures.push(`${pkg.name}: node engine mismatch`);
+  for (const file of pkg.files ?? []) {
+    try {
+      await access(join(dir, file));
+    } catch {
+      failures.push(`${pkg.name}: files entry ${file} does not exist`);
+    }
+  }
+  if (pkg.bin) {
+    for (const [name, target] of Object.entries(pkg.bin)) {
+      if (!String(target).startsWith("./dist/"))
+        failures.push(`${pkg.name}: bin ${name} must point into dist`);
+    }
+  }
 }
 
 if (failures.length) {

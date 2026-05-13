@@ -321,6 +321,12 @@ export default defineAuthConfig({
   appName: "My App",
   basePath: "/auth",
   email: terminalEmail({ outbox: true }),
+  request: {
+    requireOriginOnUnsafeMethods: false
+  },
+  security: {
+    allowedRequestOrigins: ["https://app.example.com/path"]
+  },
   redirects: {
     allowedOrigins: ["https://example.com/path"]
   }
@@ -340,6 +346,12 @@ export default defineAuthConfig({
     );
     expect(errors.join("\n")).toContain(
       "Redirect allowedOrigins contains an invalid exact origin",
+    );
+    expect(errors.join("\n")).toContain(
+      "Request allowedRequestOrigins contains an invalid exact origin",
+    );
+    expect(errors.join("\n")).toContain(
+      "Unsafe auth-route methods do not require Origin",
     );
   });
 

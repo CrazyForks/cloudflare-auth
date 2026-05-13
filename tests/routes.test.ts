@@ -1,6 +1,10 @@
 import { readFile } from "node:fs/promises";
 
-import { hashRawAuthToken, parseAuthKeyRing } from "@cf-auth/core";
+import {
+  AuthCryptoError,
+  hashRawAuthToken,
+  parseAuthKeyRing,
+} from "@cf-auth/core";
 import {
   applyD1Migrations,
   createMockEmailAdapter,
@@ -69,6 +73,43 @@ async function setup(overrides: Partial<AuthConfig> = {}) {
 }
 
 describe("auth HTTP runtime", () => {
+  it("rejects invalid origin allowlists and unsupported SameSite config", () => {
+    expect(() =>
+      defineAuthConfig({
+        appName: "Bad Redirect",
+        basePath: "/auth",
+        redirects: {
+          allowedOrigins: ["https://example.com/path"],
+        } as AuthConfig["redirects"],
+      }),
+    ).toThrow(AuthCryptoError);
+    expect(() =>
+      defineAuthConfig({
+        appName: "Bad Request Origin",
+        basePath: "/auth",
+        security: {
+          allowedRequestOrigins: ["https://*.example.com"],
+        } as AuthConfig["security"],
+      }),
+    ).toThrow(AuthCryptoError);
+    expect(() =>
+      defineAuthConfig({
+        appName: "Bad Cookie",
+        basePath: "/auth",
+        session: { sameSite: "none" } as unknown as AuthConfig["session"],
+      }),
+    ).toThrow(AuthCryptoError);
+    expect(
+      defineAuthConfig({
+        appName: "Local Request Origin",
+        basePath: "/auth",
+        security: {
+          allowedRequestOrigins: ["http://localhost:5173"],
+        } as AuthConfig["security"],
+      }).security.allowedRequestOrigins,
+    ).toEqual(["http://localhost:5173"]);
+  });
+
   it("signs up, reads current user, logs out, and logs in", async () => {
     const { authFetch } = await setup();
     const signup = await authFetch("/auth/signup", {

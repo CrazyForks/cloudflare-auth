@@ -1113,6 +1113,9 @@ interface AuthSourceInspection {
   turnstileRequiresSecret: boolean;
   passwordHashProfile: PasswordHashProfileName;
   passwordHashConcurrency: number;
+  requireOriginOnUnsafeMethods: boolean;
+  requestOrigins: Array<{ property: string; value: string }>;
+  dynamicRequestOriginProperties: string[];
   redirectOrigins: Array<{ property: string; value: string }>;
   dynamicRedirectProperties: string[];
 }
@@ -1131,6 +1134,7 @@ async function inspectAuthSource(cwd: string): Promise<AuthSourceInspection> {
     configText,
     "passwordHashing",
   );
+  const requestText = extractObjectPropertyText(configText, "request");
   const parsedPasswordProfile = parsePasswordProfile(
     passwordHashingText
       ? extractStringProperty(passwordHashingText, "profile")
@@ -1173,6 +1177,36 @@ async function inspectAuthSource(cwd: string): Promise<AuthSourceInspection> {
             "maxConcurrentHashesPerIsolate",
           )
         : null) ?? 1,
+    requireOriginOnUnsafeMethods:
+      (requestText
+        ? extractBooleanProperty(requestText, "requireOriginOnUnsafeMethods")
+        : null) ?? true,
+    requestOrigins: [
+      ...extractStringArrayProperty(
+        configText,
+        "allowedRequestOrigins",
+      ).values.map((value) => ({
+        property: "allowedRequestOrigins",
+        value,
+      })),
+      ...extractStringArrayProperty(
+        configText,
+        "allowedPreviewRequestOrigins",
+      ).values.map((value) => ({
+        property: "allowedPreviewRequestOrigins",
+        value,
+      })),
+    ],
+    dynamicRequestOriginProperties: [
+      ...extractStringArrayProperty(
+        configText,
+        "allowedRequestOrigins",
+      ).dynamic.map(() => "allowedRequestOrigins"),
+      ...extractStringArrayProperty(
+        configText,
+        "allowedPreviewRequestOrigins",
+      ).dynamic.map(() => "allowedPreviewRequestOrigins"),
+    ],
     redirectOrigins: [
       ...extractStringArrayProperty(configText, "allowedOrigins").values.map(
         (value) => ({ property: "allowedOrigins", value }),
@@ -1268,6 +1302,17 @@ function checkAuthSource(
 
   const redirectCheck = checkRedirectOrigins(source, vars.AUTH_ENV);
   if (redirectCheck) checks.push(redirectCheck);
+  const requestOriginCheck = checkRequestOrigins(source, vars.AUTH_ENV);
+  if (requestOriginCheck) checks.push(requestOriginCheck);
+  if (remoteTarget && !source.requireOriginOnUnsafeMethods) {
+    checks.push({
+      id: "origin_policy",
+      status: "warn",
+      message:
+        "Unsafe auth-route methods do not require Origin in a remote target",
+      fix: "set request.requireOriginOnUnsafeMethods to true for browser cookie auth",
+    });
+  }
   return checks;
 }
 
@@ -1385,10 +1430,41 @@ function checkRedirectOrigins(
   };
 }
 
+function checkRequestOrigins(
+  source: AuthSourceInspection,
+  mode: string | undefined,
+): DoctorCheck | null {
+  const invalid = source.requestOrigins.find(
+    (origin) => !isValidRedirectOrigin(origin.value, mode),
+  );
+  if (invalid) {
+    return {
+      id: "request_origins",
+      status: "fail",
+      message: `Request ${invalid.property} contains an invalid exact origin`,
+      fix: "use exact origins like https://app.example.com without paths, queries, fragments, wildcards, or trailing slashes",
+    };
+  }
+  if (source.dynamicRequestOriginProperties.length > 0) {
+    return {
+      id: "request_origins",
+      status: "warn",
+      message: "Request origin allowlist contains dynamic values",
+      fix: "verify dynamic request origins are exact trusted browser origins",
+    };
+  }
+  return {
+    id: "request_origins",
+    status: "pass",
+    message: "Request origin allowlists are valid",
+  };
+}
+
 function isValidRedirectOrigin(
   value: string,
   mode: string | undefined,
 ): boolean {
+  if (value.includes("*")) return false;
   let url: URL;
   try {
     url = new URL(value);
@@ -1535,6 +1611,17 @@ function extractNumberProperty(text: string, property: string): number | null {
   const value = pattern.exec(text)?.[1];
   if (!value) return null;
   return Number.parseInt(value, 10);
+}
+
+function extractBooleanProperty(
+  text: string,
+  property: string,
+): boolean | null {
+  const pattern = new RegExp(`\\b${property}\\s*:\\s*(true|false)`, "u");
+  const value = pattern.exec(text)?.[1];
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return null;
 }
 
 function parsePasswordProfile(

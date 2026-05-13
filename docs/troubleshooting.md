@@ -22,6 +22,8 @@
 | Magic link opens but does not log in           | Submit the confirmation form; `GET` does not consume tokens.                                                                     |
 | Magic link redirect rejected                   | Add the origin/path to the redirect allowlist, not the request-origin allowlist.                                                 |
 | Redirect origin rejected by `doctor`           | Use exact origins like `https://example.com`; omit paths, queries, fragments, wildcards, credentials, and trailing `/`.          |
+| Request origin rejected by `doctor`            | Use exact browser origins like `https://app.example.com`; do not reuse redirect URLs with paths.                                 |
+| Missing-Origin browser mutations allowed       | Set `request.requireOriginOnUnsafeMethods` to `true` for preview and production cookie auth.                                     |
 | Auth route reported as `/auth/auth`            | Mount `createAuthRoutes(authConfig)` once at `authConfig.basePath` or use a single `createAuthHandler(authConfig)`.              |
 | Local dev behaves like production              | Set top-level Wrangler `vars.AUTH_ENV` to `development`.                                                                         |
 | Deploy uses development settings               | Run `npx cf-auth@latest doctor --env production`; named environments must repeat vars and bindings.                              |

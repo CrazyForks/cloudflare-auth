@@ -18,3 +18,7 @@ Important keys:
 - `turnstile.endpoints`: endpoint names that require or accept Turnstile
 
 The stable config surface is tracked in `docs/config-schema.md`.
+
+Request and redirect origin allowlists must contain exact origins only. Paths,
+queries, fragments, wildcards, credentials, and trailing slash variants are
+rejected during config validation.

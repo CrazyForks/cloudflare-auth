@@ -700,7 +700,7 @@ export function defineAuthConfig(
       "invalid_password_hash_concurrency",
     );
   }
-  return {
+  const resolved: AuthConfig = {
     appName: config.appName,
     basePath,
     runtime: {
@@ -777,6 +777,67 @@ export function defineAuthConfig(
       ...config.redirects,
     },
   };
+  assertAuthConfigOrigins(resolved);
+  assertSessionOptions(resolved);
+  return resolved;
+}
+
+function assertAuthConfigOrigins(config: AuthConfig): void {
+  assertExactOriginList(
+    config.security.allowedRequestOrigins,
+    "invalid_request_origin",
+  );
+  assertExactOriginList(
+    config.security.allowedPreviewRequestOrigins,
+    "invalid_request_origin",
+  );
+  assertExactOriginList(
+    config.redirects.allowedOrigins,
+    "invalid_redirect_origin",
+  );
+  assertExactOriginList(
+    config.redirects.allowedPreviewOrigins,
+    "invalid_redirect_origin",
+  );
+}
+
+function assertSessionOptions(config: AuthConfig): void {
+  if (
+    config.session.sameSite !== "lax" &&
+    config.session.sameSite !== "strict"
+  ) {
+    throw new AuthCryptoError(
+      "unsupported SameSite mode",
+      "invalid_cookie_config",
+    );
+  }
+}
+
+function assertExactOriginList(values: string[], code: string): void {
+  if (!Array.isArray(values)) {
+    throw new AuthCryptoError("origin allowlist must be an array", code);
+  }
+  for (const value of values) {
+    if (typeof value !== "string" || !isExactAllowedOrigin(value)) {
+      throw new AuthCryptoError("origin allowlist entry is invalid", code);
+    }
+  }
+}
+
+function isExactAllowedOrigin(value: string): boolean {
+  if (value.includes("*")) return false;
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  if (value !== url.origin) return false;
+  if (url.protocol === "https:") return true;
+  return (
+    url.protocol === "http:" &&
+    ["localhost", "127.0.0.1"].includes(url.hostname)
+  );
 }
 
 export function terminalEmail(

@@ -43,8 +43,9 @@ validate secret values.
 
 `doctor` also inspects `src` source files when present. It fails remote deploy
 checks when preview/production email config selects terminal email/dev outbox,
-when literal redirect origin allowlists are invalid, when auth routes are
-mounted more than once, or when an obvious `/auth/auth` double prefix exists.
+when literal request or redirect origin allowlists are invalid, when auth
+routes are mounted more than once, or when an obvious `/auth/auth` double prefix
+exists.
 It also runs the configured password hashing profile benchmark locally and
 labels production results as local estimates.
 

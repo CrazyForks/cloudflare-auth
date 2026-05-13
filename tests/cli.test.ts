@@ -144,6 +144,36 @@ describe("CLI MVP", () => {
     expect(errors.join("\n")).not.toMatch(/cfauth\.|AUTH_SECRET=/);
   });
 
+  it("doctor validates readable local auth secrets", async () => {
+    const cwd = await tempDir();
+    await writeWrangler(cwd);
+    await writeFile(
+      join(cwd, ".dev.vars"),
+      `AUTH_SECRET=k_dev.${"A".repeat(43)}\n`,
+    );
+    const output: string[] = [];
+    const ok = await runCli(["doctor"], {
+      cwd,
+      stdout: (line) => output.push(line),
+      runCommand: localDoctorRunner(),
+    });
+    expect(ok).toBe(0);
+    expect(output.join("\n")).toContain("Local AUTH_SECRET format is valid");
+
+    await writeFile(join(cwd, ".dev.vars"), "AUTH_SECRET=bad-secret\n");
+    const errors: string[] = [];
+    const invalid = await runCli(["doctor"], {
+      cwd,
+      stderr: (line) => errors.push(line),
+      runCommand: localDoctorRunner(),
+    });
+    expect(invalid).toBe(1);
+    expect(errors.join("\n")).toContain(
+      "Local AUTH_SECRET or AUTH_SECRET_PREVIOUS is invalid",
+    );
+    expect(errors.join("\n")).not.toContain("bad-secret");
+  });
+
   it("doctor reports unavailable Wrangler before deployment checks", async () => {
     const cwd = await tempDir();
     await writeWrangler(cwd);
@@ -877,6 +907,18 @@ function remoteSecretRunner(accounts = [{ id: "acct_prod" }]) {
       stdout: JSON.stringify([{ name: "AUTH_SECRET" }]),
       stderr: "",
     };
+  };
+}
+
+function localDoctorRunner() {
+  return (_command: string, args: string[]) => {
+    if (args[0] === "--version") {
+      return { status: 0, stdout: "4.90.1\n", stderr: "" };
+    }
+    if (args[0] === "d1" && args[1] === "execute") {
+      return { status: 0, stdout: migrationStateJson(), stderr: "" };
+    }
+    return { status: 0, stdout: "", stderr: "" };
   };
 }
 

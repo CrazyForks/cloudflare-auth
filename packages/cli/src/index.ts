@@ -3,7 +3,11 @@ import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { randomBytes } from "node:crypto";
-import { base64urlEncode, normalizeEmail } from "@cf-auth/core";
+import {
+  base64urlEncode,
+  normalizeEmail,
+  parseAuthKeyRing,
+} from "@cf-auth/core";
 import cliPackageJson from "../package.json" with { type: "json" };
 
 export const cliPackageName = "@cf-auth/cli";
@@ -388,13 +392,8 @@ async function commandDoctor(
     const secretCheck = checkRemoteSecret(envName, cwd, runner);
     addCheck(secretCheck);
   }
-  if (!existsSync(join(cwd, ".dev.vars")) && !envName) {
-    addCheck({
-      id: "local_secret",
-      status: "fail",
-      message: "Local AUTH_SECRET is missing",
-      fix: "npx cf-auth@latest rotate-secret --print > .dev.vars",
-    });
+  if (!envName) {
+    for (const check of await checkLocalSecrets(cwd)) addCheck(check);
   }
   if (ok)
     addCheck({
@@ -875,6 +874,80 @@ function parseSecretNames(text: string): Set<string> {
   } catch {
     return new Set();
   }
+}
+
+async function checkLocalSecrets(cwd: string): Promise<DoctorCheck[]> {
+  let text: string;
+  try {
+    text = await readFile(join(cwd, ".dev.vars"), "utf8");
+  } catch {
+    return [
+      {
+        id: "local_secret",
+        status: "fail",
+        message: "Local AUTH_SECRET is missing",
+        fix: "npx cf-auth@latest rotate-secret --print > .dev.vars",
+      },
+    ];
+  }
+  const values = parseEnvFile(text);
+  const current = values.AUTH_SECRET;
+  if (!current) {
+    return [
+      {
+        id: "local_secret",
+        status: "fail",
+        message: "Local AUTH_SECRET is missing",
+        fix: "npx cf-auth@latest rotate-secret --print >> .dev.vars",
+      },
+    ];
+  }
+  try {
+    parseAuthKeyRing(current, values.AUTH_SECRET_PREVIOUS);
+  } catch {
+    return [
+      {
+        id: "local_secret",
+        status: "fail",
+        message: "Local AUTH_SECRET or AUTH_SECRET_PREVIOUS is invalid",
+        fix: "regenerate secrets with npx cf-auth@latest rotate-secret --print",
+      },
+    ];
+  }
+  return [
+    {
+      id: "local_secret",
+      status: "pass",
+      message: values.AUTH_SECRET_PREVIOUS
+        ? "Local AUTH_SECRET key ring is valid"
+        : "Local AUTH_SECRET format is valid",
+    },
+  ];
+}
+
+function parseEnvFile(text: string): Record<string, string> {
+  const values: Record<string, string> = {};
+  for (const rawLine of text.split(/\r?\n/u)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+    const match = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/u.exec(line);
+    if (!match) continue;
+    const key = match[1];
+    const value = match[2];
+    if (!key || value === undefined) continue;
+    values[key] = stripEnvQuotes(value.trim());
+  }
+  return values;
+}
+
+function stripEnvQuotes(value: string): string {
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    return value.slice(1, -1);
+  }
+  return value;
 }
 
 function displayCommand(command: string, args: string[]): string {

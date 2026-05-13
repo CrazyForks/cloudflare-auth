@@ -162,6 +162,7 @@ describe("security hardening helpers", () => {
         password: "correct horse battery staple",
       }),
     });
+    expect(response.status).toBe(429);
     await expect(response.json()).resolves.toMatchObject({
       error: { code: "rate_limited" },
     });

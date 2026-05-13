@@ -1836,7 +1836,9 @@ function errorResponse(error: unknown, status: number, code: string): Response {
       ? 413
       : code === "unsupported_content_type"
         ? 415
-        : status,
+        : code === "rate_limited"
+          ? 429
+          : status,
   );
 }
 

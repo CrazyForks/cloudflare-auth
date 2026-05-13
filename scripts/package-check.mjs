@@ -30,6 +30,14 @@ for (const dir of packageDirs) {
     for (const [name, target] of Object.entries(pkg.bin)) {
       if (!String(target).startsWith("./dist/"))
         failures.push(`${pkg.name}: bin ${name} must point into dist`);
+      try {
+        const bin = await readFile(join(dir, String(target)), "utf8");
+        if (!bin.startsWith("#!/usr/bin/env node")) {
+          failures.push(`${pkg.name}: bin ${name} is missing node shebang`);
+        }
+      } catch {
+        failures.push(`${pkg.name}: bin ${name} target ${target} missing`);
+      }
     }
   }
 }

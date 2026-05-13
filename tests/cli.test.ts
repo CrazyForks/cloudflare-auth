@@ -362,6 +362,84 @@ describe("CLI MVP", () => {
       "Deploy without --env requires top-level vars.AUTH_ENV=production",
     );
   });
+
+  it("applies a new remote auth secret without printing the secret", async () => {
+    const cwd = await tempDir();
+    await writeWrangler(cwd);
+    const calls: Array<{
+      command: string;
+      args: string[];
+      input: string | undefined;
+    }> = [];
+    const output: string[] = [];
+    const code = await runCli(
+      ["rotate-secret", "--apply", "--env", "production"],
+      {
+        cwd,
+        stdout: (line) => output.push(line),
+        runCommand: (command, args, options) => {
+          calls.push({ command, args, input: options.input });
+          return { status: 0, stdout: "", stderr: "" };
+        },
+      },
+    );
+
+    expect(code).toBe(0);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.command).toBe("wrangler");
+    expect(calls[0]?.args).toEqual([
+      "secret",
+      "put",
+      "AUTH_SECRET",
+      "--env",
+      "production",
+    ]);
+    expect(calls[0]?.input).toMatch(/^k1\.[A-Za-z0-9_-]{43}$/);
+    expect(output.join("\n")).toContain("Remote AUTH_SECRET updated.");
+    expect(output.join("\n")).not.toContain(calls[0]?.input ?? "");
+  });
+
+  it("applies previous auth secret from environment before the new remote secret", async () => {
+    const cwd = await tempDir();
+    await writeWrangler(cwd);
+    const previous = "k_old.abcdefghijklmnopqrstuvwxyzABCDEFG1234567";
+    process.env.AUTH_SECRET_OLD = previous;
+    const calls: Array<{ args: string[]; input: string | undefined }> = [];
+    try {
+      const code = await runCli(
+        [
+          "rotate-secret",
+          "--apply",
+          "--previous-from-env",
+          "AUTH_SECRET_OLD",
+          "--env",
+          "production",
+        ],
+        {
+          cwd,
+          runCommand: (_command, args, options) => {
+            calls.push({ args, input: options.input });
+            return { status: 0, stdout: "", stderr: "" };
+          },
+        },
+      );
+      expect(code).toBe(0);
+    } finally {
+      delete process.env.AUTH_SECRET_OLD;
+    }
+
+    expect(calls[0]).toMatchObject({
+      args: ["secret", "put", "AUTH_SECRET_PREVIOUS", "--env", "production"],
+      input: previous,
+    });
+    expect(calls[1]?.args).toEqual([
+      "secret",
+      "put",
+      "AUTH_SECRET",
+      "--env",
+      "production",
+    ]);
+  });
 });
 
 async function tempDir() {

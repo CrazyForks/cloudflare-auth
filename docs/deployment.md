@@ -38,6 +38,12 @@ Required placeholders:
 `wrangler secret list --format json`; it can verify that `AUTH_SECRET` exists,
 but it cannot read back or validate the secret value.
 
+`cf-auth rotate-secret --apply --env production` generates a new `AUTH_SECRET`
+and sends it to Wrangler over stdin. It prints the Wrangler operation result,
+not the generated secret. Provide `--previous-from-env NAME` or
+`--previous-from-stdin` when rotating without invalidating existing sessions and
+email tokens.
+
 Deploying without `--env` fails unless `doctor` proves the top-level Wrangler config is intentionally production-safe.
 
 The Deploy to Cloudflare button readiness checklist is tracked in `docs/deploy-to-cloudflare.md`.

@@ -9,6 +9,7 @@
 | Schema version mismatch                        | Run migrations and inspect `auth_schema_migrations`.                                                                   |
 | Missing `AUTH_SECRET`                          | Run `npx cf-auth@latest rotate-secret --print` locally or `npx cf-auth@latest rotate-secret --apply --env production`. |
 | Remote secret check fails                      | Run `wrangler login`, confirm the Worker environment exists, then rerun `npx cf-auth@latest doctor --env production`.  |
+| Secret rotation invalidated sessions           | Rotate again with `--previous-from-env NAME` or `--previous-from-stdin` when the old secret is available.              |
 | Cloudflare Email binding missing               | Add the `AUTH_EMAIL` send_email binding or switch to terminal/custom email.                                            |
 | Sender/domain not ready                        | Follow `docs/cloudflare-email.md`.                                                                                     |
 | Cookie not set locally                         | Ensure the dev cookie is not `__Host-` on plain HTTP.                                                                  |

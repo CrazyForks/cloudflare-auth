@@ -24,6 +24,7 @@ interface ParsedArgs {
 
 interface CommandRunOptions {
   cwd: string;
+  input?: string;
 }
 
 interface CommandRunResult {
@@ -112,7 +113,9 @@ export async function runCli(
         out(commandGenerate(parsed));
         return 0;
       case "rotate-secret":
-        out(commandRotateSecret(parsed));
+        out(
+          await commandRotateSecret(parsed, cwd, io.runCommand ?? runCommand),
+        );
         return 0;
       case "clean":
         out(commandClean(parsed));
@@ -474,6 +477,7 @@ function runCommand(
   const result = spawnSync(command, args, {
     cwd: options.cwd,
     encoding: "utf8",
+    input: options.input,
   });
   return {
     status: result.status,
@@ -486,8 +490,13 @@ function runCheckedCommand(
   command: { command: string; args: string[] },
   cwd: string,
   runner: CommandRunner,
+  input?: string,
 ): string {
-  const result = runner(command.command, command.args, { cwd });
+  const result = runner(
+    command.command,
+    command.args,
+    input === undefined ? { cwd } : { cwd, input },
+  );
   const display = displayCommand(command.command, command.args);
   if (result.status !== 0) {
     const detail = (result.stderr || result.stdout).trim();
@@ -580,11 +589,79 @@ function commandGenerate(parsed: ParsedArgs): string {
   return "app.route(authConfig.basePath, createAuthRoutes(authConfig));";
 }
 
-function commandRotateSecret(parsed: ParsedArgs): string {
+async function commandRotateSecret(
+  parsed: ParsedArgs,
+  cwd: string,
+  runner: CommandRunner,
+): Promise<string> {
   const kid = typeof parsed.flags.kid === "string" ? parsed.flags.kid : "k1";
   const secret = `${kid}.${base64urlEncode(randomBytes(32))}`;
-  if (parsed.flags.apply) return "wrangler secret put AUTH_SECRET";
+  if (parsed.flags.apply) {
+    const envName = parsed.flags.env as string | undefined;
+    const config = await readWrangler(cwd);
+    if (hasNamedEnvironments(config) && !envName) {
+      throw new Error(
+        "rotate-secret --apply requires --env when Wrangler config uses named environments.",
+      );
+    }
+    const lines: string[] = [];
+    const previous = await resolvePreviousSecret(parsed);
+    if (previous) {
+      const previousCommand = {
+        command: "wrangler",
+        args: [
+          "secret",
+          "put",
+          "AUTH_SECRET_PREVIOUS",
+          ...(envName ? ["--env", envName] : []),
+        ],
+      };
+      lines.push(runCheckedCommand(previousCommand, cwd, runner, previous));
+      lines.push("Remote AUTH_SECRET_PREVIOUS updated.");
+    } else {
+      lines.push(
+        "Warning: previous secret was not provided; existing sessions and email tokens will be invalidated.",
+      );
+    }
+    const command = {
+      command: "wrangler",
+      args: [
+        "secret",
+        "put",
+        "AUTH_SECRET",
+        ...(envName ? ["--env", envName] : []),
+      ],
+    };
+    lines.push(runCheckedCommand(command, cwd, runner, secret));
+    lines.push("Remote AUTH_SECRET updated.");
+    return lines.join("\n");
+  }
   return `AUTH_SECRET=${secret}`;
+}
+
+async function resolvePreviousSecret(
+  parsed: ParsedArgs,
+): Promise<string | null> {
+  if (parsed.flags["previous-from-stdin"]) {
+    const value = (await readStdin()).trim();
+    if (!value) throw new Error("previous secret from stdin was empty");
+    return value;
+  }
+  if (typeof parsed.flags["previous-from-env"] === "string") {
+    const envName = parsed.flags["previous-from-env"];
+    const value = process.env[envName]?.trim();
+    if (!value) throw new Error(`environment variable ${envName} is empty`);
+    return value;
+  }
+  return null;
+}
+
+async function readStdin(): Promise<string> {
+  let value = "";
+  for await (const chunk of process.stdin) {
+    value += String(chunk);
+  }
+  return value;
 }
 
 function commandClean(parsed: ParsedArgs): string {

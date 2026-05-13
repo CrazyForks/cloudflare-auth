@@ -1,0 +1,157 @@
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+
+import { runCli } from "@cf-auth/cli";
+import { describe, expect, it } from "vitest";
+
+describe("CLI MVP", () => {
+  it("scaffolds a new Hono app without manual source mutation", async () => {
+    const cwd = await tempDir();
+    const output: string[] = [];
+    const code = await runCli(["init", "my-app", "--yes"], {
+      cwd,
+      stdout: (line) => output.push(line),
+    });
+    const app = join(cwd, "my-app");
+    expect(code).toBe(0);
+    expect(existsSync(join(app, "src", "auth.config.ts"))).toBe(true);
+    expect(existsSync(join(app, "migrations", "0001_initial.sql"))).toBe(true);
+    expect(await readFile(join(app, "src", "index.ts"), "utf8")).toContain(
+      "app.route(authConfig.basePath",
+    );
+    expect(output.join("\n")).toContain("Initialized Cloudflare Auth");
+  });
+
+  it("prints snippets and writes nothing in dry-run init", async () => {
+    const cwd = await tempDir();
+    const output: string[] = [];
+    const code = await runCli(["init", "--dry-run"], {
+      cwd,
+      stdout: (line) => output.push(line),
+    });
+    expect(code).toBe(0);
+    expect(output.join("\n")).toContain("Hono mount");
+    expect(existsSync(join(cwd, "auth.config.ts"))).toBe(false);
+  });
+
+  it("constructs local and remote Wrangler migration commands", async () => {
+    const cwd = await tempDir();
+    await writeWrangler(cwd);
+    const local: string[] = [];
+    await runCli(["migrate", "--status", "--local"], {
+      cwd,
+      stdout: (line) => local.push(line),
+    });
+    expect(local[0]).toBe("wrangler d1 migrations list app-auth-dev --local");
+
+    const remote: string[] = [];
+    await runCli(["migrate", "--remote", "--env", "production"], {
+      cwd,
+      stdout: (line) => remote.push(line),
+    });
+    expect(remote[0]).toBe(
+      "wrangler d1 migrations apply app-auth --remote --env production",
+    );
+
+    const errors: string[] = [];
+    const code = await runCli(["migrate", "--remote"], {
+      cwd,
+      stderr: (line) => errors.push(line),
+    });
+    expect(code).toBe(1);
+    expect(errors.join("\n")).toContain("Remote migrations require --env");
+  });
+
+  it("doctor reports missing D1 and secret fixes without leaking sensitive values", async () => {
+    const cwd = await tempDir();
+    await writeFile(
+      join(cwd, "wrangler.jsonc"),
+      JSON.stringify(
+        {
+          vars: {
+            AUTH_ENV: "development",
+            AUTH_PUBLIC_ORIGIN: "http://localhost:8787",
+          },
+        },
+        null,
+        2,
+      ),
+    );
+    const errors: string[] = [];
+    const code = await runCli(["doctor"], {
+      cwd,
+      stderr: (line) => errors.push(line),
+    });
+    expect(code).toBe(1);
+    expect(errors.join("\n")).toContain("D1 binding AUTH_DB is missing");
+    expect(errors.join("\n")).not.toMatch(/cfauth\.|AUTH_SECRET=/);
+  });
+
+  it("prints deploy dry-run and safe recovery helper output", async () => {
+    const cwd = await tempDir();
+    await writeWrangler(cwd);
+    const deploy: string[] = [];
+    await runCli(["deploy", "--dry-run", "--env", "production"], {
+      cwd,
+      stdout: (line) => deploy.push(line),
+    });
+    expect(deploy[0]).toBe(
+      "doctor -> migrate status -> wrangler deploy --env production",
+    );
+
+    const recovery: string[] = [];
+    await runCli(
+      ["users", "disable", "person@example.com", "--local", "--dry-run"],
+      {
+        cwd,
+        stdout: (line) => recovery.push(line),
+      },
+    );
+    expect(recovery.join("\n")).toContain("Dry run only");
+    expect(recovery.join("\n")).not.toMatch(/cfauth\.|cookie=.*cfauth/i);
+  });
+});
+
+async function tempDir() {
+  return mkdtemp(join(tmpdir(), "cf-auth-cli-"));
+}
+
+async function writeWrangler(cwd: string) {
+  await writeFile(
+    join(cwd, "wrangler.jsonc"),
+    JSON.stringify(
+      {
+        vars: {
+          AUTH_ENV: "development",
+          AUTH_PUBLIC_ORIGIN: "http://localhost:8787",
+        },
+        d1_databases: [
+          {
+            binding: "AUTH_DB",
+            database_name: "app-auth-dev",
+            database_id: "local-id",
+          },
+        ],
+        env: {
+          production: {
+            vars: {
+              AUTH_ENV: "production",
+              AUTH_PUBLIC_ORIGIN: "https://example.com",
+            },
+            d1_databases: [
+              {
+                binding: "AUTH_DB",
+                database_name: "app-auth",
+                database_id: "prod-id",
+              },
+            ],
+          },
+        },
+      },
+      null,
+      2,
+    ),
+  );
+}

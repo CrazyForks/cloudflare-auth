@@ -1,2 +1,6 @@
 #!/usr/bin/env node
-import "@cf-auth/cli";
+import { runCli } from "@cf-auth/cli";
+
+runCli().then((code) => {
+  process.exitCode = code;
+});

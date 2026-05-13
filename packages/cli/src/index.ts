@@ -1,17 +1,403 @@
 #!/usr/bin/env node
+import { readFile, mkdir, writeFile, copyFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { randomBytes } from "node:crypto";
+import { base64urlEncode } from "@cf-auth/core";
+
 export const cliPackageName = "@cf-auth/cli";
 
-export async function runCli(args = process.argv.slice(2)): Promise<void> {
-  const command = args[0] ?? "help";
-  if (command === "help" || command === "--help" || command === "-h") {
-    console.log(
-      "cf-auth <init|migrate|doctor|deploy|generate|clean|rotate-secret>",
+export interface CliIO {
+  cwd?: string;
+  stdout?: (line: string) => void;
+  stderr?: (line: string) => void;
+}
+
+interface ParsedArgs {
+  command: string;
+  positionals: string[];
+  flags: Record<string, string | boolean>;
+}
+
+export async function runCli(
+  args = process.argv.slice(2),
+  io: CliIO = {},
+): Promise<number> {
+  const parsed = parseArgs(args);
+  const out = io.stdout ?? console.log;
+  const err = io.stderr ?? console.error;
+  const cwd = io.cwd ?? process.cwd();
+  try {
+    switch (parsed.command) {
+      case "help":
+      case "--help":
+      case "-h":
+        out(
+          "cf-auth <init|migrate|doctor|deploy|generate|clean|rotate-secret|users|sessions>",
+        );
+        return 0;
+      case "init":
+        await commandInit(parsed, cwd, out);
+        return 0;
+      case "migrate":
+        out(await commandMigrate(parsed, cwd));
+        return 0;
+      case "doctor": {
+        const result = await commandDoctor(parsed, cwd);
+        for (const line of result.lines) (result.ok ? out : err)(line);
+        return result.ok ? 0 : 1;
+      }
+      case "deploy":
+        out(await commandDeploy(parsed, cwd));
+        return 0;
+      case "generate":
+        out(commandGenerate(parsed));
+        return 0;
+      case "rotate-secret":
+        out(commandRotateSecret(parsed));
+        return 0;
+      case "clean":
+        out(commandClean(parsed));
+        return 0;
+      case "users":
+      case "sessions":
+        out(commandRecovery(parsed));
+        return 0;
+      default:
+        err(`Unknown command: ${parsed.command}`);
+        return 1;
+    }
+  } catch (error) {
+    err(error instanceof Error ? error.message : String(error));
+    return 1;
+  }
+}
+
+async function commandInit(
+  parsed: ParsedArgs,
+  cwd: string,
+  out: (line: string) => void,
+): Promise<void> {
+  const target = resolve(cwd, parsed.positionals[0] ?? ".");
+  if (parsed.flags["dry-run"]) {
+    out(
+      "Would write auth.config.ts, wrangler.jsonc, migrations, .dev.vars.example, and route mount snippets.",
+    );
+    out(
+      "Hono mount: app.route(authConfig.basePath, createAuthRoutes(authConfig));",
     );
     return;
   }
-  console.log(`cf-auth ${command} is not implemented yet.`);
+  await mkdir(join(target, "src"), { recursive: true });
+  await mkdir(join(target, "migrations"), { recursive: true });
+  await writeIfMissing(
+    join(target, "package.json"),
+    JSON.stringify(templatePackageJson(), null, 2) + "\n",
+  );
+  await writeIfMissing(
+    join(target, "src", "auth.config.ts"),
+    authConfigTemplate(),
+  );
+  await writeIfMissing(join(target, "src", "index.ts"), honoIndexTemplate());
+  await writeIfMissing(join(target, "wrangler.jsonc"), wranglerTemplate());
+  await writeIfMissing(join(target, ".dev.vars.example"), devVarsTemplate());
+  await copyFile(
+    "migrations/0001_initial.sql",
+    join(target, "migrations", "0001_initial.sql"),
+  );
+  await copyFile(
+    "migrations/0002_indexes.sql",
+    join(target, "migrations", "0002_indexes.sql"),
+  );
+  out(`Initialized Cloudflare Auth in ${target}`);
+  out("Next: pnpm install && npx cf-auth migrate --local && npm run dev");
+}
+
+async function commandMigrate(
+  parsed: ParsedArgs,
+  cwd: string,
+): Promise<string> {
+  const config = await readWrangler(cwd);
+  const target = targetMode(parsed);
+  const database = selectD1(config, parsed.flags.env as string | undefined);
+  const envFlag =
+    target.remote && parsed.flags.env ? ` --env ${parsed.flags.env}` : "";
+  const status = parsed.flags.status ? "list" : "apply";
+  const remoteFlag = target.remote ? "--remote" : "--local";
+  if (target.remote && hasNamedEnvironments(config) && !parsed.flags.env) {
+    throw new Error(
+      "Remote migrations require --env when Wrangler config uses named environments.",
+    );
+  }
+  return `wrangler d1 migrations ${status} ${database.database_name} ${remoteFlag}${envFlag}`;
+}
+
+async function commandDoctor(
+  parsed: ParsedArgs,
+  cwd: string,
+): Promise<{ ok: boolean; lines: string[] }> {
+  const lines: string[] = [];
+  let ok = true;
+  let config: WranglerConfig | null = null;
+  try {
+    config = await readWrangler(cwd);
+    lines.push("✓ Wrangler config found");
+  } catch {
+    return {
+      ok: false,
+      lines: [
+        "✗ Wrangler config missing",
+        "  Fix: npx cf-auth@latest init --repair",
+      ],
+    };
+  }
+  const envName = parsed.flags.env as string | undefined;
+  const selected = envName ? config.env?.[envName] : config;
+  if (envName && !selected) {
+    return {
+      ok: false,
+      lines: [
+        `✗ Wrangler environment ${envName} missing`,
+        `  Fix: add env.${envName} to wrangler.jsonc`,
+      ],
+    };
+  }
+  const d1 = selected?.d1_databases?.find((item) => item.binding === "AUTH_DB");
+  if (!d1) {
+    ok = false;
+    lines.push("✗ D1 binding AUTH_DB is missing");
+    lines.push(
+      "  Fix: npx cf-auth@latest init --repair or add d1_databases binding AUTH_DB",
+    );
+  } else if (d1.database_id?.startsWith("REPLACE_")) {
+    ok = false;
+    lines.push("✗ D1 database_id is still a placeholder");
+    lines.push("  Fix: set the real D1 database_id for AUTH_DB");
+  } else {
+    lines.push("✓ D1 binding AUTH_DB configured");
+  }
+  const vars = selected?.vars ?? {};
+  if (!vars.AUTH_ENV) {
+    ok = false;
+    lines.push("✗ AUTH_ENV is missing");
+    lines.push(
+      "  Fix: set vars.AUTH_ENV to development, preview, or production",
+    );
+  }
+  if ((vars.AUTH_ENV === "production" || envName) && !vars.AUTH_PUBLIC_ORIGIN) {
+    ok = false;
+    lines.push("✗ Production public origin is missing");
+    lines.push("  Fix: set AUTH_PUBLIC_ORIGIN=https://example.com");
+  }
+  if (!existsSync(join(cwd, ".dev.vars")) && !envName) {
+    ok = false;
+    lines.push("✗ Local AUTH_SECRET is missing");
+    lines.push("  Fix: npx cf-auth@latest rotate-secret --print > .dev.vars");
+  }
+  if (ok) lines.push("✓ Auth route mounted at /auth");
+  return { ok, lines };
+}
+
+async function commandDeploy(parsed: ParsedArgs, cwd: string): Promise<string> {
+  const envName = parsed.flags.env as string | undefined;
+  if (!parsed.flags["dry-run"]) {
+    throw new Error(
+      "Only deploy --dry-run is implemented in this local CLI build.",
+    );
+  }
+  await readWrangler(cwd);
+  const envFlag = envName ? ` --env ${envName}` : "";
+  return `doctor -> migrate status -> wrangler deploy${envFlag}`;
+}
+
+function commandGenerate(parsed: ParsedArgs): string {
+  const what = parsed.positionals[0] ?? "hono";
+  if (what === "types")
+    return "export interface Env { AUTH_DB: D1Database; AUTH_SECRET: string; }";
+  if (what === "react-client")
+    return 'import { createAuthClient } from "@cf-auth/client";\nexport const auth = createAuthClient({ basePath: "/auth" });';
+  if (what === "worker-snippet")
+    return "const authHandler = createAuthHandler(authConfig);\nconst authResponse = await authHandler.fetch(request, env, ctx);";
+  return "app.route(authConfig.basePath, createAuthRoutes(authConfig));";
+}
+
+function commandRotateSecret(parsed: ParsedArgs): string {
+  const kid = typeof parsed.flags.kid === "string" ? parsed.flags.kid : "k1";
+  const secret = `${kid}.${base64urlEncode(randomBytes(32))}`;
+  if (parsed.flags.apply) return "wrangler secret put AUTH_SECRET";
+  return `AUTH_SECRET=${secret}`;
+}
+
+function commandClean(parsed: ParsedArgs): string {
+  const target = targetMode(parsed);
+  const envFlag = parsed.flags.env ? ` --env ${parsed.flags.env}` : "";
+  const remoteFlag = target.remote ? "--remote" : "--local";
+  return `wrangler d1 execute AUTH_DB ${remoteFlag}${envFlag} --command <redacted cleanup SQL>`;
+}
+
+function commandRecovery(parsed: ParsedArgs): string {
+  if (!parsed.flags["dry-run"])
+    return "Recovery helpers require --dry-run in this local build.";
+  return "Dry run only. Would update users/sessions without printing tokens, hashes, cookies, raw IPs, or raw user agents.";
+}
+
+function parseArgs(args: string[]): ParsedArgs {
+  const [command = "help", ...rest] = args;
+  const flags: Record<string, string | boolean> = {};
+  const positionals: string[] = [];
+  for (let i = 0; i < rest.length; i += 1) {
+    const arg = rest[i];
+    if (arg?.startsWith("--")) {
+      const key = arg.slice(2);
+      const next = rest[i + 1];
+      if (next && !next.startsWith("--")) {
+        flags[key] = next;
+        i += 1;
+      } else {
+        flags[key] = true;
+      }
+    } else if (arg) {
+      positionals.push(arg);
+    }
+  }
+  return { command, flags, positionals };
+}
+
+function targetMode(parsed: ParsedArgs): { local: boolean; remote: boolean } {
+  const local = Boolean(parsed.flags.local);
+  const remote = Boolean(parsed.flags.remote);
+  if (local === remote)
+    throw new Error("Specify exactly one of --local or --remote.");
+  return { local, remote };
+}
+
+interface WranglerConfig {
+  vars?: Record<string, string>;
+  d1_databases?: Array<{
+    binding: string;
+    database_name: string;
+    database_id?: string;
+  }>;
+  env?: Record<string, WranglerConfig>;
+}
+
+async function readWrangler(cwd: string): Promise<WranglerConfig> {
+  const path = existsSync(join(cwd, "wrangler.jsonc"))
+    ? join(cwd, "wrangler.jsonc")
+    : join(cwd, "wrangler.json");
+  const text = await readFile(path, "utf8");
+  return JSON.parse(stripJsonComments(text)) as WranglerConfig;
+}
+
+function selectD1(config: WranglerConfig, envName?: string) {
+  const selected = envName ? config.env?.[envName] : config;
+  const database = selected?.d1_databases?.find(
+    (item) => item.binding === "AUTH_DB",
+  );
+  if (!database) throw new Error("D1 binding AUTH_DB is missing.");
+  return database;
+}
+
+function hasNamedEnvironments(config: WranglerConfig): boolean {
+  return Boolean(config.env && Object.keys(config.env).length > 0);
+}
+
+function stripJsonComments(text: string): string {
+  return text.replace(/^\s*\/\/.*$/gmu, "");
+}
+
+async function writeIfMissing(path: string, contents: string): Promise<void> {
+  if (existsSync(path)) return;
+  await writeFile(path, contents);
+}
+
+function templatePackageJson() {
+  return {
+    type: "module",
+    scripts: {
+      dev: "wrangler dev",
+      build: "tsc -p tsconfig.json --noEmit",
+      test: "vitest run",
+    },
+    dependencies: {
+      "@cf-auth/hono": "workspace:*",
+      "@cf-auth/worker": "workspace:*",
+      hono: "4.12.18",
+    },
+    devDependencies: {
+      typescript: "6.0.3",
+      wrangler: "4.90.1",
+      vitest: "4.1.6",
+    },
+    engines: { node: ">=22.12.0" },
+  };
+}
+
+function authConfigTemplate(): string {
+  return `import { defineAuthConfig, terminalEmail } from "@cf-auth/worker";
+
+export default defineAuthConfig({
+  appName: "My App",
+  basePath: "/auth",
+  email: terminalEmail({ outbox: true })
+});
+`;
+}
+
+function honoIndexTemplate(): string {
+  return `import { Hono } from "hono";
+import { createAuthRoutes } from "@cf-auth/hono";
+import authConfig from "./auth.config";
+
+const app = new Hono();
+app.route(authConfig.basePath, createAuthRoutes(authConfig));
+export default app;
+`;
+}
+
+function wranglerTemplate(): string {
+  return `{
+  "name": "my-app-dev",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-05-13",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "AUTH_ENV": "development",
+    "AUTH_PUBLIC_ORIGIN": "http://localhost:8787"
+  },
+  "d1_databases": [
+    {
+      "binding": "AUTH_DB",
+      "database_name": "my-app-auth-dev",
+      "database_id": "REPLACE_WITH_DATABASE_ID"
+    }
+  ],
+  "env": {
+    "production": {
+      "name": "my-app",
+      "vars": {
+        "AUTH_ENV": "production",
+        "AUTH_PUBLIC_ORIGIN": "https://example.com"
+      },
+      "d1_databases": [
+        {
+          "binding": "AUTH_DB",
+          "database_name": "my-app-auth",
+          "database_id": "REPLACE_WITH_DATABASE_ID"
+        }
+      ]
+    }
+  }
+}
+`;
+}
+
+function devVarsTemplate(): string {
+  return "AUTH_ENV=development\nAUTH_PUBLIC_ORIGIN=http://localhost:8787\nAUTH_SECRET=k_dev.REPLACE_WITH_GENERATED_BASE64URL_SECRET\n";
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  void runCli();
+  runCli().then((code) => {
+    process.exitCode = code;
+  });
 }

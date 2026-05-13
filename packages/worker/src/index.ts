@@ -1,5 +1,6 @@
 import {
   type AuthEventRow,
+  AuthCryptoError,
   type AuthRepositories,
   AuthRepositoryError,
   type CreateSessionInput,
@@ -17,7 +18,26 @@ import {
   assertHmacTokenEnvelope,
   assertValidMetadataJson,
   assertVerificationTokenSubject,
+  canonicalizeIp,
+  deriveRateLimitKey,
+  dummyVerifyPassword,
+  generateRawAuthToken,
+  hashPassword,
+  hashRawAuthToken,
+  normalizeEmail,
+  normalizeUsername,
+  parseAuthKeyRing,
+  parseRawAuthToken,
+  PasswordHashSemaphore,
+  randomId,
+  resolveSessionCookie,
+  serializeClearSessionCookie,
+  serializeSessionCookie,
+  validatePassword,
+  validateRedirectTarget,
+  verifyPassword,
 } from "@cf-auth/core";
+import { z } from "zod";
 
 export const workerPackageName = "@cf-auth/worker";
 
@@ -293,6 +313,23 @@ export function createD1Repositories(db: D1Database): AuthRepositories {
           .bind(input.id),
       );
     },
+    async findActiveVerificationTokenByHash(tokenHash, type, now) {
+      assertHmacTokenEnvelope(tokenHash);
+      const sessionDb =
+        "withSession" in db ? db.withSession("first-primary") : db;
+      return sessionDb
+        .prepare(
+          `SELECT * FROM verification_tokens
+           WHERE token_hash = ?
+             AND type = ?
+             AND used_at IS NULL
+             AND consume_id IS NULL
+             AND revoked_at IS NULL
+             AND expires_at > ?`,
+        )
+        .bind(tokenHash, type, now)
+        .first<VerificationTokenRow>();
+    },
     async revokeActiveVerificationTokens(input) {
       assertVerificationTokenSubject(input);
       const subjectSql = input.userId
@@ -463,29 +500,1267 @@ export function createD1Repositories(db: D1Database): AuthRepositories {
   return { users, sessions, verificationTokens, events, rateLimits };
 }
 
-export function defineAuthConfig<T extends MinimalAuthConfig>(config: T): T {
-  return config;
+export interface AuthEmailRuntime<Env = unknown> {
+  env: Env;
+  ctx: ExecutionContext;
+  mode: AuthRuntimeMode;
+  requestId: string;
+  publicOrigin: string;
+  logger: AuthLogger;
 }
 
-export function terminalEmail(options: { outbox?: boolean } = {}) {
-  return { kind: "terminal", outbox: options.outbox === true };
+export interface AuthLogger {
+  log(message: string, metadata?: Record<string, unknown>): void;
+  error(message: string, metadata?: Record<string, unknown>): void;
 }
 
-export function createAuthHandler(config: MinimalAuthConfig) {
+export interface SendAuthEmailInput {
+  to: string;
+  token: string;
+  url: string;
+  redirectTo?: string | null;
+  expiresAt: number;
+}
+
+export interface AuthEmailAdapter<Env = unknown> {
+  kind?: string;
+  sendMagicLink(
+    input: SendAuthEmailInput,
+    runtime: AuthEmailRuntime<Env>,
+  ): Promise<void>;
+  sendEmailVerification(
+    input: SendAuthEmailInput,
+    runtime: AuthEmailRuntime<Env>,
+  ): Promise<void>;
+  sendPasswordReset(
+    input: SendAuthEmailInput,
+    runtime: AuthEmailRuntime<Env>,
+  ): Promise<void>;
+}
+
+export type AuthRuntimeMode = "development" | "preview" | "production";
+
+export interface AuthConfig extends MinimalAuthConfig {
+  runtime: {
+    mode: AuthRuntimeMode | "from-env";
+    publicOrigin: string | "from-env";
+    trustedHosts: string[];
+  };
+  database: { binding: string };
+  session: {
+    cookieName: "auto" | string;
+    maxAgeDays: number;
+    sameSite: "lax" | "strict";
+    secure: "auto";
+    domain?: string;
+    requireVerifiedEmail: boolean;
+  };
+  request: {
+    maxBodyBytes: number;
+    requireOriginOnUnsafeMethods: boolean;
+  };
+  security: {
+    allowedRequestOrigins: string[];
+    allowedPreviewRequestOrigins: string[];
+  };
+  passwordHashing: {
+    profile: "development-fast" | "workers-balanced" | "high-cost";
+    maxConcurrentHashesPerIsolate: number;
+  };
+  signup: {
+    enabled: boolean;
+    requireEmailVerificationBeforeSession: boolean;
+    enumerationSafe: boolean;
+    username: { enabled: boolean; required: boolean };
+  };
+  login: {
+    emailPassword: boolean;
+    usernamePassword: boolean;
+    magicLink: boolean;
+    requireVerifiedEmail: boolean;
+  };
+  magicLink: {
+    allowSignups: boolean;
+    expiresInMinutes: number;
+    activeTokenPolicy: "invalidate-previous" | "allow-multiple-active";
+  };
+  passwordReset: {
+    enabled: boolean;
+    expiresInMinutes: number;
+    revokeExistingSessions: boolean;
+    createSessionAfterReset: boolean;
+    markEmailVerifiedOnReset: boolean;
+    activeTokenPolicy: "invalidate-previous" | "allow-multiple-active";
+  };
+  emailVerification: {
+    enabled: boolean;
+    expiresInHours: number;
+    createSessionAfterVerification: boolean;
+    activeTokenPolicy: "invalidate-previous" | "allow-multiple-active";
+  };
+  email: AuthEmailAdapter;
+  redirects: {
+    defaultAfterLogin: string;
+    defaultAfterLogout: string;
+    defaultAfterEmailVerification: string;
+    defaultAfterPasswordReset: string;
+    allowedOrigins: string[];
+    allowedPreviewOrigins: string[];
+  };
+}
+
+type RuntimeEnv = Record<string, unknown> & {
+  AUTH_SECRET?: string;
+  AUTH_SECRET_PREVIOUS?: string;
+  AUTH_ENV?: AuthRuntimeMode;
+  AUTH_PUBLIC_ORIGIN?: string;
+};
+
+interface RuntimeContext {
+  config: AuthConfig;
+  env: RuntimeEnv;
+  ctx: ExecutionContext;
+  mode: AuthRuntimeMode;
+  publicOrigin: string;
+  requestOrigin: string;
+  requestId: string;
+  db: D1Database;
+  repos: AuthRepositories;
+  keyRing: ReturnType<typeof parseAuthKeyRing>;
+  cookie: ReturnType<typeof resolveSessionCookie>;
+  logger: AuthLogger;
+}
+
+const signupSchema = z.object({
+  email: z.string(),
+  username: z.string().optional(),
+  password: z.string(),
+});
+const loginSchema = z.object({ identifier: z.string(), password: z.string() });
+const emailRequestSchema = z.object({
+  email: z.string(),
+  redirectTo: z.string().optional(),
+  afterResetRedirectTo: z.string().optional(),
+});
+const tokenSchema = z.object({ token: z.string() });
+const resetConfirmSchema = z.object({
+  token: z.string(),
+  password: z.string(),
+});
+
+const hashSemaphore = new PasswordHashSemaphore(1, 2_000);
+
+export function defineAuthConfig(
+  config: MinimalAuthConfig & Partial<AuthConfig>,
+): AuthConfig {
+  const basePath = config.basePath ?? "/auth";
+  if (!/^\/(?!\/)(?!.*\/\/)(?!.*%2f)(?!.*%5c)[^?#]*[^/]$/iu.test(basePath)) {
+    throw new AuthCryptoError("invalid auth basePath", "invalid_base_path");
+  }
+  return {
+    appName: config.appName,
+    basePath,
+    runtime: {
+      mode: "from-env",
+      publicOrigin: "from-env",
+      trustedHosts: ["localhost:8787", "127.0.0.1:8787"],
+      ...config.runtime,
+    },
+    database: { binding: "AUTH_DB", ...config.database },
+    session: {
+      cookieName: "auto",
+      maxAgeDays: 30,
+      sameSite: "lax",
+      secure: "auto",
+      requireVerifiedEmail: false,
+      ...config.session,
+    },
+    request: {
+      maxBodyBytes: 16 * 1024,
+      requireOriginOnUnsafeMethods: true,
+      ...config.request,
+    },
+    security: {
+      allowedRequestOrigins: [],
+      allowedPreviewRequestOrigins: [],
+      ...config.security,
+    },
+    passwordHashing: {
+      profile: "development-fast",
+      maxConcurrentHashesPerIsolate: 1,
+      ...config.passwordHashing,
+    },
+    signup: {
+      enabled: true,
+      requireEmailVerificationBeforeSession: false,
+      enumerationSafe: false,
+      username: { enabled: true, required: false, ...config.signup?.username },
+      ...config.signup,
+    },
+    login: {
+      emailPassword: true,
+      usernamePassword: true,
+      magicLink: true,
+      requireVerifiedEmail: false,
+      ...config.login,
+    },
+    magicLink: {
+      allowSignups: false,
+      expiresInMinutes: 15,
+      activeTokenPolicy: "invalidate-previous",
+      ...config.magicLink,
+    },
+    passwordReset: {
+      enabled: true,
+      expiresInMinutes: 30,
+      revokeExistingSessions: true,
+      createSessionAfterReset: false,
+      markEmailVerifiedOnReset: true,
+      activeTokenPolicy: "invalidate-previous",
+      ...config.passwordReset,
+    },
+    emailVerification: {
+      enabled: true,
+      expiresInHours: 24,
+      createSessionAfterVerification: false,
+      activeTokenPolicy: "invalidate-previous",
+      ...config.emailVerification,
+    },
+    email: config.email ?? terminalEmail({ outbox: true }),
+    redirects: {
+      defaultAfterLogin: "/",
+      defaultAfterLogout: "/",
+      defaultAfterEmailVerification: "/",
+      defaultAfterPasswordReset: "/",
+      allowedOrigins: [],
+      allowedPreviewOrigins: [],
+      ...config.redirects,
+    },
+  };
+}
+
+export function terminalEmail(
+  options: { outbox?: boolean } = {},
+): AuthEmailAdapter & { outbox: SendAuthEmailInput[] } {
+  const outbox: SendAuthEmailInput[] = [];
+  async function send(input: SendAuthEmailInput, runtime: AuthEmailRuntime) {
+    if (runtime.mode !== "development") {
+      throw new AuthCryptoError(
+        "terminal email is development-only",
+        "terminal_email_unavailable",
+      );
+    }
+    if (options.outbox) outbox.push(input);
+    runtime.logger.log(`[cf-auth dev email] ${input.url}`, { to: input.to });
+  }
+  return {
+    kind: "terminal",
+    outbox,
+    sendMagicLink: send,
+    sendEmailVerification: send,
+    sendPasswordReset: send,
+  };
+}
+
+export function createAuthHandler(
+  configInput: AuthConfig | (MinimalAuthConfig & Partial<AuthConfig>),
+) {
+  const config =
+    "runtime" in configInput
+      ? (configInput as AuthConfig)
+      : defineAuthConfig(configInput);
   return {
     async fetch(
       request: Request,
-      _env?: unknown,
-      _ctx?: ExecutionContext,
+      envInput?: unknown,
+      ctxInput?: ExecutionContext,
     ): Promise<Response | null> {
       const url = new URL(request.url);
-      if (
-        url.pathname === config.basePath ||
-        url.pathname.startsWith(`${config.basePath}/`)
-      ) {
-        return Response.json({ ok: true, appName: config.appName });
+      const path = stripBasePath(url.pathname, config.basePath);
+      if (path === null) return null;
+      const ctx =
+        ctxInput ?? ({ waitUntil() {} } as unknown as ExecutionContext);
+      let runtime: RuntimeContext;
+      try {
+        runtime = resolveRuntime(config, request, envInput, ctx);
+      } catch (error) {
+        return errorResponse(error, 500, "config_error");
       }
-      return null;
+      if (request.method === "OPTIONS")
+        return handlePreflight(request, runtime);
+      if (!checkOrigin(request, runtime))
+        return errorResponse("Invalid origin", 403, "invalid_origin");
+
+      try {
+        if (path === "/dev/emails" && request.method === "GET")
+          return handleDevEmails(runtime);
+        if (path === "/signup" && request.method === "POST")
+          return await handleSignup(request, runtime);
+        if (path === "/login" && request.method === "POST")
+          return await handleLogin(request, runtime);
+        if (path === "/logout" && request.method === "POST")
+          return await handleLogout(request, runtime);
+        if (path === "/user" && request.method === "GET")
+          return await handleUser(request, runtime);
+        if (path === "/magic-link/request" && request.method === "POST")
+          return await handleMagicLinkRequest(request, runtime);
+        if (path === "/magic-link/verify" && request.method === "GET")
+          return tokenPage(
+            request,
+            runtime,
+            "magic",
+            "/magic-link/consume",
+            "Continue",
+          );
+        if (path === "/magic-link/consume" && request.method === "POST")
+          return await handleMagicLinkConsume(request, runtime);
+        if (path === "/email/verify/request" && request.method === "POST")
+          return await handleEmailVerifyRequest(request, runtime);
+        if (path === "/email/verify" && request.method === "GET")
+          return tokenPage(
+            request,
+            runtime,
+            "verify",
+            "/email/verify/consume",
+            "Verify email",
+          );
+        if (path === "/email/verify/consume" && request.method === "POST")
+          return await handleEmailVerifyConsume(request, runtime);
+        if (path === "/password/reset/request" && request.method === "POST")
+          return await handlePasswordResetRequest(request, runtime);
+        if (path === "/password/reset" && request.method === "GET")
+          return resetPage(request, runtime);
+        if (path === "/password/reset/confirm" && request.method === "POST")
+          return await handlePasswordResetConfirm(request, runtime);
+        return errorResponse("Not found", 404, "not_found");
+      } catch (error) {
+        if (
+          error instanceof AuthCryptoError ||
+          error instanceof AuthRepositoryError ||
+          error instanceof z.ZodError
+        ) {
+          return errorResponse(
+            error,
+            400,
+            error instanceof z.ZodError ? "validation_failed" : error.code,
+          );
+        }
+        return errorResponse(error, 500, "server_error");
+      }
     },
   };
+}
+
+async function handleSignup(
+  request: Request,
+  runtime: RuntimeContext,
+): Promise<Response> {
+  if (!runtime.config.signup.enabled)
+    return errorResponse("Not found", 404, "not_found");
+  const body = signupSchema.parse(await parseBody(request, runtime));
+  const normalizedEmail = normalizeEmail(body.email);
+  const username = body.username ? body.username.trim() : null;
+  const normalizedUsername = username ? normalizeUsername(username) : null;
+  if (runtime.config.signup.username.required && !normalizedUsername)
+    return errorResponse("Username required", 400, "validation_failed");
+  await rateLimit(
+    runtime,
+    "signup",
+    "email",
+    normalizedEmail,
+    3,
+    60 * 60 * 1000,
+    request,
+  );
+  const passwordHash = await hashSemaphore.run(() =>
+    hashPassword(body.password, {
+      profile: runtime.config.passwordHashing.profile,
+    }),
+  );
+  const now = Date.now();
+  let user: UserRow;
+  try {
+    user = await runtime.repos.users.createUser({
+      id: randomId("usr_"),
+      email: body.email.trim(),
+      normalizedEmail,
+      username,
+      normalizedUsername,
+      passwordHash,
+      createdAt: now,
+    });
+  } catch (error) {
+    if (runtime.config.signup.enumerationSafe) return json({ ok: true });
+    throw error;
+  }
+  if (runtime.config.emailVerification.enabled)
+    await sendVerificationEmail(user, runtime, null);
+  if (
+    runtime.config.signup.requireEmailVerificationBeforeSession ||
+    runtime.config.signup.enumerationSafe
+  ) {
+    return runtime.config.signup.enumerationSafe
+      ? json({ ok: true })
+      : json({ user: publicUser(user) });
+  }
+  return jsonWithSession({ user: publicUser(user) }, runtime, user, now);
+}
+
+async function handleLogin(
+  request: Request,
+  runtime: RuntimeContext,
+): Promise<Response> {
+  if (
+    !runtime.config.login.emailPassword &&
+    !runtime.config.login.usernamePassword
+  )
+    return errorResponse("Not found", 404, "not_found");
+  const body = loginSchema.parse(await parseBody(request, runtime));
+  const isEmail = body.identifier.includes("@");
+  let user: UserRow | null = null;
+  try {
+    if (isEmail && runtime.config.login.emailPassword) {
+      const normalized = normalizeEmail(body.identifier);
+      await rateLimit(
+        runtime,
+        "password_login",
+        "email",
+        normalized,
+        5,
+        10 * 60 * 1000,
+        request,
+      );
+      user = await runtime.repos.users.findUserByNormalizedEmail(normalized);
+    } else if (!isEmail && runtime.config.login.usernamePassword) {
+      const normalized = normalizeUsername(body.identifier);
+      await rateLimit(
+        runtime,
+        "password_login",
+        "identifier",
+        normalized,
+        5,
+        10 * 60 * 1000,
+        request,
+      );
+      user = await runtime.repos.users.findUserByNormalizedUsername(normalized);
+    }
+  } catch {
+    await dummyVerifyPassword(body.password, {
+      profile: runtime.config.passwordHashing.profile,
+    });
+    return errorResponse("Invalid credentials", 401, "invalid_credentials");
+  }
+  if (!user?.password_hash) {
+    await dummyVerifyPassword(body.password, {
+      profile: runtime.config.passwordHashing.profile,
+    });
+    return errorResponse("Invalid credentials", 401, "invalid_credentials");
+  }
+  const ok = await hashSemaphore.run(() =>
+    verifyPassword(body.password, user.password_hash ?? ""),
+  );
+  if (!ok)
+    return errorResponse("Invalid credentials", 401, "invalid_credentials");
+  if (user.disabled_at !== null)
+    return errorResponse("Account disabled", 403, "account_disabled");
+  if (
+    runtime.config.login.requireVerifiedEmail &&
+    user.email_verified_at === null
+  )
+    return errorResponse(
+      "Email verification required",
+      403,
+      "email_verification_required",
+    );
+  return jsonWithSession({ user: publicUser(user) }, runtime, user, Date.now());
+}
+
+async function handleLogout(
+  request: Request,
+  runtime: RuntimeContext,
+): Promise<Response> {
+  const session = await getSession(request, runtime);
+  if (session)
+    await runtime.repos.sessions.revokeSession(session.id, Date.now());
+  return json({ ok: true }, 200, {
+    "Set-Cookie": serializeClearSessionCookie(runtime.cookie),
+  });
+}
+
+async function handleUser(
+  request: Request,
+  runtime: RuntimeContext,
+): Promise<Response> {
+  const session = await getSession(request, runtime);
+  if (!session) return json({ user: null });
+  if (
+    runtime.config.session.requireVerifiedEmail &&
+    session.user.email_verified_at === null
+  )
+    return json({ user: null });
+  return json({ user: publicUser(session.user) });
+}
+
+async function handleMagicLinkRequest(
+  request: Request,
+  runtime: RuntimeContext,
+): Promise<Response> {
+  if (!runtime.config.login.magicLink)
+    return errorResponse("Not found", 404, "not_found");
+  const body = emailRequestSchema.parse(await parseBody(request, runtime));
+  const normalizedEmail = normalizeEmail(body.email);
+  await rateLimit(
+    runtime,
+    "magic_link_request",
+    "email",
+    normalizedEmail,
+    3,
+    15 * 60 * 1000,
+    request,
+  );
+  const redirectTo = safeRedirect(
+    body.redirectTo,
+    runtime,
+    runtime.config.redirects.defaultAfterLogin,
+  );
+  const user =
+    await runtime.repos.users.findUserByNormalizedEmail(normalizedEmail);
+  if (user && user.disabled_at === null) {
+    await createAndSendToken(
+      runtime,
+      "magic",
+      "magic_link",
+      user.email,
+      user.id,
+      null,
+      redirectTo,
+      runtime.config.magicLink.expiresInMinutes * 60 * 1000,
+    );
+  } else if (runtime.config.magicLink.allowSignups) {
+    await createAndSendToken(
+      runtime,
+      "magic",
+      "magic_link",
+      normalizedEmail,
+      null,
+      normalizedEmail,
+      redirectTo,
+      runtime.config.magicLink.expiresInMinutes * 60 * 1000,
+    );
+  }
+  return json({ ok: true });
+}
+
+async function handleMagicLinkConsume(
+  request: Request,
+  runtime: RuntimeContext,
+): Promise<Response> {
+  const mode = contentMode(request);
+  const body = tokenSchema.parse(await parseBody(request, runtime));
+  await rateLimit(
+    runtime,
+    "magic_link_consume",
+    "ip",
+    clientIp(request),
+    30,
+    15 * 60 * 1000,
+    request,
+  );
+  const tokenHash = hashRawAuthToken(body.token, runtime.keyRing, "magic_link");
+  const consumed =
+    await runtime.repos.verificationTokens.consumeVerificationToken({
+      tokenHash,
+      type: "magic_link",
+      consumeId: randomId("con_"),
+      consumedAt: Date.now(),
+      now: Date.now(),
+    });
+  if (!consumed) return errorResponse("Invalid token", 400, "invalid_token");
+  let user = consumed.user_id
+    ? await runtime.repos.users.findUserById(consumed.user_id)
+    : null;
+  if (
+    !user &&
+    consumed.normalized_email &&
+    runtime.config.magicLink.allowSignups
+  ) {
+    user = await runtime.repos.users.createUser({
+      id: randomId("usr_"),
+      email: consumed.normalized_email,
+      normalizedEmail: consumed.normalized_email,
+      emailVerifiedAt: Date.now(),
+      createdAt: Date.now(),
+    });
+  }
+  if (!user || user.disabled_at !== null)
+    return errorResponse("Invalid token", 400, "invalid_token");
+  await runtime.repos.users.markEmailVerified(user.id, Date.now());
+  return sessionConsumeResponse(
+    {
+      user: publicUser(user),
+      redirectTo:
+        consumed.redirect_to ?? runtime.config.redirects.defaultAfterLogin,
+    },
+    runtime,
+    user,
+    mode,
+  );
+}
+
+async function handleEmailVerifyRequest(
+  request: Request,
+  runtime: RuntimeContext,
+): Promise<Response> {
+  if (!runtime.config.emailVerification.enabled)
+    return errorResponse("Not found", 404, "not_found");
+  const body = emailRequestSchema.parse(await parseBody(request, runtime));
+  const normalizedEmail = normalizeEmail(body.email);
+  await rateLimit(
+    runtime,
+    "email_verification_request",
+    "email",
+    normalizedEmail,
+    3,
+    60 * 60 * 1000,
+    request,
+  );
+  const redirectTo = safeRedirect(
+    body.redirectTo,
+    runtime,
+    runtime.config.redirects.defaultAfterEmailVerification,
+  );
+  const user =
+    await runtime.repos.users.findUserByNormalizedEmail(normalizedEmail);
+  if (user && user.disabled_at === null && user.email_verified_at === null) {
+    await sendVerificationEmail(user, runtime, redirectTo);
+  }
+  return json({ ok: true });
+}
+
+async function handleEmailVerifyConsume(
+  request: Request,
+  runtime: RuntimeContext,
+): Promise<Response> {
+  if (!runtime.config.emailVerification.enabled)
+    return errorResponse("Not found", 404, "not_found");
+  const mode = contentMode(request);
+  const body = tokenSchema.parse(await parseBody(request, runtime));
+  await rateLimit(
+    runtime,
+    "email_verification_consume",
+    "ip",
+    clientIp(request),
+    30,
+    60 * 60 * 1000,
+    request,
+  );
+  const tokenHash = hashRawAuthToken(
+    body.token,
+    runtime.keyRing,
+    "email_verification",
+  );
+  const consumed =
+    await runtime.repos.verificationTokens.consumeVerificationToken({
+      tokenHash,
+      type: "email_verification",
+      consumeId: randomId("con_"),
+      consumedAt: Date.now(),
+      now: Date.now(),
+    });
+  if (!consumed?.user_id)
+    return errorResponse("Invalid token", 400, "invalid_token");
+  await runtime.repos.users.markEmailVerified(consumed.user_id, Date.now());
+  const user = await runtime.repos.users.findUserById(consumed.user_id);
+  if (!user) return errorResponse("Invalid token", 400, "invalid_token");
+  const payload = {
+    user: publicUser(user),
+    redirectTo:
+      consumed.redirect_to ??
+      runtime.config.redirects.defaultAfterEmailVerification,
+  };
+  return runtime.config.emailVerification.createSessionAfterVerification
+    ? sessionConsumeResponse(payload, runtime, user, mode)
+    : consumeResponse(payload, mode);
+}
+
+async function handlePasswordResetRequest(
+  request: Request,
+  runtime: RuntimeContext,
+): Promise<Response> {
+  if (!runtime.config.passwordReset.enabled)
+    return errorResponse("Not found", 404, "not_found");
+  const body = emailRequestSchema.parse(await parseBody(request, runtime));
+  const normalizedEmail = normalizeEmail(body.email);
+  await rateLimit(
+    runtime,
+    "password_reset_request",
+    "email",
+    normalizedEmail,
+    3,
+    60 * 60 * 1000,
+    request,
+  );
+  const redirectTo = safeRedirect(
+    body.afterResetRedirectTo,
+    runtime,
+    runtime.config.redirects.defaultAfterPasswordReset,
+  );
+  const user =
+    await runtime.repos.users.findUserByNormalizedEmail(normalizedEmail);
+  if (user && user.disabled_at === null) {
+    await createAndSendToken(
+      runtime,
+      "reset",
+      "password_reset",
+      user.email,
+      user.id,
+      null,
+      redirectTo,
+      runtime.config.passwordReset.expiresInMinutes * 60 * 1000,
+    );
+  }
+  return json({ ok: true });
+}
+
+async function handlePasswordResetConfirm(
+  request: Request,
+  runtime: RuntimeContext,
+): Promise<Response> {
+  if (!runtime.config.passwordReset.enabled)
+    return errorResponse("Not found", 404, "not_found");
+  const mode = contentMode(request);
+  const body = resetConfirmSchema.parse(await parseBody(request, runtime));
+  await rateLimit(
+    runtime,
+    "password_reset_confirm",
+    "ip",
+    clientIp(request),
+    10,
+    60 * 60 * 1000,
+    request,
+  );
+  const validation = validatePassword(body.password);
+  if (!validation.ok)
+    return errorResponse(
+      validation.message ?? "Invalid password",
+      400,
+      validation.code ?? "invalid_password",
+    );
+  const tokenHash = hashRawAuthToken(
+    body.token,
+    runtime.keyRing,
+    "password_reset",
+  );
+  const active =
+    await runtime.repos.verificationTokens.findActiveVerificationTokenByHash(
+      tokenHash,
+      "password_reset",
+      Date.now(),
+    );
+  if (!active?.user_id)
+    return errorResponse("Invalid token", 400, "invalid_token");
+  const passwordHash = await hashSemaphore.run(() =>
+    hashPassword(body.password, {
+      profile: runtime.config.passwordHashing.profile,
+    }),
+  );
+  const consumed =
+    await runtime.repos.verificationTokens.consumeVerificationToken({
+      tokenHash,
+      type: "password_reset",
+      consumeId: randomId("con_"),
+      consumedAt: Date.now(),
+      now: Date.now(),
+    });
+  if (!consumed?.user_id)
+    return errorResponse("Invalid token", 400, "invalid_token");
+  await runtime.repos.users.updatePasswordHash(
+    consumed.user_id,
+    passwordHash,
+    Date.now(),
+  );
+  if (runtime.config.passwordReset.markEmailVerifiedOnReset)
+    await runtime.repos.users.markEmailVerified(consumed.user_id, Date.now());
+  if (runtime.config.passwordReset.revokeExistingSessions)
+    await runtime.repos.sessions.revokeAllUserSessions(
+      consumed.user_id,
+      Date.now(),
+    );
+  const user = await runtime.repos.users.findUserById(consumed.user_id);
+  if (!user) return errorResponse("Invalid token", 400, "invalid_token");
+  const payload = {
+    user: publicUser(user),
+    redirectTo:
+      consumed.redirect_to ??
+      runtime.config.redirects.defaultAfterPasswordReset,
+  };
+  return runtime.config.passwordReset.createSessionAfterReset
+    ? sessionConsumeResponse(payload, runtime, user, mode)
+    : consumeResponse(payload, mode);
+}
+
+async function sendVerificationEmail(
+  user: UserRow,
+  runtime: RuntimeContext,
+  redirectToInput: string | null,
+): Promise<void> {
+  const redirectTo = safeRedirect(
+    redirectToInput,
+    runtime,
+    runtime.config.redirects.defaultAfterEmailVerification,
+  );
+  await createAndSendToken(
+    runtime,
+    "verify",
+    "email_verification",
+    user.email,
+    user.id,
+    null,
+    redirectTo,
+    runtime.config.emailVerification.expiresInHours * 60 * 60 * 1000,
+  );
+}
+
+async function createAndSendToken(
+  runtime: RuntimeContext,
+  rawPurpose: "magic" | "verify" | "reset",
+  type: "magic_link" | "email_verification" | "password_reset",
+  to: string,
+  userId: string | null,
+  normalizedEmail: string | null,
+  redirectTo: string,
+  ttlMs: number,
+): Promise<void> {
+  const now = Date.now();
+  if (userId || normalizedEmail) {
+    await runtime.repos.verificationTokens.revokeActiveVerificationTokens({
+      type,
+      userId,
+      normalizedEmail,
+      revokedAt: now,
+      revokedReason: "superseded",
+    });
+  }
+  const token = generateRawAuthToken(rawPurpose, runtime.keyRing.current);
+  const tokenHash = hashRawAuthToken(token, runtime.keyRing, type);
+  await runtime.repos.verificationTokens.createVerificationToken({
+    id: randomId("vtok_"),
+    userId,
+    normalizedEmail,
+    tokenHash,
+    type,
+    redirectTo,
+    createdAt: now,
+    expiresAt: now + ttlMs,
+  });
+  const path =
+    rawPurpose === "magic"
+      ? "/magic-link/verify"
+      : rawPurpose === "verify"
+        ? "/email/verify"
+        : "/password/reset";
+  const url = `${runtime.publicOrigin}${runtime.config.basePath}${path}?token=${encodeURIComponent(token)}`;
+  const input = { to, token, url, redirectTo, expiresAt: now + ttlMs };
+  if (rawPurpose === "magic")
+    await runtime.config.email.sendMagicLink(input, emailRuntime(runtime));
+  else if (rawPurpose === "verify")
+    await runtime.config.email.sendEmailVerification(
+      input,
+      emailRuntime(runtime),
+    );
+  else
+    await runtime.config.email.sendPasswordReset(input, emailRuntime(runtime));
+}
+
+function tokenPage(
+  request: Request,
+  runtime: RuntimeContext,
+  purpose: "magic" | "verify",
+  action: string,
+  label: string,
+): Response {
+  const token = new URL(request.url).searchParams.get("token") ?? "";
+  const parsed = parseRawAuthToken(token);
+  if (parsed.purpose !== purpose)
+    throw new AuthCryptoError("wrong token purpose", "wrong_token_purpose");
+  return html(
+    `<form method="post" action="${runtime.config.basePath}${action}"><input type="hidden" name="token" value="${escapeHtml(token)}"><button type="submit">${escapeHtml(label)}</button></form>`,
+  );
+}
+
+function resetPage(request: Request, runtime: RuntimeContext): Response {
+  const token = new URL(request.url).searchParams.get("token") ?? "";
+  const parsed = parseRawAuthToken(token);
+  if (parsed.purpose !== "reset")
+    throw new AuthCryptoError("wrong token purpose", "wrong_token_purpose");
+  return html(
+    `<form method="post" action="${runtime.config.basePath}/password/reset/confirm"><input type="hidden" name="token" value="${escapeHtml(token)}"><input name="password" type="password" autocomplete="new-password"><button type="submit">Reset password</button></form>`,
+  );
+}
+
+function handleDevEmails(runtime: RuntimeContext): Response {
+  if (runtime.mode !== "development" || !("outbox" in runtime.config.email))
+    return errorResponse("Not found", 404, "not_found");
+  return json({ emails: runtime.config.email.outbox });
+}
+
+async function jsonWithSession(
+  payload: unknown,
+  runtime: RuntimeContext,
+  user: UserRow,
+  now: number,
+): Promise<Response> {
+  const token = generateRawAuthToken("ses", runtime.keyRing.current);
+  const tokenHash = hashRawAuthToken(token, runtime.keyRing, "session");
+  await runtime.repos.sessions.createSession({
+    id: randomId("ses_"),
+    userId: user.id,
+    tokenHash,
+    createdAt: now,
+    expiresAt: now + runtime.config.session.maxAgeDays * 24 * 60 * 60 * 1000,
+  });
+  return json(payload, 200, {
+    "Set-Cookie": serializeSessionCookie(
+      runtime.cookie,
+      token,
+      runtime.config.session.maxAgeDays * 24 * 60 * 60,
+    ),
+  });
+}
+
+async function sessionConsumeResponse<T extends { redirectTo: string }>(
+  payload: T,
+  runtime: RuntimeContext,
+  user: UserRow,
+  mode: "json" | "form",
+): Promise<Response> {
+  const response = await jsonWithSession(payload, runtime, user, Date.now());
+  if (mode === "json") return response;
+  return redirect(
+    payload.redirectTo,
+    response.headers.get("Set-Cookie") ?? undefined,
+  );
+}
+
+function consumeResponse(
+  payload: { redirectTo: string },
+  mode: "json" | "form",
+): Response {
+  return mode === "json" ? json(payload) : redirect(payload.redirectTo);
+}
+
+async function getSession(
+  request: Request,
+  runtime: RuntimeContext,
+): Promise<SessionWithUserRow | null> {
+  const raw = readCookie(request.headers.get("Cookie"), runtime.cookie.name);
+  if (!raw) return null;
+  try {
+    const tokenHash = hashRawAuthToken(raw, runtime.keyRing, "session");
+    return runtime.repos.sessions.findSessionByTokenHash(tokenHash, Date.now());
+  } catch {
+    return null;
+  }
+}
+
+async function parseBody(
+  request: Request,
+  runtime: RuntimeContext,
+): Promise<Record<string, unknown>> {
+  const contentType = request.headers.get("Content-Type") ?? "";
+  const length = Number(request.headers.get("Content-Length") ?? "0");
+  if (length > runtime.config.request.maxBodyBytes)
+    throw new AuthCryptoError("Request body too large", "body_too_large");
+  const text = await request.text();
+  if (Buffer.byteLength(text) > runtime.config.request.maxBodyBytes)
+    throw new AuthCryptoError("Request body too large", "body_too_large");
+  if (contentType.startsWith("application/json"))
+    return JSON.parse(text || "{}") as Record<string, unknown>;
+  if (contentType.startsWith("application/x-www-form-urlencoded"))
+    return Object.fromEntries(new URLSearchParams(text));
+  if (!contentType && !text) return {};
+  throw new AuthCryptoError(
+    "Unsupported content type",
+    "unsupported_content_type",
+  );
+}
+
+async function rateLimit(
+  runtime: RuntimeContext,
+  action: string,
+  subjectType: "ip" | "email" | "identifier",
+  subject: string,
+  limit: number,
+  windowMs: number,
+  request: Request,
+): Promise<void> {
+  const ipKey = deriveRateLimitKey({
+    keyRing: runtime.keyRing,
+    action,
+    subjectType: "ip",
+    subject: canonicalizeIp(clientIp(request)),
+  });
+  const key = deriveRateLimitKey({
+    keyRing: runtime.keyRing,
+    action,
+    subjectType,
+    subject: subjectType === "ip" ? canonicalizeIp(subject) : subject,
+  });
+  const first = await runtime.repos.rateLimits.hitFixedWindow({
+    action,
+    key: ipKey,
+    windowMs,
+    limit: Math.max(limit, 10),
+    now: Date.now(),
+  });
+  const second = await runtime.repos.rateLimits.hitFixedWindow({
+    action,
+    key,
+    windowMs,
+    limit,
+    now: Date.now(),
+  });
+  if (!first.allowed || !second.allowed)
+    throw new AuthCryptoError(
+      "Too many attempts. Try again later.",
+      "rate_limited",
+    );
+}
+
+function resolveRuntime(
+  config: AuthConfig,
+  request: Request,
+  envInput: unknown,
+  ctx: ExecutionContext,
+): RuntimeContext {
+  const env = (envInput ?? {}) as RuntimeEnv;
+  const requestUrl = new URL(request.url);
+  const mode =
+    config.runtime.mode === "from-env" ? env.AUTH_ENV : config.runtime.mode;
+  if (!mode) throw new AuthCryptoError("AUTH_ENV is missing", "config_error");
+  const publicOrigin =
+    config.runtime.publicOrigin === "from-env"
+      ? env.AUTH_PUBLIC_ORIGIN
+      : config.runtime.publicOrigin;
+  if (!publicOrigin && mode !== "development")
+    throw new AuthCryptoError("AUTH_PUBLIC_ORIGIN is missing", "config_error");
+  const requestOrigin = requestUrl.origin;
+  const resolvedPublicOrigin = publicOrigin ?? requestOrigin;
+  if (
+    (mode === "production" || mode === "preview") &&
+    requestUrl.host !== new URL(resolvedPublicOrigin).host &&
+    !config.runtime.trustedHosts.includes(requestUrl.host)
+  ) {
+    throw new AuthCryptoError("untrusted host", "untrusted_host");
+  }
+  const db = env[config.database.binding] as D1Database | undefined;
+  if (!db) throw new AuthCryptoError("D1 binding is missing", "config_error");
+  if (!env.AUTH_SECRET)
+    throw new AuthCryptoError("AUTH_SECRET is missing", "config_error");
+  const keyRing = parseAuthKeyRing(env.AUTH_SECRET, env.AUTH_SECRET_PREVIOUS);
+  return {
+    config,
+    env,
+    ctx,
+    mode,
+    publicOrigin: resolvedPublicOrigin,
+    requestOrigin,
+    requestId: request.headers.get("CF-Ray") ?? randomId("req_"),
+    db,
+    repos: createD1Repositories(db),
+    keyRing,
+    cookie: resolveSessionCookie({
+      mode,
+      requestOrigin,
+      cookieName: config.session.cookieName,
+      sameSite: config.session.sameSite,
+      ...(config.session.domain ? { domain: config.session.domain } : {}),
+    }),
+    logger: consoleLogger,
+  };
+}
+
+function checkOrigin(request: Request, runtime: RuntimeContext): boolean {
+  if (!["POST", "PUT", "PATCH", "DELETE"].includes(request.method)) return true;
+  const origin = request.headers.get("Origin");
+  if (!origin)
+    return (
+      runtime.mode === "development" ||
+      !runtime.config.request.requireOriginOnUnsafeMethods
+    );
+  if (origin === runtime.requestOrigin) return true;
+  const allowed =
+    runtime.mode === "preview"
+      ? runtime.config.security.allowedPreviewRequestOrigins
+      : runtime.config.security.allowedRequestOrigins;
+  return allowed.includes(origin);
+}
+
+function handlePreflight(request: Request, runtime: RuntimeContext): Response {
+  const origin = request.headers.get("Origin");
+  if (!origin)
+    return new Response(null, { status: 204, headers: securityHeaders() });
+  const allowed =
+    origin === runtime.requestOrigin ||
+    runtime.config.security.allowedRequestOrigins.includes(origin) ||
+    (runtime.mode === "preview" &&
+      runtime.config.security.allowedPreviewRequestOrigins.includes(origin));
+  if (!allowed)
+    return new Response(null, { status: 403, headers: securityHeaders() });
+  const headers = securityHeaders();
+  headers.set("Access-Control-Allow-Origin", origin);
+  headers.set("Access-Control-Allow-Credentials", "true");
+  headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  headers.set("Access-Control-Allow-Headers", "Content-Type");
+  headers.set("Access-Control-Max-Age", "600");
+  headers.set("Vary", "Origin");
+  return new Response(null, { status: 204, headers });
+}
+
+function publicUser(user: UserRow) {
+  return {
+    id: user.id,
+    email: user.email,
+    username: user.username,
+    emailVerified: user.email_verified_at !== null,
+    createdAt: user.created_at,
+  };
+}
+
+function safeRedirect(
+  value: string | null | undefined,
+  runtime: RuntimeContext,
+  defaultRedirect: string,
+): string {
+  return validateRedirectTarget({
+    redirectTo: value,
+    requestOrigin: runtime.requestOrigin,
+    allowedOrigins:
+      runtime.mode === "preview"
+        ? runtime.config.redirects.allowedPreviewOrigins
+        : runtime.config.redirects.allowedOrigins,
+    defaultRedirect,
+  });
+}
+
+function json(
+  body: unknown,
+  status = 200,
+  extraHeaders?: Record<string, string>,
+): Response {
+  const headers = securityHeaders();
+  headers.set("Content-Type", "application/json");
+  for (const [key, value] of Object.entries(extraHeaders ?? {}))
+    headers.append(key, value);
+  return new Response(JSON.stringify(body), { status, headers });
+}
+
+function errorResponse(error: unknown, status: number, code: string): Response {
+  const message = error instanceof Error ? error.message : String(error);
+  return json(
+    { error: { code, message } },
+    code === "body_too_large"
+      ? 413
+      : code === "unsupported_content_type"
+        ? 415
+        : status,
+  );
+}
+
+function redirect(location: string, cookie?: string): Response {
+  const headers = securityHeaders();
+  headers.set("Location", location);
+  if (cookie) headers.append("Set-Cookie", cookie);
+  return new Response(null, { status: 303, headers });
+}
+
+function html(markup: string): Response {
+  const headers = securityHeaders();
+  headers.set("Content-Type", "text/html; charset=utf-8");
+  headers.set("Referrer-Policy", "no-referrer");
+  headers.set(
+    "Content-Security-Policy",
+    "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'",
+  );
+  return new Response(`<!doctype html><meta charset="utf-8">${markup}`, {
+    headers,
+  });
+}
+
+function securityHeaders(): Headers {
+  return new Headers({
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer",
+  });
+}
+
+function stripBasePath(pathname: string, basePath: string): string | null {
+  if (pathname === basePath) return "/";
+  if (pathname.startsWith(`${basePath}/`))
+    return pathname.slice(basePath.length);
+  return null;
+}
+
+function contentMode(request: Request): "json" | "form" {
+  const type = request.headers.get("Content-Type") ?? "";
+  return type.startsWith("application/x-www-form-urlencoded") ? "form" : "json";
+}
+
+function readCookie(header: string | null, name: string): string | null {
+  for (const part of header?.split(";") ?? []) {
+    const [cookieName, ...value] = part.trim().split("=");
+    if (cookieName === name) return value.join("=");
+  }
+  return null;
+}
+
+function clientIp(request: Request): string {
+  return request.headers.get("CF-Connecting-IP") ?? "unknown";
+}
+
+function emailRuntime(runtime: RuntimeContext): AuthEmailRuntime {
+  return {
+    env: runtime.env,
+    ctx: runtime.ctx,
+    mode: runtime.mode,
+    requestId: runtime.requestId,
+    publicOrigin: runtime.publicOrigin,
+    logger: runtime.logger,
+  };
+}
+
+function escapeHtml(input: string): string {
+  return input
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+const consoleLogger: AuthLogger = {
+  log(message, metadata) {
+    console.log(redact(String(message)), redactMetadata(metadata));
+  },
+  error(message, metadata) {
+    console.error(redact(String(message)), redactMetadata(metadata));
+  },
+};
+
+function redact(value: string): string {
+  return value
+    .replace(
+      /cfauth\.(ses|magic|verify|reset)\.[A-Za-z0-9_-]{1,32}\.[A-Za-z0-9_-]{43}/gu,
+      "[REDACTED_TOKEN]",
+    )
+    .replace(/AUTH_SECRET=[^\s]+/gu, "AUTH_SECRET=[REDACTED]");
+}
+
+function redactMetadata(
+  metadata: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  if (!metadata) return undefined;
+  return JSON.parse(redact(JSON.stringify(metadata))) as Record<
+    string,
+    unknown
+  >;
 }

@@ -1,4 +1,5 @@
 import { DatabaseSync, type StatementSync } from "node:sqlite";
+import type { AuthEmailAdapter, SendAuthEmailInput } from "@cf-auth/worker";
 
 export const testingPackageName = "@cf-auth/testing";
 
@@ -80,6 +81,8 @@ class SqliteD1PreparedStatement {
 }
 
 class SqliteD1Database {
+  private queue: Promise<void> = Promise.resolve();
+
   constructor(readonly sqlite: DatabaseSync) {
     this.sqlite.exec("PRAGMA foreign_keys = ON");
   }
@@ -94,25 +97,35 @@ class SqliteD1Database {
   async batch<T = unknown>(
     statements: D1PreparedStatement[],
   ): Promise<D1Result<T>[]> {
-    this.sqlite.exec("BEGIN IMMEDIATE");
-    try {
-      const results: D1Result<T>[] = [];
-      for (const statement of statements) {
-        if (!(statement instanceof SqliteD1PreparedStatement)) {
-          throw new Error("SqliteD1Database can only batch its own statements");
+    const run = async () => {
+      this.sqlite.exec("BEGIN IMMEDIATE");
+      try {
+        const results: D1Result<T>[] = [];
+        for (const statement of statements) {
+          if (!(statement instanceof SqliteD1PreparedStatement)) {
+            throw new Error(
+              "SqliteD1Database can only batch its own statements",
+            );
+          }
+          if (/^\s*select\b/i.test(statement["sql"])) {
+            results.push((await statement.all<T>()) as D1Result<T>);
+          } else {
+            results.push((await statement.run<T>()) as D1Result<T>);
+          }
         }
-        if (/^\s*select\b/i.test(statement["sql"])) {
-          results.push((await statement.all<T>()) as D1Result<T>);
-        } else {
-          results.push((await statement.run<T>()) as D1Result<T>);
-        }
+        this.sqlite.exec("COMMIT");
+        return results;
+      } catch (error) {
+        this.sqlite.exec("ROLLBACK");
+        throw error;
       }
-      this.sqlite.exec("COMMIT");
-      return results;
-    } catch (error) {
-      this.sqlite.exec("ROLLBACK");
-      throw error;
-    }
+    };
+    const next = this.queue.then(run, run);
+    this.queue = next.then(
+      () => undefined,
+      () => undefined,
+    );
+    return next;
   }
 
   async exec<T = unknown>(query: string): Promise<D1ExecResult> {
@@ -144,6 +157,29 @@ export async function applyD1Migrations(
   for (const sql of migrations) {
     await db.exec(sql);
   }
+}
+
+export interface MockAuthEmail extends SendAuthEmailInput {
+  type: "magic" | "verify" | "reset";
+}
+
+export function createMockEmailAdapter(): AuthEmailAdapter & {
+  messages: MockAuthEmail[];
+} {
+  const messages: MockAuthEmail[] = [];
+  return {
+    kind: "mock",
+    messages,
+    async sendMagicLink(input) {
+      messages.push({ ...input, type: "magic" });
+    },
+    async sendEmailVerification(input) {
+      messages.push({ ...input, type: "verify" });
+    },
+    async sendPasswordReset(input) {
+      messages.push({ ...input, type: "reset" });
+    },
+  };
 }
 
 function toBoundValue(value: unknown): BoundValue {

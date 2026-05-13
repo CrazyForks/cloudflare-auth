@@ -187,6 +187,11 @@ export interface VerificationTokenRepository {
   createVerificationToken(
     input: CreateVerificationTokenInput,
   ): Promise<VerificationTokenRow>;
+  findActiveVerificationTokenByHash(
+    tokenHash: string,
+    type: VerificationTokenType,
+    now: number,
+  ): Promise<VerificationTokenRow | null>;
   revokeActiveVerificationTokens(
     input: RevokeActiveVerificationTokensInput,
   ): Promise<number>;
@@ -280,6 +285,121 @@ export function assertHmacTokenEnvelope(value: string): string {
     );
   }
   return value;
+}
+
+export function normalizeEmail(email: string): string {
+  const trimmed = email.trim();
+  if (
+    trimmed.length > 320 ||
+    !trimmed.includes("@") ||
+    trimmed.split("@").length !== 2 ||
+    /[\s\p{C}]/u.test(trimmed)
+  ) {
+    throw new AuthCryptoError("invalid email", "invalid_email");
+  }
+  const [local, domain] = trimmed.split("@");
+  if (
+    !local ||
+    !domain ||
+    domain.startsWith(".") ||
+    domain.endsWith(".") ||
+    domain.includes("..")
+  ) {
+    throw new AuthCryptoError("invalid email", "invalid_email");
+  }
+  for (const label of domain.split(".")) {
+    if (!/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/u.test(label)) {
+      throw new AuthCryptoError("invalid email", "invalid_email");
+    }
+  }
+  return trimmed.toLowerCase();
+}
+
+const reservedUsernames = new Set([
+  "admin",
+  "root",
+  "support",
+  "auth",
+  "api",
+  "login",
+  "logout",
+  "signup",
+  "me",
+  "settings",
+  "password",
+  "reset",
+  "verify",
+  "email",
+  "dev",
+  "emails",
+  "user",
+  "users",
+  "session",
+  "sessions",
+]);
+
+export function normalizeUsername(username: string): string {
+  const normalized = username.trim().toLowerCase();
+  if (
+    normalized.length < 3 ||
+    normalized.length > 32 ||
+    normalized.includes("@") ||
+    !/^[a-z0-9_-]+$/u.test(normalized) ||
+    reservedUsernames.has(normalized)
+  ) {
+    throw new AuthCryptoError("invalid username", "invalid_username");
+  }
+  return normalized;
+}
+
+export function validateRedirectTarget(input: {
+  redirectTo: string | null | undefined;
+  requestOrigin: string;
+  allowedOrigins?: string[];
+  defaultRedirect: string;
+}): string {
+  const value = input.redirectTo?.trim();
+  if (!value) return input.defaultRedirect;
+  if (/[\u0000-\u001F\u007F]/u.test(value) || /\\/u.test(value)) {
+    throw new AuthCryptoError("unsafe redirect", "unsafe_redirect");
+  }
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(value);
+  } catch {
+    throw new AuthCryptoError("unsafe redirect", "unsafe_redirect");
+  }
+  if (
+    decoded.startsWith("//") ||
+    decoded.startsWith("\\") ||
+    /^[/\\]%2f/i.test(value)
+  ) {
+    throw new AuthCryptoError("unsafe redirect", "unsafe_redirect");
+  }
+  if (value.startsWith("/")) {
+    if (!value.startsWith("/") || value.startsWith("//")) {
+      throw new AuthCryptoError("unsafe redirect", "unsafe_redirect");
+    }
+    return (
+      new URL(value, input.requestOrigin).pathname +
+      new URL(value, input.requestOrigin).search +
+      new URL(value, input.requestOrigin).hash
+    );
+  }
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new AuthCryptoError("unsafe redirect", "unsafe_redirect");
+  }
+  if (!["https:", "http:"].includes(url.protocol)) {
+    throw new AuthCryptoError("unsafe redirect", "unsafe_redirect");
+  }
+  const allowed = new Set(input.allowedOrigins ?? []);
+  if (!allowed.has(url.origin)) {
+    throw new AuthCryptoError("unsafe redirect", "unsafe_redirect");
+  }
+  return `${url.origin}${url.pathname}${url.search}${url.hash}`;
 }
 
 export type AuthTokenPurpose = "ses" | "magic" | "verify" | "reset";

@@ -135,7 +135,7 @@ describe("CLI MVP", () => {
     await writeWrangler(cwd);
     const schema = JSON.parse(
       await readFile("schemas/doctor-report.schema.json", "utf8"),
-    ) as { $id: string; required: string[] };
+    ) as JsonSchema;
     const output: string[] = [];
     const code = await runCli(["doctor", "--report", "--env", "production"], {
       cwd,
@@ -144,7 +144,7 @@ describe("CLI MVP", () => {
     const report = JSON.parse(output.join("\n")) as Record<string, unknown>;
     expect(code).toBe(0);
     expect(report.$schema).toBe(schema.$id);
-    for (const field of schema.required) expect(report).toHaveProperty(field);
+    expect(validateJsonSchema(report, schema)).toEqual([]);
     expect(report).toMatchObject({
       schemaVersion: 1,
       ok: true,
@@ -239,4 +239,71 @@ async function writeWrangler(cwd: string) {
       2,
     ),
   );
+}
+
+interface JsonSchema {
+  $id?: string;
+  type?: string;
+  const?: unknown;
+  enum?: unknown[];
+  required?: string[];
+  additionalProperties?: boolean;
+  properties?: Record<string, JsonSchema>;
+  items?: JsonSchema;
+}
+
+function validateJsonSchema(
+  value: unknown,
+  schema: JsonSchema,
+  path = "$",
+): string[] {
+  const failures: string[] = [];
+  if ("const" in schema && value !== schema.const) {
+    failures.push(`${path}: expected ${String(schema.const)}`);
+  }
+  if (schema.enum && !schema.enum.includes(value)) {
+    failures.push(`${path}: expected one of ${schema.enum.join(", ")}`);
+  }
+  if (schema.type === "object") {
+    if (!isRecord(value)) return [`${path}: expected object`];
+    for (const key of schema.required ?? []) {
+      if (!(key in value)) failures.push(`${path}.${key}: missing`);
+    }
+    if (schema.additionalProperties === false && schema.properties) {
+      for (const key of Object.keys(value)) {
+        if (!(key in schema.properties))
+          failures.push(`${path}.${key}: additional property`);
+      }
+    }
+    for (const [key, child] of Object.entries(schema.properties ?? {})) {
+      if (key in value) {
+        failures.push(
+          ...validateJsonSchema(value[key], child, `${path}.${key}`),
+        );
+      }
+    }
+  } else if (schema.type === "array") {
+    if (!Array.isArray(value)) return [`${path}: expected array`];
+    if (schema.items) {
+      value.forEach((item, index) => {
+        failures.push(
+          ...validateJsonSchema(item, schema.items!, `${path}[${index}]`),
+        );
+      });
+    }
+  } else if (schema.type === "string" && typeof value !== "string") {
+    failures.push(`${path}: expected string`);
+  } else if (schema.type === "boolean" && typeof value !== "boolean") {
+    failures.push(`${path}: expected boolean`);
+  } else if (
+    schema.type === "integer" &&
+    (!Number.isInteger(value) || typeof value !== "number")
+  ) {
+    failures.push(`${path}: expected integer`);
+  }
+  return failures;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

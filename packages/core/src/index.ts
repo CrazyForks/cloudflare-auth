@@ -1,3 +1,11 @@
+import {
+  createHmac,
+  hkdfSync,
+  randomBytes,
+  scrypt as scryptCallback,
+  timingSafeEqual,
+} from "node:crypto";
+import { isIP } from "node:net";
 export const corePackageName = "@cf-auth/core";
 
 export type VerificationTokenType =
@@ -274,9 +282,666 @@ export function assertHmacTokenEnvelope(value: string): string {
   return value;
 }
 
+export type AuthTokenPurpose = "ses" | "magic" | "verify" | "reset";
+export type TokenHashPurpose =
+  | "session"
+  | "magic_link"
+  | "email_verification"
+  | "password_reset";
+export type HkdfPurpose =
+  | "session-token-hmac"
+  | "email-token-hmac"
+  | "rate-limit-key-hmac"
+  | "event-ip-hash"
+  | "event-user-agent-hash"
+  | "internal-state-signing";
+
+export interface AuthSecret {
+  kid: string;
+  material: Buffer;
+}
+
+export interface AuthKeyRing {
+  current: AuthSecret;
+  previous: AuthSecret[];
+}
+
+export interface ParsedRawAuthToken {
+  raw: string;
+  purpose: AuthTokenPurpose;
+  hashPurpose: TokenHashPurpose;
+  kid: string;
+  random: string;
+}
+
+export interface ParsedTokenHashEnvelope {
+  algorithm: "hmac-sha256";
+  version: 1;
+  kid: string;
+  purpose: TokenHashPurpose;
+  hash: string;
+}
+
+export interface PasswordHashParams {
+  N: number;
+  r: number;
+  p: number;
+  keyLen: number;
+  maxmem: number;
+}
+
+export interface ParsedPasswordHashEnvelope extends PasswordHashParams {
+  algorithm: "scrypt";
+  version: 1;
+  salt: Buffer;
+  hash: Buffer;
+}
+
+export type PasswordHashProfileName =
+  | "development-fast"
+  | "workers-balanced"
+  | "high-cost";
+
+export interface PasswordHashOptions {
+  profile?: PasswordHashProfileName;
+  params?: Partial<PasswordHashParams>;
+  saltBytes?: number;
+}
+
+export interface PasswordValidationResult {
+  ok: boolean;
+  code?: string;
+  message?: string;
+}
+
+export class AuthCryptoError extends Error {
+  constructor(
+    message: string,
+    readonly code: string,
+  ) {
+    super(message);
+    this.name = "AuthCryptoError";
+  }
+}
+
+export const passwordHashProfiles: Record<
+  PasswordHashProfileName,
+  PasswordHashParams
+> = {
+  "development-fast": {
+    N: 16_384,
+    r: 8,
+    p: 1,
+    keyLen: 64,
+    maxmem: 32 * 1024 * 1024,
+  },
+  "workers-balanced": {
+    N: 32_768,
+    r: 8,
+    p: 1,
+    keyLen: 64,
+    maxmem: 64 * 1024 * 1024,
+  },
+  "high-cost": {
+    N: 65_536,
+    r: 8,
+    p: 1,
+    keyLen: 64,
+    maxmem: 96 * 1024 * 1024,
+  },
+};
+
+const tokenPattern =
+  /^cfauth\.(ses|magic|verify|reset)\.([A-Za-z0-9_-]{1,32})\.([A-Za-z0-9_-]{43})$/;
+
+const tokenPurposeMap: Record<AuthTokenPurpose, TokenHashPurpose> = {
+  ses: "session",
+  magic: "magic_link",
+  verify: "email_verification",
+  reset: "password_reset",
+};
+
+const hashPurposeToHkdfPurpose: Record<TokenHashPurpose, HkdfPurpose> = {
+  session: "session-token-hmac",
+  magic_link: "email-token-hmac",
+  email_verification: "email-token-hmac",
+  password_reset: "email-token-hmac",
+};
+
+export function base64urlEncode(bytes: Buffer | Uint8Array): string {
+  return Buffer.from(bytes)
+    .toString("base64")
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replace(/=+$/u, "");
+}
+
+export function base64urlDecode(value: string): Buffer {
+  if (!/^[A-Za-z0-9_-]*$/u.test(value)) {
+    throw new AuthCryptoError("invalid base64url input", "invalid_base64url");
+  }
+  const padded = value.padEnd(Math.ceil(value.length / 4) * 4, "=");
+  return Buffer.from(
+    padded.replaceAll("-", "+").replaceAll("_", "/"),
+    "base64",
+  );
+}
+
+export function randomId(prefix: string, bytes = 16): string {
+  if (!/^[a-z][a-z0-9]*_$/u.test(prefix)) {
+    throw new AuthCryptoError(
+      "id prefix must be lowercase and end with underscore",
+      "invalid_id_prefix",
+    );
+  }
+  return `${prefix}${base64urlEncode(randomBytes(bytes))}`;
+}
+
+export function parseAuthSecret(secret: string): AuthSecret {
+  const match = /^([A-Za-z0-9_-]{1,32})\.([A-Za-z0-9_-]+)$/u.exec(secret);
+  if (!match) {
+    throw new AuthCryptoError(
+      "AUTH_SECRET must be <kid>.<base64url>",
+      "invalid_auth_secret",
+    );
+  }
+  const kid = match[1];
+  const encoded = match[2];
+  if (!kid || !encoded) {
+    throw new AuthCryptoError(
+      "AUTH_SECRET must be <kid>.<base64url>",
+      "invalid_auth_secret",
+    );
+  }
+  const material = base64urlDecode(encoded);
+  if (material.length < 32) {
+    throw new AuthCryptoError(
+      "AUTH_SECRET material must decode to at least 32 bytes",
+      "weak_auth_secret",
+    );
+  }
+  return { kid, material };
+}
+
+export function parseAuthKeyRing(
+  current: string,
+  previous?: string,
+): AuthKeyRing {
+  const currentSecret = parseAuthSecret(current);
+  const previousSecrets =
+    previous
+      ?.split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+      .map(parseAuthSecret) ?? [];
+  const seen = new Set<string>();
+  for (const secret of [currentSecret, ...previousSecrets]) {
+    if (seen.has(secret.kid)) {
+      throw new AuthCryptoError(
+        `duplicate auth-secret kid: ${secret.kid}`,
+        "duplicate_kid",
+      );
+    }
+    seen.add(secret.kid);
+  }
+  return { current: currentSecret, previous: previousSecrets };
+}
+
+export function findAuthSecretByKid(
+  keyRing: AuthKeyRing,
+  kid: string,
+): AuthSecret | null {
+  if (keyRing.current.kid === kid) return keyRing.current;
+  return keyRing.previous.find((secret) => secret.kid === kid) ?? null;
+}
+
+export function deriveSubkey(secret: AuthSecret, purpose: HkdfPurpose): Buffer {
+  return Buffer.from(
+    hkdfSync("sha256", secret.material, "cf-auth:v1", purpose, 32),
+  );
+}
+
+export function generateRawAuthToken(
+  purpose: AuthTokenPurpose,
+  secret: AuthSecret,
+): string {
+  return `cfauth.${purpose}.${secret.kid}.${base64urlEncode(randomBytes(32))}`;
+}
+
+export function parseRawAuthToken(token: string): ParsedRawAuthToken {
+  const match = tokenPattern.exec(token);
+  if (!match) {
+    throw new AuthCryptoError("malformed auth token", "malformed_token");
+  }
+  const [, purpose, kid, random] = match as unknown as [
+    string,
+    AuthTokenPurpose,
+    string,
+    string,
+  ];
+  return {
+    raw: token,
+    purpose,
+    hashPurpose: tokenPurposeMap[purpose],
+    kid,
+    random,
+  };
+}
+
+export function hashRawAuthToken(
+  token: string,
+  keyRing: AuthKeyRing,
+  expectedPurpose?: TokenHashPurpose,
+): string {
+  const parsed = parseRawAuthToken(token);
+  if (expectedPurpose && parsed.hashPurpose !== expectedPurpose) {
+    throw new AuthCryptoError(
+      "auth token has the wrong purpose",
+      "wrong_token_purpose",
+    );
+  }
+  const secret = findAuthSecretByKid(keyRing, parsed.kid);
+  if (!secret) {
+    throw new AuthCryptoError(
+      "auth token kid is not in key ring",
+      "unknown_kid",
+    );
+  }
+  const key = deriveSubkey(
+    secret,
+    hashPurposeToHkdfPurpose[parsed.hashPurpose],
+  );
+  const hash = createHmac("sha256", key).update(token).digest();
+  return `hmac-sha256$v=1$kid=${parsed.kid}$purpose=${parsed.hashPurpose}$hash=${base64urlEncode(hash)}`;
+}
+
+export function parseTokenHashEnvelope(value: string): ParsedTokenHashEnvelope {
+  assertHmacTokenEnvelope(value);
+  const [algorithm, versionField, kidField, purposeField, hashField] =
+    value.split("$");
+  const version = versionField === "v=1" ? 1 : null;
+  const kid = kidField?.slice("kid=".length);
+  const purpose = purposeField?.slice("purpose=".length) as TokenHashPurpose;
+  const hash = hashField?.slice("hash=".length);
+  if (
+    algorithm !== "hmac-sha256" ||
+    version !== 1 ||
+    !kid ||
+    !purpose ||
+    !hash
+  ) {
+    throw new AuthCryptoError(
+      "invalid token hash envelope",
+      "invalid_token_hash",
+    );
+  }
+  return { algorithm, version, kid, purpose, hash };
+}
+
+export function deriveRateLimitKey(input: {
+  keyRing: AuthKeyRing;
+  action: string;
+  subjectType: "ip" | "email" | "identifier";
+  subject: string;
+}): string {
+  const key = deriveSubkey(input.keyRing.current, "rate-limit-key-hmac");
+  const message = `${input.action}\0${input.subjectType}\0${input.subject}`;
+  const digest = base64urlEncode(
+    createHmac("sha256", key).update(message).digest(),
+  );
+  return `rl:v1:${input.action}:${input.subjectType}:${digest}`;
+}
+
+export function canonicalizeIp(input: string | null | undefined): string {
+  const value = input?.trim();
+  if (!value) return "unknown";
+  const version = isIP(value);
+  if (version === 4) return value;
+  if (version === 6) return compressIpv6(value);
+  return "malformed";
+}
+
+export function canonicalizeUserAgent(
+  input: string | null | undefined,
+): string {
+  return (input ?? "").trim().slice(0, 512);
+}
+
+export function deriveEventHash(input: {
+  keyRing: AuthKeyRing;
+  purpose: "event-ip-hash" | "event-user-agent-hash";
+  value: string;
+}): string {
+  return base64urlEncode(
+    createHmac("sha256", deriveSubkey(input.keyRing.current, input.purpose))
+      .update(input.value)
+      .digest(),
+  );
+}
+
+export function validatePassword(password: string): PasswordValidationResult {
+  if ([...password].length < 8) {
+    return {
+      ok: false,
+      code: "password_too_short",
+      message: "Password is too short",
+    };
+  }
+  if ([...password].length > 128) {
+    return {
+      ok: false,
+      code: "password_too_long",
+      message: "Password is too long",
+    };
+  }
+  if (Buffer.byteLength(password, "utf8") > 512) {
+    return {
+      ok: false,
+      code: "password_too_large",
+      message: "Password is too large",
+    };
+  }
+  if (/^\s*$/u.test(password)) {
+    return {
+      ok: false,
+      code: "password_all_whitespace",
+      message: "Password must not be all whitespace",
+    };
+  }
+  return { ok: true };
+}
+
+export function resolvePasswordHashParams(
+  options: PasswordHashOptions = {},
+): PasswordHashParams {
+  const base = passwordHashProfiles[options.profile ?? "workers-balanced"];
+  const params = { ...base, ...options.params };
+  if (
+    !Number.isInteger(params.N) ||
+    params.N < 2 ||
+    (params.N & (params.N - 1)) !== 0
+  ) {
+    throw new AuthCryptoError(
+      "scrypt N must be a power of two",
+      "invalid_scrypt_params",
+    );
+  }
+  for (const key of ["r", "p", "keyLen", "maxmem"] as const) {
+    if (!Number.isInteger(params[key]) || params[key] <= 0) {
+      throw new AuthCryptoError(
+        `scrypt ${key} must be positive`,
+        "invalid_scrypt_params",
+      );
+    }
+  }
+  return params;
+}
+
 export async function hashPassword(
   password: string,
-  _options?: { profile?: string },
+  options?: PasswordHashOptions,
 ): Promise<string> {
-  return `scrypt$v=1$n=16384$r=8$p=1$keylen=64$maxmem=33554432$salt=dummy$hash=${password.length}`;
+  const validation = validatePassword(password);
+  if (!validation.ok) {
+    throw new AuthCryptoError(
+      validation.message ?? "invalid password",
+      validation.code ?? "invalid_password",
+    );
+  }
+  const params = resolvePasswordHashParams(options);
+  const salt = randomBytes(options?.saltBytes ?? 16);
+  const hash = await scryptWithParams(password, salt, params);
+  return passwordEnvelope(params, salt, hash);
+}
+
+export function parsePasswordHashEnvelope(
+  envelope: string,
+): ParsedPasswordHashEnvelope {
+  const parts = envelope.split("$");
+  if (parts.length !== 9 || parts[0] !== "scrypt" || parts[1] !== "v=1") {
+    throw new AuthCryptoError(
+      "invalid password hash envelope",
+      "invalid_password_hash",
+    );
+  }
+  const values = Object.fromEntries(
+    parts.slice(2).map((part) => part.split("=")),
+  );
+  const parsed: ParsedPasswordHashEnvelope = {
+    algorithm: "scrypt",
+    version: 1,
+    N: Number(values.n),
+    r: Number(values.r),
+    p: Number(values.p),
+    keyLen: Number(values.keylen),
+    maxmem: Number(values.maxmem),
+    salt: base64urlDecode(values.salt ?? ""),
+    hash: base64urlDecode(values.hash ?? ""),
+  };
+  resolvePasswordHashParams({ params: parsed });
+  if (parsed.salt.length < 16 || parsed.hash.length !== parsed.keyLen) {
+    throw new AuthCryptoError(
+      "invalid password hash envelope",
+      "invalid_password_hash",
+    );
+  }
+  return parsed;
+}
+
+export async function verifyPassword(
+  password: string,
+  envelope: string,
+): Promise<boolean> {
+  if (Buffer.byteLength(password, "utf8") > 512) return false;
+  const parsed = parsePasswordHashEnvelope(envelope);
+  const hash = await scryptWithParams(password, parsed.salt, parsed);
+  return safeEqual(hash, parsed.hash);
+}
+
+export function needsRehash(
+  envelope: string,
+  options?: PasswordHashOptions,
+): boolean {
+  const parsed = parsePasswordHashEnvelope(envelope);
+  const current = resolvePasswordHashParams(options);
+  return (
+    parsed.N < current.N ||
+    parsed.r < current.r ||
+    parsed.p < current.p ||
+    parsed.keyLen < current.keyLen ||
+    parsed.maxmem < current.maxmem
+  );
+}
+
+export async function dummyVerifyPassword(
+  password: string,
+  options?: PasswordHashOptions,
+): Promise<boolean> {
+  return verifyPassword(password, getDummyPasswordHash(options));
+}
+
+export function getDummyPasswordHash(options?: PasswordHashOptions): string {
+  const params = resolvePasswordHashParams(options);
+  const salt = Buffer.alloc(16, 7);
+  const hash = Buffer.alloc(params.keyLen, 11);
+  return passwordEnvelope(params, salt, hash);
+}
+
+export class PasswordHashSemaphore {
+  private active = 0;
+  private readonly queue: Array<() => void> = [];
+
+  constructor(
+    private readonly maxConcurrent = 1,
+    private readonly queueTimeoutMs = 2_000,
+  ) {}
+
+  async run<T>(fn: () => Promise<T>): Promise<T> {
+    await this.acquire();
+    try {
+      return await fn();
+    } finally {
+      this.release();
+    }
+  }
+
+  private acquire(): Promise<void> {
+    if (this.active < this.maxConcurrent) {
+      this.active += 1;
+      return Promise.resolve();
+    }
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        const index = this.queue.indexOf(start);
+        if (index >= 0) this.queue.splice(index, 1);
+        reject(
+          new AuthCryptoError(
+            "password hash queue timeout",
+            "hash_queue_timeout",
+          ),
+        );
+      }, this.queueTimeoutMs);
+      const start = () => {
+        clearTimeout(timeout);
+        this.active += 1;
+        resolve();
+      };
+      this.queue.push(start);
+    });
+  }
+
+  private release(): void {
+    this.active -= 1;
+    this.queue.shift()?.();
+  }
+}
+
+export interface ResolvedSessionCookie {
+  name: string;
+  secure: boolean;
+  sameSite: "Lax" | "Strict";
+  path: "/";
+  domain?: string;
+}
+
+export function resolveSessionCookie(input: {
+  mode: "development" | "preview" | "production";
+  requestOrigin: string;
+  cookieName?: "auto" | string;
+  sameSite?: "lax" | "strict";
+  domain?: string;
+}): ResolvedSessionCookie {
+  const origin = new URL(input.requestOrigin);
+  const localHttp =
+    input.mode === "development" &&
+    origin.protocol === "http:" &&
+    ["localhost", "127.0.0.1"].includes(origin.hostname);
+  const secure = !localHttp;
+  const sameSite = input.sameSite === "strict" ? "Strict" : "Lax";
+  const name =
+    input.cookieName && input.cookieName !== "auto"
+      ? input.cookieName
+      : !secure
+        ? "cfauth-session"
+        : input.domain
+          ? "__Secure-cfauth-session"
+          : "__Host-cfauth-session";
+  if (name.startsWith("__Host-") && (!secure || input.domain)) {
+    throw new AuthCryptoError(
+      "__Host- cookies require Secure and no Domain",
+      "invalid_cookie_config",
+    );
+  }
+  if (name.startsWith("__Secure-") && !secure) {
+    throw new AuthCryptoError(
+      "__Secure- cookies require Secure",
+      "invalid_cookie_config",
+    );
+  }
+  return {
+    name,
+    secure,
+    sameSite,
+    path: "/",
+    ...(input.domain ? { domain: input.domain } : {}),
+  };
+}
+
+export function serializeSessionCookie(
+  cookie: ResolvedSessionCookie,
+  value: string,
+  maxAgeSeconds: number,
+): string {
+  const parts = [
+    `${cookie.name}=${value}`,
+    "Path=/",
+    "HttpOnly",
+    `SameSite=${cookie.sameSite}`,
+    `Max-Age=${maxAgeSeconds}`,
+  ];
+  if (cookie.secure) parts.push("Secure");
+  if (cookie.domain) parts.push(`Domain=${cookie.domain}`);
+  return parts.join("; ");
+}
+
+export function serializeClearSessionCookie(
+  cookie: ResolvedSessionCookie,
+): string {
+  return serializeSessionCookie(cookie, "", 0);
+}
+
+function passwordEnvelope(
+  params: PasswordHashParams,
+  salt: Buffer,
+  hash: Buffer,
+): string {
+  return [
+    "scrypt",
+    "v=1",
+    `n=${params.N}`,
+    `r=${params.r}`,
+    `p=${params.p}`,
+    `keylen=${params.keyLen}`,
+    `maxmem=${params.maxmem}`,
+    `salt=${base64urlEncode(salt)}`,
+    `hash=${base64urlEncode(hash)}`,
+  ].join("$");
+}
+
+function safeEqual(left: Buffer, right: Buffer): boolean {
+  if (left.length !== right.length) {
+    const padded = Buffer.alloc(Math.max(left.length, right.length));
+    timingSafeEqual(padded, padded);
+    return false;
+  }
+  return timingSafeEqual(left, right);
+}
+
+function scryptWithParams(
+  password: string,
+  salt: Buffer,
+  params: PasswordHashParams,
+): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    scryptCallback(
+      password,
+      salt,
+      params.keyLen,
+      { N: params.N, r: params.r, p: params.p, maxmem: params.maxmem },
+      (error, derivedKey) => {
+        if (error) reject(error);
+        else resolve(derivedKey as Buffer);
+      },
+    );
+  });
+}
+
+function compressIpv6(value: string): string {
+  if (!isIP(value)) return "malformed";
+  const lower = value.toLowerCase();
+  if (lower.includes("::")) return lower.replace(/(^|:)0{1,3}/gu, "$1");
+  return lower
+    .split(":")
+    .map((part) => part.replace(/^0+/u, "") || "0")
+    .join(":");
 }

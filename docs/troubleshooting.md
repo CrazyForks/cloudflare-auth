@@ -4,6 +4,7 @@
 | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | `npx cf-auth` fails                            | Ensure the `cf-auth` package exists; otherwise use `npx --package @cf-auth/cli@latest cf-auth`.                        |
 | Wrangler unavailable or wrong version          | Run `pnpm install`, `npx wrangler --version`, and rerun `npx cf-auth@latest doctor`.                                   |
+| Cloudflare login or account mismatch           | Run `wrangler login`, then set Wrangler `account_id` to the intended authenticated account.                            |
 | Missing D1 binding                             | Run `npx cf-auth@latest init --repair` or add `AUTH_DB` to `wrangler.jsonc`.                                           |
 | Need support diagnostics                       | Run `npx cf-auth@latest doctor --report --env production` and attach the redaction-safe JSON.                          |
 | Migrations not applied                         | Run `npx cf-auth@latest migrate --local` or `npx cf-auth@latest migrate --remote --env production`.                    |

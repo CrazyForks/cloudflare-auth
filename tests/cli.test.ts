@@ -159,6 +159,78 @@ describe("CLI MVP", () => {
     expect(errors.join("\n")).toContain("install wrangler 4.90.1");
   });
 
+  it("doctor reports failed Cloudflare login without leaking Wrangler output", async () => {
+    const cwd = await tempDir();
+    await writeWrangler(cwd);
+    const errors: string[] = [];
+    const code = await runCli(["doctor", "--env", "production"], {
+      cwd,
+      stderr: (line) => errors.push(line),
+      runCommand: (_command, args) => {
+        if (args[0] === "--version") {
+          return { status: 0, stdout: "4.90.1\n", stderr: "" };
+        }
+        if (args[0] === "whoami") {
+          return {
+            status: 1,
+            stdout: "",
+            stderr: "not logged in as person@example.com",
+          };
+        }
+        return {
+          status: 0,
+          stdout: JSON.stringify([{ name: "AUTH_SECRET" }]),
+          stderr: "",
+        };
+      },
+    });
+
+    expect(code).toBe(1);
+    expect(errors.join("\n")).toContain(
+      "Cloudflare login could not be verified",
+    );
+    expect(errors.join("\n")).not.toContain("person@example.com");
+  });
+
+  it("doctor reports unavailable configured Cloudflare accounts", async () => {
+    const cwd = await tempDir();
+    await writeWrangler(cwd);
+    const text = await readFile(join(cwd, "wrangler.jsonc"), "utf8");
+    const config = JSON.parse(text) as { account_id?: string };
+    config.account_id = "missing-account";
+    await writeFile(join(cwd, "wrangler.jsonc"), JSON.stringify(config));
+    const errors: string[] = [];
+    const code = await runCli(["doctor", "--env", "production"], {
+      cwd,
+      stderr: (line) => errors.push(line),
+      runCommand: remoteSecretRunner(),
+    });
+
+    expect(code).toBe(1);
+    expect(errors.join("\n")).toContain(
+      "Wrangler account_id is not available to the authenticated user",
+    );
+  });
+
+  it("doctor warns when production account selection is implicit", async () => {
+    const cwd = await tempDir();
+    await writeWrangler(cwd);
+    const output: string[] = [];
+    const code = await runCli(["doctor", "--env", "production"], {
+      cwd,
+      stdout: (line) => output.push(line),
+      runCommand: remoteSecretRunner([
+        { id: "acct_prod" },
+        { id: "acct_other" },
+      ]),
+    });
+
+    expect(code).toBe(0);
+    expect(output.join("\n")).toContain(
+      "Multiple Cloudflare accounts available; selection is implicit",
+    );
+  });
+
   it("doctor reports missing production email binding", async () => {
     const cwd = await tempDir();
     await writeWrangler(cwd);
@@ -281,7 +353,15 @@ describe("CLI MVP", () => {
     const code = await runCli(["doctor", "--env", "production"], {
       cwd,
       stderr: (line) => errors.push(line),
-      runCommand: () => ({ status: 0, stdout: "[]", stderr: "" }),
+      runCommand: (_command, args) => {
+        if (args[0] === "--version") {
+          return { status: 0, stdout: "4.90.1\n", stderr: "" };
+        }
+        if (args[0] === "whoami") {
+          return { status: 0, stdout: healthyWhoamiJson(), stderr: "" };
+        }
+        return { status: 0, stdout: "[]", stderr: "" };
+      },
     });
 
     expect(code).toBe(1);
@@ -299,6 +379,12 @@ describe("CLI MVP", () => {
       stdout: (line) => output.push(line),
       runCommand: (command, args, options) => {
         calls.push({ command, args, cwd: options.cwd });
+        if (args[0] === "--version") {
+          return { status: 0, stdout: "4.90.1\n", stderr: "" };
+        }
+        if (args[0] === "whoami") {
+          return { status: 0, stdout: healthyWhoamiJson(), stderr: "" };
+        }
         return {
           status: 0,
           stdout:
@@ -315,6 +401,11 @@ describe("CLI MVP", () => {
       {
         command: "wrangler",
         args: ["--version"],
+        cwd,
+      },
+      {
+        command: "wrangler",
+        args: ["whoami", "--json"],
         cwd,
       },
       {
@@ -355,6 +446,12 @@ describe("CLI MVP", () => {
       cwd,
       runCommand: (command, args) => {
         calls.push([command, ...args].join(" "));
+        if (args[0] === "--version") {
+          return { status: 0, stdout: "4.90.1\n", stderr: "" };
+        }
+        if (args[0] === "whoami") {
+          return { status: 0, stdout: healthyWhoamiJson(), stderr: "" };
+        }
         return {
           status: 0,
           stdout:
@@ -369,6 +466,7 @@ describe("CLI MVP", () => {
     expect(code).toBe(0);
     expect(calls).toEqual([
       "wrangler --version",
+      "wrangler whoami --json",
       "wrangler secret list --format json --env production",
       "wrangler d1 migrations list app-auth --remote --env production",
       "wrangler d1 migrations apply app-auth --remote --env production",
@@ -531,10 +629,13 @@ async function writeWrangler(cwd: string) {
   );
 }
 
-function remoteSecretRunner() {
+function remoteSecretRunner(accounts = [{ id: "acct_prod" }]) {
   return (_command: string, args: string[]) => {
     if (args[0] === "--version") {
       return { status: 0, stdout: "4.90.1\n", stderr: "" };
+    }
+    if (args[0] === "whoami") {
+      return { status: 0, stdout: healthyWhoamiJson(accounts), stderr: "" };
     }
     return {
       status: 0,
@@ -542,6 +643,16 @@ function remoteSecretRunner() {
       stderr: "",
     };
   };
+}
+
+function healthyWhoamiJson(accounts = [{ id: "acct_prod" }]) {
+  return JSON.stringify({
+    loggedIn: true,
+    authType: "OAuth Token",
+    email: "person@example.com",
+    accounts,
+    tokenPermissions: [],
+  });
 }
 
 interface JsonSchema {

@@ -331,6 +331,7 @@ async function commandDoctor(
     });
   }
   if (vars.AUTH_ENV === "production" || envName) {
+    addCheck(checkCloudflareAccount(cwd, runner, config));
     const email = selected?.send_email?.find(
       (item) => item.name === "AUTH_EMAIL",
     );
@@ -444,6 +445,107 @@ function checkWranglerVersion(cwd: string, runner: CommandRunner): DoctorCheck {
     status: "pass",
     message: `Wrangler ${version} available`,
   };
+}
+
+function checkCloudflareAccount(
+  cwd: string,
+  runner: CommandRunner,
+  config: WranglerConfig,
+): DoctorCheck {
+  const result = runner("wrangler", ["whoami", "--json"], { cwd });
+  if (result.status !== 0) {
+    return {
+      id: "cloudflare_account",
+      status: "fail",
+      message: "Cloudflare login could not be verified",
+      fix: "run wrangler login and confirm the selected account with wrangler whoami",
+    };
+  }
+  const account = parseWhoamiResult(result.stdout);
+  if (!account.ok) return account.check;
+  const configuredAccount = config.account_id?.trim();
+  if (configuredAccount) {
+    const found = account.accounts.some(
+      (item) => item.id === configuredAccount,
+    );
+    if (!found) {
+      return {
+        id: "cloudflare_account",
+        status: "fail",
+        message:
+          "Wrangler account_id is not available to the authenticated user",
+        fix: "set account_id to an authenticated Cloudflare account or run wrangler login with the correct user",
+      };
+    }
+    return {
+      id: "cloudflare_account",
+      status: "pass",
+      message: "Cloudflare account selection verified",
+    };
+  }
+  if (account.accounts.length > 1) {
+    return {
+      id: "cloudflare_account",
+      status: "warn",
+      message: "Multiple Cloudflare accounts available; selection is implicit",
+      fix: "set account_id in wrangler.jsonc for reproducible production deploys",
+    };
+  }
+  return {
+    id: "cloudflare_account",
+    status: "pass",
+    message: "Cloudflare login verified",
+  };
+}
+
+function parseWhoamiResult(
+  stdout: string,
+):
+  | { ok: true; accounts: Array<{ id: string }> }
+  | { ok: false; check: DoctorCheck } {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    return {
+      ok: false,
+      check: {
+        id: "cloudflare_account",
+        status: "warn",
+        message: "Cloudflare account response could not be parsed",
+        fix: "run wrangler whoami --json and rerun doctor",
+      },
+    };
+  }
+  if (!isRecord(parsed) || parsed.loggedIn !== true) {
+    return {
+      ok: false,
+      check: {
+        id: "cloudflare_account",
+        status: "fail",
+        message: "Cloudflare login could not be verified",
+        fix: "run wrangler login and confirm the selected account with wrangler whoami",
+      },
+    };
+  }
+  const accounts = Array.isArray(parsed.accounts)
+    ? parsed.accounts.flatMap((item) => {
+        if (!isRecord(item) || typeof item.id !== "string") return [];
+        return [{ id: item.id }];
+      })
+    : [];
+  if (accounts.length === 0) {
+    return {
+      ok: false,
+      check: {
+        id: "cloudflare_account",
+        status: "fail",
+        message: "No Cloudflare account is available to Wrangler",
+        fix: "run wrangler login with a user or token that can access the target account",
+      },
+    };
+  }
+  return { ok: true, accounts };
 }
 
 async function commandDeploy(
@@ -752,6 +854,7 @@ function targetMode(parsed: ParsedArgs): { local: boolean; remote: boolean } {
 }
 
 interface WranglerConfig {
+  account_id?: string;
   vars?: Record<string, string>;
   send_email?: Array<{ name: string }>;
   d1_databases?: Array<{
@@ -760,6 +863,10 @@ interface WranglerConfig {
     database_id?: string;
   }>;
   env?: Record<string, WranglerConfig>;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 async function readWrangler(cwd: string): Promise<WranglerConfig> {

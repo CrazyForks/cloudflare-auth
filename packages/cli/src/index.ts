@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFile, mkdir, writeFile, copyFile } from "node:fs/promises";
+import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { randomBytes } from "node:crypto";
@@ -136,13 +136,13 @@ async function commandInit(
   await writeIfMissing(join(target, "src", "index.ts"), honoIndexTemplate());
   await writeIfMissing(join(target, "wrangler.jsonc"), wranglerTemplate());
   await writeIfMissing(join(target, ".dev.vars.example"), devVarsTemplate());
-  await copyFile(
-    "migrations/0001_initial.sql",
+  await writeIfMissing(
     join(target, "migrations", "0001_initial.sql"),
+    initialMigrationSql(),
   );
-  await copyFile(
-    "migrations/0002_indexes.sql",
+  await writeIfMissing(
     join(target, "migrations", "0002_indexes.sql"),
+    indexesMigrationSql(),
   );
   out(`Initialized Cloudflare Auth in ${target}`);
   out("Next: pnpm install && npx cf-auth migrate --local && npm run dev");
@@ -520,6 +520,144 @@ function wranglerTemplate(): string {
 
 function devVarsTemplate(): string {
   return "AUTH_ENV=development\nAUTH_PUBLIC_ORIGIN=http://localhost:8787\nAUTH_SECRET=k_dev.REPLACE_WITH_GENERATED_BASE64URL_SECRET\n";
+}
+
+function initialMigrationSql(): string {
+  return `CREATE TABLE auth_meta (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE auth_schema_migrations (
+  version TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  applied_at INTEGER NOT NULL
+);
+
+INSERT INTO auth_meta (key, value, updated_at)
+VALUES ('schema_version', '1', CAST(strftime('%s', 'now') AS INTEGER) * 1000);
+
+INSERT INTO auth_schema_migrations (version, name, applied_at)
+VALUES ('0001', 'initial', CAST(strftime('%s', 'now') AS INTEGER) * 1000);
+
+CREATE TABLE users (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL,
+  normalized_email TEXT NOT NULL UNIQUE,
+  username TEXT,
+  normalized_username TEXT UNIQUE,
+  password_hash TEXT,
+  email_verified_at INTEGER,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  disabled_at INTEGER,
+  metadata_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(metadata_json))
+);
+
+CREATE TABLE sessions (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL,
+  last_seen_at INTEGER,
+  revoked_at INTEGER,
+  user_agent_hash TEXT,
+  ip_hash TEXT,
+  metadata_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(metadata_json)),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE verification_tokens (
+  id TEXT PRIMARY KEY,
+  user_id TEXT,
+  normalized_email TEXT,
+  token_hash TEXT NOT NULL UNIQUE,
+  type TEXT NOT NULL CHECK (type IN ('magic_link', 'email_verification', 'password_reset')),
+  redirect_to TEXT,
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL,
+  used_at INTEGER,
+  revoked_at INTEGER,
+  revoked_reason TEXT,
+  consume_id TEXT UNIQUE,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  metadata_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(metadata_json)),
+  CHECK (redirect_to IS NULL OR length(redirect_to) <= 2048),
+  CHECK (normalized_email IS NULL OR length(normalized_email) <= 320),
+  CHECK ((used_at IS NULL AND consume_id IS NULL) OR (used_at IS NOT NULL AND consume_id IS NOT NULL)),
+  CHECK (used_at IS NULL OR revoked_at IS NULL),
+  CHECK ((revoked_at IS NULL AND revoked_reason IS NULL) OR (revoked_at IS NOT NULL AND revoked_reason IS NOT NULL)),
+  CHECK (
+    (type IN ('email_verification', 'password_reset') AND user_id IS NOT NULL AND normalized_email IS NULL)
+    OR (
+      type = 'magic_link'
+      AND (
+        (user_id IS NOT NULL AND normalized_email IS NULL)
+        OR (user_id IS NULL AND normalized_email IS NOT NULL)
+      )
+    )
+  ),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE auth_events (
+  id TEXT PRIMARY KEY,
+  user_id TEXT,
+  event_type TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  ip_hash TEXT,
+  user_agent_hash TEXT,
+  request_id TEXT,
+  metadata_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(metadata_json)),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE TABLE rate_limits (
+  action TEXT NOT NULL,
+  key TEXT NOT NULL,
+  count INTEGER NOT NULL,
+  reset_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (action, key)
+);
+`;
+}
+
+function indexesMigrationSql(): string {
+  return `CREATE INDEX sessions_user_id_idx ON sessions(user_id);
+CREATE INDEX sessions_expires_at_idx ON sessions(expires_at);
+CREATE INDEX sessions_active_lookup_idx ON sessions(token_hash, expires_at, revoked_at);
+
+CREATE INDEX verification_tokens_email_type_idx
+  ON verification_tokens(normalized_email, type);
+
+CREATE INDEX verification_tokens_user_type_idx
+  ON verification_tokens(user_id, type);
+
+CREATE INDEX verification_tokens_expires_at_idx
+  ON verification_tokens(expires_at);
+
+CREATE INDEX verification_tokens_active_user_type_idx
+  ON verification_tokens(user_id, type, used_at, revoked_at, expires_at);
+
+CREATE INDEX verification_tokens_active_email_type_idx
+  ON verification_tokens(normalized_email, type, used_at, revoked_at, expires_at);
+
+CREATE INDEX auth_events_user_id_idx ON auth_events(user_id);
+CREATE INDEX auth_events_created_at_idx ON auth_events(created_at);
+CREATE INDEX auth_events_type_created_at_idx ON auth_events(event_type, created_at);
+
+CREATE INDEX rate_limits_reset_at_idx ON rate_limits(reset_at);
+
+INSERT INTO auth_schema_migrations (version, name, applied_at)
+VALUES ('0002', 'indexes', CAST(strftime('%s', 'now') AS INTEGER) * 1000);
+
+UPDATE auth_meta
+SET value = '2', updated_at = CAST(strftime('%s', 'now') AS INTEGER) * 1000
+WHERE key = 'schema_version';
+`;
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

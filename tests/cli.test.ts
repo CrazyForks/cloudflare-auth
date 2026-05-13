@@ -21,7 +21,28 @@ describe("CLI MVP", () => {
     expect(await readFile(join(app, "src", "index.ts"), "utf8")).toContain(
       "app.route(authConfig.basePath",
     );
+    expect(
+      await readFile(join(app, "migrations", "0001_initial.sql"), "utf8"),
+    ).toBe(await readFile("migrations/0001_initial.sql", "utf8"));
     expect(output.join("\n")).toContain("Initialized Cloudflare Auth");
+  });
+
+  it("scaffolds bundled migrations without relying on the repo cwd", async () => {
+    const cwd = await tempDir();
+    const originalCwd = process.cwd();
+    process.chdir(cwd);
+    try {
+      const code = await runCli(["init", "standalone", "--yes"], { cwd });
+      expect(code).toBe(0);
+    } finally {
+      process.chdir(originalCwd);
+    }
+    await expect(
+      readFile(
+        join(cwd, "standalone", "migrations", "0002_indexes.sql"),
+        "utf8",
+      ),
+    ).resolves.toBe(await readFile("migrations/0002_indexes.sql", "utf8"));
   });
 
   it("prints snippets and writes nothing in dry-run init", async () => {

@@ -989,6 +989,40 @@ describe("auth HTTP runtime", () => {
     expect(JSON.stringify(rows.results)).not.toContain("raw@example.com");
   });
 
+  it("stores only derived route rate-limit keys", async () => {
+    const { authFetch, db } = await setup();
+    await authFetch("/auth/magic-link/request", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "CF-Connecting-IP": "198.51.100.77",
+      },
+      body: JSON.stringify({ email: "rate-raw@example.com" }),
+    });
+    await authFetch("/auth/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "CF-Connecting-IP": "198.51.100.77",
+      },
+      body: JSON.stringify({
+        identifier: "raw-identifier",
+        password: "correct horse battery staple",
+      }),
+    });
+
+    const rows = await db
+      .prepare("SELECT key FROM rate_limits")
+      .all<{ key: string }>();
+    expect(rows.results?.length).toBeGreaterThan(0);
+    expect(rows.results?.every((row) => row.key.startsWith("rl:v1:"))).toBe(
+      true,
+    );
+    expect(JSON.stringify(rows.results)).not.toMatch(
+      /rate-raw@example\.com|raw-identifier|198\.51\.100\.77/,
+    );
+  });
+
   it("writes redacted auth events for core auth outcomes", async () => {
     const { authFetch, db } = await setup();
     const headers = {

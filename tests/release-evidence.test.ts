@@ -351,6 +351,24 @@ describe("release evidence verifiers", () => {
     expect(result.stderr).toContain("templateRepositoryUrl");
   });
 
+  it("rejects deploy button evidence with unsupported repository and button URLs", async () => {
+    const evidence = validDeployButtonEvidence();
+    evidence.templateRepositoryUrl = "https://example.org/acme/template";
+    evidence.deployButtonUrl =
+      "https://deploy.workers.cloudflare.com/?url=https://example.org/acme/template&debug=true";
+    const path = await writeEvidence("deploy-button-unsupported-url", evidence);
+    const result = runScript("scripts/verify-deploy-button-evidence.mjs", {
+      CF_AUTH_REQUIRE_DEPLOY_BUTTON_EVIDENCE: "1",
+      CF_AUTH_DEPLOY_BUTTON_EVIDENCE_PATH: path,
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("templateRepositoryUrl");
+    expect(result.stderr).toContain("GitHub or GitLab repository URL");
+    expect(result.stderr).toContain("deployButtonUrl");
+    expect(result.stderr).toContain("only the url parameter");
+  });
+
   it("rejects deploy button evidence with raw emails, IPs, and user agents", async () => {
     const emailEvidence = validDeployButtonEvidence();
     (emailEvidence as Record<string, unknown>).notes =

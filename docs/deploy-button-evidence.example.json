@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "status": "pending",
+  "verifiedAt": "2026-05-14T00:00:00.000Z",
+  "verifiedBy": "maintainer-name",
+  "templateRepositoryUrl": "https://github.com/OWNER/cloudflare-auth-template",
+  "deployButtonUrl": "https://deploy.workers.cloudflare.com/?url=https://github.com/OWNER/cloudflare-auth-template",
+  "deployedOrigin": "https://example.com",
+  "templateRepositoryPublic": false,
+  "templateHasNoWorkspaceDependencies": false,
+  "d1BindingConfigured": false,
+  "migrationsApplied": false,
+  "authSecretConfigured": false,
+  "publicOriginConfigured": false,
+  "signupLoginSmokePassed": false,
+  "smokedEndpoints": []
+}

@@ -13,6 +13,7 @@
 - `pnpm version-matrix:check`
 - `pnpm audit --audit-level high` reviewed as advisory evidence, not as the sole security gate
 - `pnpm verify:alpha-evidence`
+- `pnpm verify:deploy-button-evidence`
 - `pnpm verify:deploy-template`
 - `pnpm verify:docs-coverage`
 - `pnpm verify:migrations`
@@ -32,6 +33,7 @@
 - Changesets version/changelog output reviewed before publishing
 - local clean-directory quickstart passes
 - private-alpha evidence verifier passes before public beta
+- Deploy to Cloudflare button evidence verifier passes before public beta
 - `doctor --report` attached to the release issue
 - known limitations reviewed
 - unresolved high/critical auth security issues checked

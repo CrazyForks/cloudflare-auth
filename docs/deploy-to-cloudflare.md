@@ -30,6 +30,13 @@ repository:
 Replace `OWNER/cloudflare-auth-template` with the released starter template.
 Do not link the button from the README until the generated template has been
 published to its own public repository and the button flow has been verified.
+Copy `docs/deploy-button-evidence.example.json` to
+`docs/deploy-button-evidence.json` and record redaction-safe button-flow
+evidence before public beta:
+
+```bash
+CF_AUTH_REQUIRE_DEPLOY_BUTTON_EVIDENCE=1 pnpm verify:deploy-button-evidence
+```
 
 ## Acceptance Path
 

@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -182,6 +182,20 @@ describe("release evidence verifiers", () => {
     expect(result.stderr).toContain("templateRepositoryUrl");
   });
 
+  it("requires deploy button evidence for stable package versions", async () => {
+    const cwd = await packageVersionFixture("1.0.0");
+    const result = runScript(
+      "scripts/verify-deploy-button-evidence.mjs",
+      {},
+      cwd,
+    );
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "Deploy to Cloudflare button evidence is required",
+    );
+  });
+
   it("accepts package ownership evidence with private shim reservations", async () => {
     const path = await writeEvidence(
       "package-ownership",
@@ -291,9 +305,24 @@ async function writeEvidence(name: string, value: unknown): Promise<string> {
   return path;
 }
 
-function runScript(script: string, env: Record<string, string>) {
-  return spawnSync(process.execPath, [script], {
-    cwd: process.cwd(),
+async function packageVersionFixture(version: string): Promise<string> {
+  const root = await mkdtemp(join(tmpdir(), "cf-auth-package-version-"));
+  const packageDir = join(root, "packages", "cli");
+  await mkdir(packageDir, { recursive: true });
+  await writeFile(
+    join(packageDir, "package.json"),
+    `${JSON.stringify({ name: "@cf-auth/cli", version })}\n`,
+  );
+  return root;
+}
+
+function runScript(
+  script: string,
+  env: Record<string, string>,
+  cwd = process.cwd(),
+) {
+  return spawnSync(process.execPath, [join(process.cwd(), script)], {
+    cwd,
     encoding: "utf8",
     env: { ...process.env, ...env },
   });

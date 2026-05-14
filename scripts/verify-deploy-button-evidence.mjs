@@ -6,12 +6,12 @@ const evidencePath =
   "docs/deploy-button-evidence.json";
 const requireEvidence =
   process.env.CF_AUTH_REQUIRE_DEPLOY_BUTTON_EVIDENCE === "1" ||
-  (await hasPublicBetaPackageVersions());
+  (await hasBetaOrStablePackageVersions());
 
 if (!(await exists(evidencePath))) {
   if (requireEvidence) {
     console.error(
-      `${evidencePath}: Deploy to Cloudflare button evidence is required before public beta.`,
+      `${evidencePath}: Deploy to Cloudflare button evidence is required before public beta or stable release.`,
     );
     process.exit(1);
   }
@@ -200,7 +200,7 @@ function containsPlaceholderEvidence(text) {
   return /\bOWNER\b|\bREPO\b|https:\/\/example\.com\b/u.test(text);
 }
 
-async function hasPublicBetaPackageVersions() {
+async function hasBetaOrStablePackageVersions() {
   const packages = await readdir("packages", { withFileTypes: true });
   for (const entry of packages) {
     if (!entry.isDirectory()) continue;
@@ -208,10 +208,22 @@ async function hasPublicBetaPackageVersions() {
       await readFile(join("packages", entry.name, "package.json"), "utf8"),
     );
     if (!pkg.private && typeof pkg.version === "string") {
-      if (/^\d+\.\d+\.\d+-beta(?:[.-].*)?$/u.test(pkg.version)) return true;
+      if (isPublicBeta(pkg.version) || isStableOneOrLater(pkg.version)) {
+        return true;
+      }
     }
   }
   return false;
+}
+
+function isPublicBeta(version) {
+  return /^\d+\.\d+\.\d+-beta(?:[.-].*)?$/u.test(version);
+}
+
+function isStableOneOrLater(version) {
+  const match = version.match(/^(\d+)\.(\d+)\.(\d+)(?:-.+)?$/);
+  if (!match || version.includes("-")) return false;
+  return Number(match[1]) >= 1;
 }
 
 async function exists(path) {

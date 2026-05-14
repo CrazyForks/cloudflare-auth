@@ -42,11 +42,13 @@ describe("CLI MVP", () => {
       await readFile(join(app, "package.json"), "utf8"),
     ) as {
       name: string;
+      packageManager: string;
       dependencies: Record<string, string>;
       scripts: Record<string, string>;
       pnpm: { onlyBuiltDependencies: string[] };
     };
     expect(generatedPackage.name).toBe("my-app");
+    expect(generatedPackage.packageManager).toBe("pnpm@11.1.1");
     expect(generatedPackage.dependencies["@cf-auth/email-cloudflare"]).toBe(
       generatedPackageVersion,
     );

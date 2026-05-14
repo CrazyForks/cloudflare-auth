@@ -2781,6 +2781,7 @@ function templatePackageJson(name: string, template: InitTemplate) {
   return {
     name,
     type: "module",
+    packageManager: "pnpm@11.1.1",
     scripts: {
       dev: "wrangler dev",
       build: "tsc -p tsconfig.json --noEmit",

@@ -2,6 +2,7 @@
   "name": "cf-auth-example-worker-basic",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@11.1.1",
   "engines": {
     "node": ">=22.12.0"
   },

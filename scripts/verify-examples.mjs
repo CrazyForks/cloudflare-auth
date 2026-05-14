@@ -3,6 +3,9 @@ import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 const packageVersions = await readPackageVersions();
+const versionMatrix = JSON.parse(
+  await readFile("scripts/version-matrix.json", "utf8"),
+);
 const rootMigrations = new Map(
   await Promise.all(
     ["0001_initial.sql", "0002_indexes.sql"].map(async (file) => [
@@ -23,6 +26,11 @@ for (const root of ["examples", "templates"]) {
   for (const entry of entries) {
     const dir = join(root, entry.name);
     const pkg = JSON.parse(await readFile(join(dir, "package.json"), "utf8"));
+    verifyProjectToolchain(dir, pkg);
+    const wrangler = parseJsonc(
+      await readFile(join(dir, "wrangler.jsonc"), "utf8"),
+    );
+    verifyWranglerToolchain(dir, wrangler);
     const rendered = renderPublishedManifest(pkg);
     for (const section of ["dependencies", "devDependencies"]) {
       for (const [name, version] of Object.entries(rendered[section] ?? {})) {
@@ -115,7 +123,7 @@ async function verifyBuildableProjects(root) {
     const pkg = JSON.parse(await readFile(join(dir, "package.json"), "utf8"));
     if (!pkg.scripts?.build) failures.push(`${dir}: missing build script`);
     if (!pkg.scripts?.test) failures.push(`${dir}: missing test script`);
-    if (!pkg.engines || pkg.engines.node !== ">=22.12.0")
+    if (!pkg.engines || pkg.engines.node !== versionMatrix.node)
       failures.push(`${dir}: engine mismatch`);
     for (const script of ["build", "test"]) {
       const result = spawnSync("pnpm", ["--dir", dir, script], {
@@ -124,4 +132,44 @@ async function verifyBuildableProjects(root) {
       if (result.status !== 0) failures.push(`${dir}: pnpm ${script} failed`);
     }
   }
+}
+
+function verifyProjectToolchain(dir, pkg) {
+  if (pkg.packageManager !== `pnpm@${versionMatrix.pnpm}`) {
+    failures.push(`${dir}: packageManager must be pnpm@${versionMatrix.pnpm}`);
+  }
+  for (const [section, name, expected] of [
+    ["devDependencies", "typescript", versionMatrix.typescript],
+    ["devDependencies", "vitest", versionMatrix.vitest],
+    ["devDependencies", "wrangler", versionMatrix.wrangler],
+    ["dependencies", "hono", versionMatrix.hono],
+  ]) {
+    const actual = pkg[section]?.[name];
+    if (actual !== undefined && actual !== expected) {
+      failures.push(`${dir}: ${section}.${name} must be ${expected}`);
+    }
+  }
+}
+
+function verifyWranglerToolchain(dir, wrangler) {
+  if (
+    typeof wrangler.compatibility_date !== "string" ||
+    wrangler.compatibility_date < versionMatrix.workersCompatibilityDateFloor
+  ) {
+    failures.push(
+      `${dir}: compatibility_date must be at least ${versionMatrix.workersCompatibilityDateFloor}`,
+    );
+  }
+  if (!wrangler.compatibility_flags?.includes("nodejs_compat")) {
+    failures.push(`${dir}: wrangler.jsonc must enable nodejs_compat`);
+  }
+}
+
+function parseJsonc(text) {
+  return JSON.parse(
+    text
+      .replace(/^\s*\/\/.*$/gm, "")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/,\s*([}\]])/g, "$1"),
+  );
 }

@@ -94,6 +94,37 @@ describe("release evidence verifiers", () => {
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("reservedPackages");
   });
+
+  it("accepts security tracker evidence with issue and advisory search proof", async () => {
+    const path = await writeEvidence(
+      "security-tracker",
+      validSecurityTracker(),
+    );
+    const result = runScript("scripts/verify-security-release-tracker.mjs", {
+      CF_AUTH_REQUIRE_SECURITY_TRACKER: "1",
+      CF_AUTH_SECURITY_TRACKER_PATH: path,
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("security release tracker verified");
+  });
+
+  it("rejects security tracker evidence without search URLs", async () => {
+    const evidence = validSecurityTracker() as Partial<
+      ReturnType<typeof validSecurityTracker>
+    >;
+    delete evidence.issueSearchUrl;
+    delete evidence.advisorySearchUrl;
+    const path = await writeEvidence("security-tracker-missing-url", evidence);
+    const result = runScript("scripts/verify-security-release-tracker.mjs", {
+      CF_AUTH_REQUIRE_SECURITY_TRACKER: "1",
+      CF_AUTH_SECURITY_TRACKER_PATH: path,
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("issueSearchUrl");
+    expect(result.stderr).toContain("advisorySearchUrl");
+  });
 });
 
 async function writeEvidence(name: string, value: unknown): Promise<string> {
@@ -248,6 +279,26 @@ function validPackageEvidence() {
         name: "create-cloudflare-auth",
         registry: "https://registry.npmjs.org/",
         publishableAfterOwnershipConfirmed: true,
+      },
+    ],
+  };
+}
+
+function validSecurityTracker() {
+  return {
+    schemaVersion: 1,
+    reviewedAt: "2026-05-14T00:00:00.000Z",
+    reviewedBy: "release-reviewer",
+    issueSearchUrl:
+      "https://github.com/acme/cloudflare-auth/issues?q=is%3Aissue%20is%3Aopen%20label%3Aauth%20label%3Ahigh%2Ccritical",
+    advisorySearchUrl:
+      "https://github.com/acme/cloudflare-auth/security/advisories",
+    openHighCriticalAuthSecurityIssues: [],
+    advisories: [
+      {
+        id: "GHSA-abcd-1234-5678",
+        severity: "high",
+        status: "resolved",
       },
     ],
   };

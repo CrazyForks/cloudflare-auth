@@ -23,8 +23,8 @@ Stable 1.0 also requires a redaction-safe security release tracker. Copy
 CF_AUTH_REQUIRE_SECURITY_TRACKER=1 pnpm verify:security-tracker
 ```
 
-The tracker must show that no high/critical auth security issue or advisory
-remains open.
+The tracker must show the issue and advisory searches used to confirm that no
+high/critical auth security issue or advisory remains open.
 
 ## Decision Record
 

@@ -169,6 +169,11 @@ if (stablePackages.length > 0) {
     "docs/security-release-tracker.json",
     '"openHighCriticalAuthSecurityIssues"',
   );
+  await requireText("docs/security-release-tracker.json", '"issueSearchUrl"');
+  await requireText(
+    "docs/security-release-tracker.json",
+    '"advisorySearchUrl"',
+  );
   await requireFile("tests/upgrade.test.ts");
   await requireFile("tests/fixtures/upgrade/beta-schema-versions.json");
   await requireUpgradeFixtures();

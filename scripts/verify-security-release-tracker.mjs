@@ -46,6 +46,8 @@ function validateTracker(value, rawText) {
   }
   requireString(value.reviewedBy, "reviewedBy");
   requireDate(value.reviewedAt, "reviewedAt");
+  requireUrl(value.issueSearchUrl, "issueSearchUrl");
+  requireUrl(value.advisorySearchUrl, "advisorySearchUrl");
 
   const openIssues = Array.isArray(value.openHighCriticalAuthSecurityIssues)
     ? value.openHighCriticalAuthSecurityIssues
@@ -97,8 +99,21 @@ function requireDate(value, path) {
   }
 }
 
+function requireUrl(value, path) {
+  requireString(value, path);
+  if (typeof value !== "string") return;
+  try {
+    const url = new URL(value);
+    if (!["http:", "https:"].includes(url.protocol)) {
+      failures.push(`${trackerPath}: ${path} must be an http(s) URL`);
+    }
+  } catch {
+    failures.push(`${trackerPath}: ${path} must be a valid URL`);
+  }
+}
+
 function containsPlaceholderEvidence(text) {
-  return /\bmaintainer-name\b|\bGHSA-example\b/u.test(text);
+  return /\bmaintainer-name\b|\bGHSA-example\b|\bOWNER\b|\bREPO\b/u.test(text);
 }
 
 function containsSensitiveEvidence(text) {

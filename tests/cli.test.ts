@@ -2194,6 +2194,44 @@ export default app;
     );
   });
 
+  it("doctor rejects malformed remote D1 migration state JSON", async () => {
+    const cwd = await tempDir();
+    await writeWrangler(cwd);
+    const errors: string[] = [];
+    const code = await runCli(["doctor", "--env", "production"], {
+      cwd,
+      stderr: (line) => errors.push(line),
+      runCommand: (_command, args) => {
+        if (args[0] === "--version") {
+          return { status: 0, stdout: "4.90.1\n", stderr: "" };
+        }
+        if (args[0] === "whoami") {
+          return { status: 0, stdout: healthyWhoamiJson(), stderr: "" };
+        }
+        if (args[0] === "d1" && args[1] === "execute") {
+          return {
+            status: 0,
+            stdout: JSON.stringify([{ results: "not rows" }]),
+            stderr: "",
+          };
+        }
+        return {
+          status: 0,
+          stdout: JSON.stringify([{ name: "AUTH_SECRET" }]),
+          stderr: "",
+        };
+      },
+    });
+
+    expect(code).toBe(1);
+    expect(errors.join("\n")).toContain(
+      "D1 migration state response had unexpected shape",
+    );
+    expect(errors.join("\n")).not.toContain(
+      "D1 migration 0001 has not been applied remotely",
+    );
+  });
+
   it("executes deploy through Wrangler after doctor and migration status", async () => {
     const cwd = await tempDir();
     await writeWrangler(cwd);

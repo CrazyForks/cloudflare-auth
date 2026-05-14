@@ -967,27 +967,83 @@ function parseD1MigrationState(
     };
   }
   const state = collectD1MigrationState(parsed);
-  return { ok: true, ...state };
+  if (!state.ok) {
+    return {
+      ok: false,
+      check: {
+        id: "d1_migrations",
+        status: "fail",
+        message: "D1 migration state response had unexpected shape",
+        fix: "rerun doctor after confirming wrangler d1 execute --json works",
+      },
+    };
+  }
+  return {
+    ok: true,
+    versions: state.versions,
+    schemaVersion: state.schemaVersion,
+  };
 }
 
-function collectD1MigrationState(value: unknown): {
-  versions: string[];
-  schemaVersion: string | undefined;
-} {
+function collectD1MigrationState(value: unknown):
+  | {
+      ok: true;
+      versions: string[];
+      schemaVersion: string | undefined;
+    }
+  | { ok: false } {
   const versions = new Set<string>();
   let schemaVersion: string | undefined;
-  const visit = (item: unknown) => {
+  let foundResults = false;
+  let malformed = false;
+  const visit = (item: unknown, rowContext = false) => {
+    if (malformed) return;
     if (Array.isArray(item)) {
-      for (const child of item) visit(child);
+      for (const child of item) visit(child, rowContext);
       return;
     }
-    if (!isRecord(item)) return;
-    if (typeof item.version === "string") versions.add(item.version);
-    if (typeof item.value === "string") schemaVersion = item.value;
-    for (const key of ["result", "results"]) visit(item[key]);
+    if (!isRecord(item)) {
+      if (rowContext) malformed = true;
+      return;
+    }
+    const resultKeys = ["result", "results"].filter((key) => key in item);
+    if (resultKeys.length > 0) {
+      for (const key of resultKeys) {
+        const rows = item[key];
+        if (!Array.isArray(rows)) {
+          malformed = true;
+          return;
+        }
+        foundResults = true;
+        visit(rows, true);
+      }
+      return;
+    }
+    if (!rowContext) return;
+    const hasVersion = "version" in item;
+    const hasValue = "value" in item;
+    if (!hasVersion && !hasValue) {
+      malformed = true;
+      return;
+    }
+    if (hasVersion) {
+      if (typeof item.version !== "string") {
+        malformed = true;
+        return;
+      }
+      versions.add(item.version);
+    }
+    if (hasValue) {
+      if (typeof item.value !== "string") {
+        malformed = true;
+        return;
+      }
+      schemaVersion = item.value;
+    }
   };
   visit(value);
-  return { versions: [...versions].sort(), schemaVersion };
+  if (malformed || !foundResults) return { ok: false };
+  return { ok: true, versions: [...versions].sort(), schemaVersion };
 }
 
 async function commandDeploy(

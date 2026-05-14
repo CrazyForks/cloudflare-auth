@@ -49,7 +49,7 @@
 - opt-in Wrangler dev smoke workflow passes for at least one Worker example
 - opt-in Cloudflare production smoke workflow passes against the dedicated fixture
 - production smoke test passes against an opt-in Cloudflare account fixture
-- Deploy to Cloudflare button path verified or explicitly blocked
+- Deploy to Cloudflare button path verified with `pnpm verify:deploy-button-evidence`
 
 ## 1.0
 

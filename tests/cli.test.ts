@@ -420,7 +420,7 @@ describe("CLI MVP", () => {
           observability: { enabled: boolean; head_sampling_rate: number };
           vars: Record<string, string>;
           d1_databases: Array<{ binding: string; database_id: string }>;
-          send_email: Array<{ name: string }>;
+          send_email: Array<{ name: string; remote?: boolean }>;
         };
       };
     };
@@ -442,6 +442,7 @@ describe("CLI MVP", () => {
     });
     expect(wrangler.env.production.send_email).toContainEqual({
       name: "AUTH_EMAIL",
+      remote: true,
     });
   });
 
@@ -497,7 +498,7 @@ describe("CLI MVP", () => {
             database_id: string;
             migrations_dir?: string;
           }>;
-          send_email: Array<{ name: string }>;
+          send_email: Array<{ name: string; remote?: boolean }>;
         };
       };
     };
@@ -522,6 +523,7 @@ describe("CLI MVP", () => {
     });
     expect(wrangler.env.production.send_email).toContainEqual({
       name: "AUTH_EMAIL",
+      remote: true,
     });
     const backup = JSON.parse(
       await readFile(join(app, "wrangler.jsonc.cf-auth-backup"), "utf8"),
@@ -2628,7 +2630,7 @@ async function writeWrangler(cwd: string) {
                 database_id: "prod-id",
               },
             ],
-            send_email: [{ name: "AUTH_EMAIL" }],
+            send_email: [{ name: "AUTH_EMAIL", remote: true }],
           },
         },
       },

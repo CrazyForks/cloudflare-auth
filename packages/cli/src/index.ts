@@ -2928,7 +2928,7 @@ interface WranglerConfig {
     head_sampling_rate?: number;
   };
   vars?: Record<string, string>;
-  send_email?: Array<{ name: string }>;
+  send_email?: Array<{ name: string; remote?: boolean }>;
   d1_databases?: Array<{
     binding: string;
     database_name: string;
@@ -3194,12 +3194,25 @@ async function repairWranglerConfig(
     ) || changed;
   const sendEmailBindings = Array.isArray(production.send_email)
     ? production.send_email.filter(
-        (binding): binding is { name: string } =>
+        (binding): binding is { name: string; remote?: boolean } =>
           isRecord(binding) && typeof binding.name === "string",
       )
     : [];
-  if (!sendEmailBindings.some((binding) => binding.name === "AUTH_EMAIL")) {
-    production.send_email = [...sendEmailBindings, { name: "AUTH_EMAIL" }];
+  let foundAuthEmailBinding = false;
+  let sendEmailChanged = !Array.isArray(production.send_email);
+  const normalizedSendEmailBindings = sendEmailBindings.map((binding) => {
+    if (binding.name !== "AUTH_EMAIL") return binding;
+    foundAuthEmailBinding = true;
+    if (binding.remote === true) return binding;
+    sendEmailChanged = true;
+    return { ...binding, remote: true };
+  });
+  if (!foundAuthEmailBinding) {
+    normalizedSendEmailBindings.push({ name: "AUTH_EMAIL", remote: true });
+    sendEmailChanged = true;
+  }
+  if (sendEmailChanged) {
+    production.send_email = normalizedSendEmailBindings;
     changed = true;
   }
 
@@ -3601,7 +3614,8 @@ function wranglerTemplate(appName: string): string {
       ],
       "send_email": [
         {
-          "name": "AUTH_EMAIL"
+          "name": "AUTH_EMAIL",
+          "remote": true
         }
       ]
     }

@@ -19,6 +19,7 @@ await requireFile(".github/workflows/codeql.yml");
 await requireFile(".github/workflows/cloudflare-production-smoke.yml");
 await requireFile(".github/workflows/dependency-review.yml");
 await requireFile(".github/workflows/published-quickstart-smoke.yml");
+await requireFile(".github/workflows/wrangler-dev-smoke.yml");
 await requireFile(".github/ISSUE_TEMPLATE/alpha-feedback.yml");
 await requireFile(".github/ISSUE_TEMPLATE/bug.yml");
 await requireFile(".github/ISSUE_TEMPLATE/feature-request.yml");
@@ -89,6 +90,14 @@ await requireText(
 await requireText(
   "docs/public-beta.md",
   ".github/workflows/cloudflare-production-smoke.yml",
+);
+await requireText(
+  ".github/workflows/wrangler-dev-smoke.yml",
+  "pnpm smoke:wrangler-dev",
+);
+await requireText(
+  "docs/release-checklist.md",
+  "opt-in Wrangler dev smoke workflow passes",
 );
 
 const stablePackages = packages.filter((pkg) =>

@@ -334,6 +334,36 @@ async function exerciseDeployedAuth(origin) {
   if (body?.user?.email !== email) {
     throw new Error("user endpoint did not return the smoke user");
   }
+
+  const logout = await fetch(`${origin}/auth/logout`, {
+    method: "POST",
+    headers: {
+      Cookie: cookie,
+      Origin: origin,
+    },
+  });
+  if (logout.status !== 200) {
+    throw new Error(`logout failed: ${logout.status} ${await logout.text()}`);
+  }
+  const clearCookie = logout.headers.get("Set-Cookie") ?? "";
+  if (!clearCookie.includes("Max-Age=0")) {
+    throw new Error("logout did not clear the session cookie");
+  }
+
+  const userAfterLogout = await fetch(`${origin}/auth/user`, {
+    headers: {
+      Cookie: cookie,
+    },
+  });
+  if (userAfterLogout.status !== 200) {
+    throw new Error(
+      `user endpoint after logout failed: ${userAfterLogout.status} ${await userAfterLogout.text()}`,
+    );
+  }
+  const bodyAfterLogout = await userAfterLogout.json();
+  if (bodyAfterLogout?.user !== null) {
+    throw new Error("user endpoint still returned a user after logout");
+  }
 }
 
 function jsonPost(url, body) {

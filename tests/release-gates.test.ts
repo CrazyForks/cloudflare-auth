@@ -102,6 +102,20 @@ describe("release gates", () => {
     expect(result.stderr).toContain("docs/api.md: missing hashPassword");
   });
 
+  it("derives public API docs coverage from package root exports", async () => {
+    const root = await releaseGateFixture({ deployButtonEvidence: true });
+    await writeFixtureFile(
+      root,
+      "packages/cli/src/index.ts",
+      "export function uncoveredRootExport() {}",
+    );
+    const result = runReleaseGates(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("scripts/verify-docs-coverage.mjs");
+    expect(result.stderr).toContain("docs/api.md: missing uncoveredRootExport");
+  });
+
   it("requires password benchmark evidence in release gates", async () => {
     const root = await releaseGateFixture({ deployButtonEvidence: true });
     await writeFixtureFile(

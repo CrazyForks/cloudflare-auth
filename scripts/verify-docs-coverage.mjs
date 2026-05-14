@@ -1,4 +1,5 @@
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
+import { join } from "node:path";
 
 const docs = {
   api: await readFile("docs/api.md", "utf8"),
@@ -173,6 +174,10 @@ for (const symbol of [
   requireText("docs/api.md", docs.api, symbol);
 }
 
+for (const exportName of await rootExportNames()) {
+  requireText("docs/api.md", docs.api, exportName);
+}
+
 for (const text of ["Default retention windows", "non-negative integer"]) {
   requireText("docs/api.md", docs.api, text);
 }
@@ -216,4 +221,39 @@ function requireText(file, text, needle) {
   if (!text.includes(needle)) {
     failures.push(`${file}: missing ${needle}`);
   }
+}
+
+async function rootExportNames() {
+  const entries = await readdir("packages", { withFileTypes: true });
+  const names = new Set();
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    let source;
+    try {
+      source = await readFile(
+        join("packages", entry.name, "src", "index.ts"),
+        "utf8",
+      );
+    } catch {
+      continue;
+    }
+    for (const line of source.split("\n")) {
+      const trimmed = line.trim();
+      const declaration = trimmed.match(
+        /^export\s+(?:async\s+)?(?:function|class|const|interface|type)\s+([A-Za-z_$][\w$]*)/u,
+      );
+      if (declaration?.[1]) {
+        names.add(declaration[1]);
+        continue;
+      }
+      const named = trimmed.match(/^export\s*\{([^}]+)\}/u);
+      if (!named?.[1]) continue;
+      for (const item of named[1].split(",")) {
+        const [name, alias] = item.trim().split(/\s+as\s+/u);
+        const exported = alias ?? name;
+        if (/^[A-Za-z_$][\w$]*$/u.test(exported)) names.add(exported);
+      }
+    }
+  }
+  return [...names].sort();
 }

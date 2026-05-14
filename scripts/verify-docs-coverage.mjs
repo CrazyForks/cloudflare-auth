@@ -2,6 +2,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import ts from "typescript";
 
+import { isJsonObject } from "./evidence-validation.mjs";
 import { requiredAuthSmokeEndpoints } from "./smoke-endpoints.mjs";
 
 const docs = {
@@ -190,6 +191,10 @@ async function workspacePackageNames() {
       pkg = JSON.parse(await readFile(path, "utf8"));
     } catch {
       failures.push(`${path}: could not be read for package docs coverage`);
+      continue;
+    }
+    if (!isJsonObject(pkg)) {
+      failures.push(`${path}: top-level JSON value must be an object`);
       continue;
     }
     if (typeof pkg.name === "string") {

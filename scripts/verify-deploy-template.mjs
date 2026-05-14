@@ -17,11 +17,16 @@ const wrangler = JSON.parse(
   await readFile(join(output, "wrangler.jsonc"), "utf8"),
 );
 const readme = await readFile(join(output, "README.md"), "utf8");
+const devVarsExample = await readFile(
+  join(output, ".dev.vars.example"),
+  "utf8",
+);
 
 checkPackageJson(packageJson);
 checkWrangler(wrangler);
 await checkIsolatedTree(output);
 checkReadme(readme);
+checkDevVarsExample(devVarsExample);
 
 if (process.env.CF_AUTH_DEPLOY_TEMPLATE_INSTALL === "1") {
   run("pnpm", ["--dir", output, "install", "--no-frozen-lockfile"]);
@@ -130,6 +135,14 @@ function checkReadme(text) {
   }
   if (!text.includes("AUTH_PUBLIC_ORIGIN") || !text.includes("AUTH_SECRET")) {
     failures.push("README.md: missing required variable instructions");
+  }
+}
+
+function checkDevVarsExample(text) {
+  if (text !== "AUTH_SECRET=k1.REPLACE_WITH_32_BYTE_BASE64URL_SECRET\n") {
+    failures.push(
+      ".dev.vars.example: must contain the exact AUTH_SECRET placeholder",
+    );
   }
 }
 

@@ -48,14 +48,25 @@ function validateEvidence(value, rawText) {
     : [];
   const failuresSeen = Array.isArray(value.failures) ? value.failures : [];
 
-  if (localSetups.length < 5) {
+  const localSetupUsers = new Set(
+    localSetups
+      .map((setup) => setup.user)
+      .filter((user) => typeof user === "string" && user.length > 0),
+  );
+  const productionDeployUsers = new Set(
+    productionDeploys
+      .map((deploy) => deploy.user)
+      .filter((user) => typeof user === "string" && user.length > 0),
+  );
+
+  if (localSetupUsers.size < 5) {
     failures.push(
-      `${evidencePath}: at least 5 alpha local setups are required`,
+      `${evidencePath}: at least 5 distinct alpha users must complete local setup`,
     );
   }
-  if (productionDeploys.length < 3) {
+  if (productionDeployUsers.size < 3) {
     failures.push(
-      `${evidencePath}: at least 3 alpha production deploys are required`,
+      `${evidencePath}: at least 3 distinct alpha users must complete production deploy`,
     );
   }
 

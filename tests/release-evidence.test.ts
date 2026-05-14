@@ -34,6 +34,23 @@ describe("release evidence verifiers", () => {
     expect(result.stderr).toContain("cf-auth deploy --env production");
   });
 
+  it("rejects alpha evidence that reuses the same users for thresholds", async () => {
+    const evidence = validAlphaEvidence();
+    for (const setup of evidence.localSetups) setup.user = "alpha-user-1";
+    for (const deploy of evidence.productionDeploys) {
+      deploy.user = "alpha-user-1";
+    }
+    const path = await writeEvidence("alpha-duplicate-users", evidence);
+    const result = runScript("scripts/verify-alpha-evidence.mjs", {
+      CF_AUTH_REQUIRE_ALPHA_EVIDENCE: "1",
+      CF_AUTH_ALPHA_EVIDENCE_PATH: path,
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("5 distinct alpha users");
+    expect(result.stderr).toContain("3 distinct alpha users");
+  });
+
   it("accepts beta evidence for clean quickstart and opt-in production smoke", async () => {
     const path = await writeEvidence("beta", validBetaEvidence());
     const result = runScript("scripts/verify-beta-evidence.mjs", {

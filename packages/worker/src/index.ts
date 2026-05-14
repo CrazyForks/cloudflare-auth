@@ -1695,6 +1695,8 @@ export function createAuthHandler(configInput: AuthHelperConfig) {
       if (path === null) return null;
       const ctx =
         ctxInput ?? ({ waitUntil() {} } as unknown as ExecutionContext);
+      const fallbackRequestId =
+        request.headers.get("CF-Ray") ?? randomId("req_");
       let runtime: RuntimeContext;
       try {
         runtime = resolveRuntime(config, request, envInput, ctx);
@@ -1703,16 +1705,24 @@ export function createAuthHandler(configInput: AuthHelperConfig) {
           error instanceof AuthCryptoError &&
           error.code === "untrusted_host"
         ) {
-          return errorResponse(error, 403, "untrusted_host");
+          return errorResponse(error, 403, "untrusted_host", fallbackRequestId);
         }
-        return errorResponse(error, 500, "config_error");
+        return errorResponse(error, 500, "config_error", fallbackRequestId);
       }
       if (request.method === "OPTIONS")
         return handlePreflight(request, runtime);
       if (!checkOrigin(request, runtime))
-        return errorResponse("Invalid origin", 403, "invalid_origin");
+        return errorResponse(
+          "Invalid origin",
+          403,
+          "invalid_origin",
+          runtime.requestId,
+        );
 
-      const response = await dispatchAuthRequest(path, request, runtime);
+      const response = await withErrorRequestId(
+        await dispatchAuthRequest(path, request, runtime),
+        runtime.requestId,
+      );
       return withCorsHeaders(request, runtime, response);
     },
   };
@@ -1853,7 +1863,12 @@ export async function requireUser(
   );
   const session = await lookupSessionForConfig(request, runtime);
   if (!session)
-    return errorResponse("Authentication required", 401, "unauthorized");
+    return errorResponse(
+      "Authentication required",
+      401,
+      "unauthorized",
+      runtime.requestId,
+    );
   return publicUser(session.user);
 }
 
@@ -1871,12 +1886,18 @@ export async function requireVerifiedUser(
   );
   const session = await lookupSession(request, runtime);
   if (!session)
-    return errorResponse("Authentication required", 401, "unauthorized");
+    return errorResponse(
+      "Authentication required",
+      401,
+      "unauthorized",
+      runtime.requestId,
+    );
   if (session.user.email_verified_at === null) {
     return errorResponse(
       "Email verification required",
       403,
       "email_verification_required",
+      runtime.requestId,
     );
   }
   return publicUser(session.user);
@@ -3419,6 +3440,55 @@ function withCorsHeaders(
   });
 }
 
+async function withErrorRequestId(
+  response: Response,
+  requestId: string,
+): Promise<Response> {
+  if (response.status < 400) return response;
+  if (
+    !response.headers
+      .get("Content-Type")
+      ?.toLowerCase()
+      .startsWith("application/json")
+  ) {
+    return response;
+  }
+  const text = await response.text();
+  let body: unknown;
+  try {
+    body = JSON.parse(text);
+  } catch {
+    return new Response(text, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers,
+    });
+  }
+  if (!isErrorResponseBody(body) || body.requestId) {
+    return new Response(text, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers,
+    });
+  }
+  return new Response(JSON.stringify({ ...body, requestId }), {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers,
+  });
+}
+
+function isErrorResponseBody(
+  body: unknown,
+): body is { error: unknown; requestId?: unknown } {
+  return (
+    typeof body === "object" &&
+    body !== null &&
+    !Array.isArray(body) &&
+    "error" in body
+  );
+}
+
 function allowedCorsOrigin(
   request: Request,
   runtime: RuntimeContext,
@@ -3501,12 +3571,17 @@ function json(
   return new Response(JSON.stringify(body), { status, headers });
 }
 
-function errorResponse(error: unknown, status: number, code: string): Response {
+function errorResponse(
+  error: unknown,
+  status: number,
+  code: string,
+  requestId?: string | null,
+): Response {
   const message = redactLogValue(
     error instanceof Error ? error.message : String(error),
   );
   return json(
-    { error: { code, message } },
+    { error: { code, message }, ...(requestId ? { requestId } : {}) },
     code === "body_too_large"
       ? 413
       : code === "unsupported_content_type"

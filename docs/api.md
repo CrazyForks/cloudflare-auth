@@ -7,12 +7,16 @@ JSON responses use this error shape:
 
 ```json
 {
+  "requestId": "req_...",
   "error": {
     "code": "validation_failed",
     "message": "Invalid JSON body"
   }
 }
 ```
+
+`requestId` is included when the runtime can derive one from `CF-Ray` or a
+generated request identifier.
 
 Mutation endpoints require a trusted `Origin` header outside local development.
 JSON request bodies should use `Content-Type: application/json`; built-in token

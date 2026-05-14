@@ -1,4 +1,4 @@
-import type { UserRow } from "@cf-auth/core";
+import { randomId, type UserRow } from "@cf-auth/core";
 import {
   createAuthHandler,
   getAuthSessionFromRequest,
@@ -64,7 +64,7 @@ export function requireUser(
     );
     if (!user)
       return c.json(
-        { error: { code: "unauthorized", message: "Authentication required" } },
+        authErrorBody(c.req.raw, "unauthorized", "Authentication required"),
         401,
       );
     c.set(authUserKey, user);
@@ -85,22 +85,28 @@ export function requireVerifiedUser(
     );
     if (!session)
       return c.json(
-        { error: { code: "unauthorized", message: "Authentication required" } },
+        authErrorBody(c.req.raw, "unauthorized", "Authentication required"),
         401,
       );
     if (session.user.email_verified_at === null) {
       return c.json(
-        {
-          error: {
-            code: "email_verification_required",
-            message: "Email verification required",
-          },
-        },
+        authErrorBody(
+          c.req.raw,
+          "email_verification_required",
+          "Email verification required",
+        ),
         403,
       );
     }
     c.set(authUserKey, publicAuthUser(session.user));
     await next();
+  };
+}
+
+function authErrorBody(request: Request, code: string, message: string) {
+  return {
+    error: { code, message },
+    requestId: request.headers.get("CF-Ray") ?? randomId("req_"),
   };
 }
 

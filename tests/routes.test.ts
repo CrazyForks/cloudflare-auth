@@ -427,7 +427,7 @@ describe("auth HTTP runtime", () => {
 
     const absent = await authFetch("/auth/login", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "CF-Ray": "ray-login" },
       body: JSON.stringify({
         identifier: "absent@example.com",
         password: "correct horse battery staple",
@@ -443,6 +443,10 @@ describe("auth HTTP runtime", () => {
     });
 
     expect(absent.status).toBe(401);
+    await expect(absent.json()).resolves.toMatchObject({
+      error: { code: "invalid_credentials" },
+      requestId: "ray-login",
+    });
     expect(passwordless.status).toBe(401);
     const events = await db
       .prepare(
@@ -821,9 +825,10 @@ describe("auth HTTP runtime", () => {
     await expect(
       Promise.all(responses.map((response) => response.json())),
     ).resolves.toEqual(
-      Array(10).fill({
+      Array.from({ length: 10 }, () => ({
         error: { code: "invalid_token", message: "Invalid token" },
-      }),
+        requestId: expect.stringMatching(/^req_/),
+      })),
     );
   });
 
@@ -855,9 +860,10 @@ describe("auth HTTP runtime", () => {
     await expect(
       Promise.all(allowed.map((response) => response.json())),
     ).resolves.toEqual(
-      Array(10).fill({
+      Array.from({ length: 10 }, () => ({
         error: { code: "invalid_token", message: "Invalid token" },
-      }),
+        requestId: expect.stringMatching(/^req_/),
+      })),
     );
 
     const limited = await authFetch("/auth/password/reset/confirm", {
@@ -868,6 +874,7 @@ describe("auth HTTP runtime", () => {
     expect(limited.status).toBe(429);
     await expect(limited.json()).resolves.toMatchObject({
       error: { code: "rate_limited" },
+      requestId: expect.stringMatching(/^req_/),
     });
   });
 
@@ -968,7 +975,9 @@ describe("auth HTTP runtime", () => {
     expect(prod?.status).toBe(403);
 
     const badPublicOrigin = await handler.fetch(
-      new Request("https://example.com/auth/user"),
+      new Request("https://example.com/auth/user", {
+        headers: { "CF-Ray": "ray-public-origin" },
+      }),
       {
         ...env,
         AUTH_ENV: "production",
@@ -979,10 +988,13 @@ describe("auth HTTP runtime", () => {
     expect(badPublicOrigin?.status).toBe(500);
     await expect(badPublicOrigin?.json()).resolves.toMatchObject({
       error: { code: "config_error" },
+      requestId: "ray-public-origin",
     });
 
     const untrustedHost = await handler.fetch(
-      new Request("https://evil.example/auth/user"),
+      new Request("https://evil.example/auth/user", {
+        headers: { "CF-Ray": "ray-untrusted-host" },
+      }),
       {
         AUTH_SECRET: authSecret,
         AUTH_ENV: "production",
@@ -993,6 +1005,7 @@ describe("auth HTTP runtime", () => {
     expect(untrustedHost?.status).toBe(403);
     await expect(untrustedHost?.json()).resolves.toMatchObject({
       error: { code: "untrusted_host" },
+      requestId: "ray-untrusted-host",
     });
 
     const badCookieConfig = await setup({
@@ -1009,6 +1022,7 @@ describe("auth HTTP runtime", () => {
       new Request("https://app.other.com/auth/user", {
         headers: {
           "CF-Connecting-IP": "203.0.113.10",
+          "CF-Ray": "ray-config",
           "User-Agent": "Config Failure Browser",
         },
       }),
@@ -1023,19 +1037,22 @@ describe("auth HTTP runtime", () => {
     expect(badCookieResponse?.status).toBe(500);
     await expect(badCookieResponse?.json()).resolves.toMatchObject({
       error: { code: "config_error" },
+      requestId: "ray-config",
     });
     const configEvent = await badCookieConfig.db
       .prepare(
-        "SELECT event_type, ip_hash, user_agent_hash, metadata_json FROM auth_events ORDER BY created_at DESC LIMIT 1",
+        "SELECT event_type, ip_hash, user_agent_hash, request_id, metadata_json FROM auth_events ORDER BY created_at DESC LIMIT 1",
       )
       .first<{
         event_type: string;
         ip_hash: string | null;
         user_agent_hash: string | null;
+        request_id: string | null;
         metadata_json: string;
       }>();
     expect(configEvent).toMatchObject({
       event_type: "config_error",
+      request_id: "ray-config",
       metadata_json: JSON.stringify({ reason: "invalid_cookie_config" }),
     });
     expect(configEvent?.ip_hash).toMatch(/^[A-Za-z0-9_-]{43}$/);

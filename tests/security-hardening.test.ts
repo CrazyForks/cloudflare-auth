@@ -160,12 +160,13 @@ describe("security hardening helpers", () => {
     await expect(
       Promise.all(responses.map((response) => response.json())),
     ).resolves.toEqual(
-      Array(10).fill({
+      Array.from({ length: 10 }, () => ({
         error: {
           code: "turnstile_required",
           message: "Turnstile token is required",
         },
-      }),
+        requestId: expect.stringMatching(/^req_/),
+      })),
     );
     await expect(
       required.db

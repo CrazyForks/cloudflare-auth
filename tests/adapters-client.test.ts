@@ -65,8 +65,16 @@ describe("Hono adapter and browser client", () => {
     );
     expect(doublePrefix.status).toBe(404);
 
-    const unauthorized = await app.request(`${origin}/api/me`, {}, env);
+    const unauthorized = await app.request(
+      `${origin}/api/me`,
+      { headers: { "CF-Ray": "ray-hono-required" } },
+      env,
+    );
     expect(unauthorized.status).toBe(401);
+    await expect(unauthorized.json()).resolves.toMatchObject({
+      error: { code: "unauthorized" },
+      requestId: "ray-hono-required",
+    });
     const authorized = await app.request(
       `${origin}/api/me`,
       { headers: { Cookie: cookie } },
@@ -101,7 +109,7 @@ describe("Hono adapter and browser client", () => {
     expect(signup?.status).toBe(200);
     const cookie = signup?.headers.get("Set-Cookie") ?? "";
     const request = new Request(`${origin}/api/me`, {
-      headers: { Cookie: cookie },
+      headers: { Cookie: cookie, "CF-Ray": "ray-worker-helper" },
     });
 
     const session = await getWorkerSession(request, env, ctx, config);
@@ -125,6 +133,10 @@ describe("Hono adapter and browser client", () => {
     );
     expect(unverified).toBeInstanceOf(Response);
     expect((unverified as Response).status).toBe(403);
+    await expect((unverified as Response).json()).resolves.toMatchObject({
+      error: { code: "email_verification_required" },
+      requestId: "ray-worker-helper",
+    });
 
     await db
       .prepare(
@@ -171,7 +183,7 @@ describe("Hono adapter and browser client", () => {
     );
     const cookie = signup.headers.get("Set-Cookie") ?? "";
     const request = new Request(`${origin}/api/me`, {
-      headers: { Cookie: cookie },
+      headers: { Cookie: cookie, "CF-Ray": "ray-global-helper" },
     });
 
     await expect(getWorkerSession(request, env, ctx, config)).resolves.toBe(
@@ -181,6 +193,10 @@ describe("Hono adapter and browser client", () => {
     const workerRequired = await requireWorkerUser(request, env, ctx, config);
     expect(workerRequired).toBeInstanceOf(Response);
     expect((workerRequired as Response).status).toBe(401);
+    await expect((workerRequired as Response).json()).resolves.toMatchObject({
+      error: { code: "unauthorized" },
+      requestId: "ray-global-helper",
+    });
     const workerVerified = await requireWorkerVerifiedUser(
       request,
       env,
@@ -189,19 +205,31 @@ describe("Hono adapter and browser client", () => {
     );
     expect(workerVerified).toBeInstanceOf(Response);
     expect((workerVerified as Response).status).toBe(403);
+    await expect((workerVerified as Response).json()).resolves.toMatchObject({
+      error: { code: "email_verification_required" },
+      requestId: "ray-global-helper",
+    });
 
     const honoRequired = await app.request(
       `${origin}/api/me`,
-      { headers: { Cookie: cookie } },
+      { headers: { Cookie: cookie, "CF-Ray": "ray-hono-global-required" } },
       env,
     );
     expect(honoRequired.status).toBe(401);
+    await expect(honoRequired.json()).resolves.toMatchObject({
+      error: { code: "unauthorized" },
+      requestId: "ray-hono-global-required",
+    });
     const honoVerified = await app.request(
       `${origin}/api/verified`,
-      { headers: { Cookie: cookie } },
+      { headers: { Cookie: cookie, "CF-Ray": "ray-hono-global-verified" } },
       env,
     );
     expect(honoVerified.status).toBe(403);
+    await expect(honoVerified.json()).resolves.toMatchObject({
+      error: { code: "email_verification_required" },
+      requestId: "ray-hono-global-verified",
+    });
   });
 
   it("client sends same-origin credentialed requests and throws typed errors", async () => {

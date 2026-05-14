@@ -21,6 +21,7 @@ await requireFile(".github/workflows/cloudflare-production-smoke.yml");
 await requireFile(".github/workflows/dependency-review.yml");
 await requireFile(".github/workflows/examples.yml");
 await requireFile(".github/workflows/published-quickstart-smoke.yml");
+await requireFile(".github/workflows/release.yml");
 await requireFile(".github/workflows/wrangler-dev-smoke.yml");
 await requireFile(".github/ISSUE_TEMPLATE/alpha-feedback.yml");
 await requireFile(".github/ISSUE_TEMPLATE/bug.yml");
@@ -143,6 +144,17 @@ await requireText("docs/deploy-button-evidence.example.json", '"packageTag"');
 await requireText(
   ".github/workflows/wrangler-dev-smoke.yml",
   "pnpm smoke:wrangler-dev",
+);
+await requireText(".github/workflows/release.yml", "package_names_confirmed");
+await requireText(
+  ".github/workflows/release.yml",
+  "pnpm install --frozen-lockfile",
+);
+await requireText(".github/workflows/release.yml", "pnpm package:check");
+await requireText(".github/workflows/release.yml", "pnpm release:gates");
+await requireText(
+  ".github/workflows/release.yml",
+  "pnpm changeset publish --provenance",
 );
 await requireText(
   "docs/release-checklist.md",

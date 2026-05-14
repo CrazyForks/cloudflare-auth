@@ -34,6 +34,7 @@ async function releaseGateFixture(options: { deployButtonEvidence: boolean }) {
     ".github/workflows/dependency-review.yml",
     ".github/workflows/examples.yml",
     ".github/workflows/published-quickstart-smoke.yml",
+    ".github/workflows/release.yml",
     ".github/workflows/wrangler-dev-smoke.yml",
     ".github/ISSUE_TEMPLATE/alpha-feedback.yml",
     ".github/ISSUE_TEMPLATE/bug.yml",
@@ -150,6 +151,16 @@ async function releaseGateFixture(options: { deployButtonEvidence: boolean }) {
       ],
     ],
     [".github/workflows/wrangler-dev-smoke.yml", ["pnpm smoke:wrangler-dev"]],
+    [
+      ".github/workflows/release.yml",
+      [
+        "package_names_confirmed",
+        "pnpm install --frozen-lockfile",
+        "pnpm package:check",
+        "pnpm release:gates",
+        "pnpm changeset publish --provenance",
+      ],
+    ],
   ]);
 
   for (const file of new Set([...requiredFiles, ...requiredText.keys()])) {

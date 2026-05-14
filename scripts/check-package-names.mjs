@@ -2,6 +2,8 @@ import { spawnSync } from "node:child_process";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 
+import { isJsonObject } from "./evidence-validation.mjs";
+
 const evidencePath =
   process.env.CF_AUTH_PACKAGE_OWNERSHIP_PATH ?? "docs/package-ownership.json";
 const registry = "https://registry.npmjs.org/";
@@ -173,29 +175,33 @@ async function readOwnershipEvidence() {
   }
 
   const parsed = parseJson(text, evidencePath);
+  if (!isJsonObject(parsed)) {
+    failures.push(`${evidencePath}: top-level JSON value must be an object`);
+    fail();
+  }
   const packageEvidence = Array.isArray(parsed.packages) ? parsed.packages : [];
   const reservedEvidence = Array.isArray(parsed.reservedPackages)
     ? parsed.reservedPackages
     : [];
   const packageEvidenceByName = new Map();
-  for (const item of packageEvidence) {
-    if (
-      item &&
-      typeof item === "object" &&
-      "name" in item &&
-      typeof item.name === "string"
-    ) {
+  for (const [index, item] of packageEvidence.entries()) {
+    if (!isJsonObject(item)) {
+      failures.push(`${evidencePath}: packages[${index}] must be an object`);
+      continue;
+    }
+    if (typeof item.name === "string") {
       packageEvidenceByName.set(item.name, item);
     }
   }
   const reservedEvidenceByName = new Map();
-  for (const item of reservedEvidence) {
-    if (
-      item &&
-      typeof item === "object" &&
-      "name" in item &&
-      typeof item.name === "string"
-    ) {
+  for (const [index, item] of reservedEvidence.entries()) {
+    if (!isJsonObject(item)) {
+      failures.push(
+        `${evidencePath}: reservedPackages[${index}] must be an object`,
+      );
+      continue;
+    }
+    if (typeof item.name === "string") {
       if (!reservedPackageNames.has(item.name)) {
         failures.push(
           `${evidencePath}: ${item.name} must not be listed under reservedPackages unless its workspace package is private`,

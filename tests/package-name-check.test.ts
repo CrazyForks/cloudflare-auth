@@ -64,6 +64,39 @@ describe("package name registry checks", () => {
       "must not be listed under reservedPackages",
     );
   });
+
+  it("rejects non-object package ownership evidence", async () => {
+    const fixture = await packageNameFixture();
+    await writeFile(
+      join(fixture.root, "docs", "package-ownership.json"),
+      "null\n",
+    );
+    const result = runPackageNameCheck(fixture.root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("top-level JSON value must be an object");
+  });
+
+  it("rejects non-object package ownership array entries", async () => {
+    const fixture = await packageNameFixture();
+    await writeFile(
+      join(fixture.root, "docs", "package-ownership.json"),
+      `${JSON.stringify(
+        {
+          schemaVersion: 1,
+          packages: [null],
+          reservedPackages: [null],
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    const result = runPackageNameCheck(fixture.root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("packages[0] must be an object");
+    expect(result.stderr).toContain("reservedPackages[0] must be an object");
+  });
 });
 
 async function packageNameFixture(

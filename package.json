@@ -25,6 +25,7 @@
     "verify:docs-coverage": "node scripts/verify-docs-coverage.mjs",
     "verify:examples": "node scripts/verify-examples.mjs",
     "verify:migrations": "node scripts/verify-migrations.mjs",
+    "verify:package-ownership": "node scripts/verify-package-ownership.mjs",
     "verify:security-tracker": "node scripts/verify-security-release-tracker.mjs",
     "release:gates": "node scripts/release-gates.mjs",
     "smoke:wrangler-dev": "node scripts/smoke-wrangler-dev.mjs",

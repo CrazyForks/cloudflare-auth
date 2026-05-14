@@ -193,6 +193,7 @@ async function verifyReleaseControls() {
     "pnpm package:check",
     "pnpm audit --audit-level high",
     "continue-on-error: true",
+    "pnpm verify:package-ownership",
     "pnpm changeset publish --provenance",
   ]) {
     if (!releaseWorkflow.includes(needle)) {
@@ -222,6 +223,7 @@ async function verifyReleaseControls() {
       [
         "npm publisher 2FA",
         "package ownership verified",
+        "verify:package-ownership",
         "not as the sole security gate",
         "secret scanning",
         "Changesets version/changelog",

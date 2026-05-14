@@ -17,6 +17,7 @@
 - `pnpm verify:docs-coverage`
 - `pnpm verify:migrations`
 - `pnpm verify:examples`
+- `pnpm verify:package-ownership`
 - `pnpm verify:security-tracker`
 - `pnpm release:gates`
 - `CF_AUTH_TARBALL_INSTALL=1 pnpm smoke:tarballs`
@@ -26,6 +27,7 @@
 
 - package names confirmed or fallback docs updated
 - npm publisher 2FA and package ownership verified before dispatching the release workflow
+- package ownership verifier passes before publishing prerelease or stable packages
 - release workflow `package_names_confirmed` gate set only after package names are verified
 - Changesets version/changelog output reviewed before publishing
 - local clean-directory quickstart passes

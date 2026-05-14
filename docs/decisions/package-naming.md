@@ -52,3 +52,14 @@ Before publishing a prerelease or stable release, maintainers must verify packag
 ownership for every published name or complete the fallback rename.
 npm publisher 2FA must be enabled for every publishing account, and the release
 workflow must publish from GitHub Actions with npm provenance.
+
+Copy `docs/package-ownership.example.json` to `docs/package-ownership.json`
+and record redaction-safe ownership evidence before publishing prerelease or
+stable packages:
+
+```bash
+CF_AUTH_REQUIRE_PACKAGE_OWNERSHIP=1 pnpm verify:package-ownership
+```
+
+Do not include npm tokens, auth-token environment variables, or registry
+session data in the evidence file.

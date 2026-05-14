@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "verifiedAt": "2026-05-14T00:00:00.000Z",
+  "verifiedBy": "maintainer-name",
+  "packages": [
+    {
+      "name": "@cf-auth/cli",
+      "registry": "https://registry.npmjs.org/",
+      "version": "0.0.0",
+      "ownershipConfirmed": false,
+      "publisherTwoFactorEnabled": false,
+      "provenancePublish": false
+    },
+    {
+      "name": "@cf-auth/client",
+      "registry": "https://registry.npmjs.org/",
+      "version": "0.0.0",
+      "ownershipConfirmed": false,
+      "publisherTwoFactorEnabled": false,
+      "provenancePublish": false
+    },
+    {
+      "name": "@cf-auth/core",
+      "registry": "https://registry.npmjs.org/",
+      "version": "0.0.0",
+      "ownershipConfirmed": false,
+      "publisherTwoFactorEnabled": false,
+      "provenancePublish": false
+    },
+    {
+      "name": "@cf-auth/email-cloudflare",
+      "registry": "https://registry.npmjs.org/",
+      "version": "0.0.0",
+      "ownershipConfirmed": false,
+      "publisherTwoFactorEnabled": false,
+      "provenancePublish": false
+    },
+    {
+      "name": "@cf-auth/hono",
+      "registry": "https://registry.npmjs.org/",
+      "version": "0.0.0",
+      "ownershipConfirmed": false,
+      "publisherTwoFactorEnabled": false,
+      "provenancePublish": false
+    },
+    {
+      "name": "@cf-auth/testing",
+      "registry": "https://registry.npmjs.org/",
+      "version": "0.0.0",
+      "ownershipConfirmed": false,
+      "publisherTwoFactorEnabled": false,
+      "provenancePublish": false
+    },
+    {
+      "name": "@cf-auth/worker",
+      "registry": "https://registry.npmjs.org/",
+      "version": "0.0.0",
+      "ownershipConfirmed": false,
+      "publisherTwoFactorEnabled": false,
+      "provenancePublish": false
+    },
+    {
+      "name": "cf-auth",
+      "registry": "https://registry.npmjs.org/",
+      "version": "0.0.0",
+      "ownershipConfirmed": false,
+      "publisherTwoFactorEnabled": false,
+      "provenancePublish": false
+    },
+    {
+      "name": "create-cloudflare-auth",
+      "registry": "https://registry.npmjs.org/",
+      "version": "0.0.0",
+      "ownershipConfirmed": false,
+      "publisherTwoFactorEnabled": false,
+      "provenancePublish": false
+    }
+  ]
+}

@@ -27,12 +27,14 @@ await requireFile("docs/alpha-evidence.example.json");
 await requireFile("docs/alpha.md");
 await requireFile("docs/deploy-to-cloudflare.md");
 await requireFile("docs/known-limitations.md");
+await requireFile("docs/package-ownership.example.json");
 await requireFile("docs/public-beta.md");
 await requireFile("docs/security-release-tracker.example.json");
 await requireFile("scripts/export-deploy-template.mjs");
 await requireFile("scripts/verify-alpha-evidence.mjs");
 await requireFile("scripts/verify-deploy-template.mjs");
 await requireFile("scripts/verify-docs-coverage.mjs");
+await requireFile("scripts/verify-package-ownership.mjs");
 await requireFile("scripts/verify-security-release-tracker.mjs");
 await requireText("README.md", "SECURITY.md");
 await requireText("SECURITY.md", "Expected Response Window");
@@ -51,12 +53,17 @@ await requireText(
   "docs/alpha.md",
   "CF_AUTH_REQUIRE_ALPHA_EVIDENCE=1 pnpm verify:alpha-evidence",
 );
+await requireText(
+  "docs/decisions/package-naming.md",
+  "CF_AUTH_REQUIRE_PACKAGE_OWNERSHIP=1 pnpm verify:package-ownership",
+);
 await requireText("docs/alpha.md", "doctor --report");
 await requireText(
   "docs/deploy-to-cloudflare.md",
   "Deploy to Cloudflare button is a public-beta gate",
 );
 await requireText("docs/public-beta.md", "docs/known-limitations.md");
+await requireText("docs/public-beta.md", "pnpm verify:package-ownership");
 await requireText(
   "docs/public-beta.md",
   ".github/workflows/published-quickstart-smoke.yml",

@@ -57,6 +57,39 @@ describe("release gates", () => {
     expect(result.stderr).toContain("deploy template broken");
   });
 
+  it("runs example and template verifiers in release gates", async () => {
+    const root = await releaseGateFixture({ deployButtonEvidence: true });
+    await writeFixtureFile(
+      root,
+      "examples/hono-basic/wrangler.jsonc",
+      JSON.stringify(
+        {
+          $schema: "./node_modules/wrangler/config-schema.json",
+          compatibility_date: "2026-05-14",
+          compatibility_flags: ["nodejs_compat"],
+          vars: {
+            AUTH_ENV: "development",
+            AUTH_PUBLIC_ORIGIN: "http://localhost:8787",
+          },
+          d1_databases: [
+            {
+              binding: "AUTH_DB",
+              database_name: "auth",
+              database_id: "local-development",
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+    );
+    const result = runReleaseGates(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("scripts/verify-examples.mjs");
+    expect(result.stderr).toContain("must enable observability");
+  });
+
   it("runs package-name registry checks for release packages", async () => {
     const root = await releaseGateFixture({ deployButtonEvidence: true });
     await writeFakeNpm(
@@ -92,7 +125,7 @@ process.exit(1);
       expect(result.stderr).toContain(`@cf-auth/cli@${packageVersion}`);
       expect(result.stderr).toContain("alpha, beta, or stable 1.0+");
     }
-  });
+  }, 20_000);
 
   it("accepts alpha package gates before beta evidence is required", async () => {
     const root = await releaseGateFixture({
@@ -197,6 +230,7 @@ async function releaseGateFixture(options: ReleaseGateFixtureOptions) {
     "scripts/verify-deploy-button-evidence.mjs",
     "scripts/verify-deploy-template.mjs",
     "scripts/verify-docs-coverage.mjs",
+    "scripts/verify-examples.mjs",
     "scripts/verify-migrations.mjs",
     "scripts/verify-package-ownership.mjs",
     "scripts/verify-security-docs.mjs",
@@ -358,6 +392,7 @@ async function writeLocalVerifierFixtures(root: string) {
   await writeDocsCoverageFixtures(root);
   await writeSecurityDocsFixtures(root);
   await writeMigrationFixtures(root);
+  await writeExamplesFixtures(root);
   await writeDeployTemplateFixtures(root);
 }
 
@@ -616,11 +651,93 @@ async function writeMigrationFixtures(root: string) {
   );
 }
 
+async function writeExamplesFixtures(root: string) {
+  for (const dir of [
+    "examples/hono-basic",
+    "examples/react-vite-worker",
+    "examples/worker-basic",
+    "templates/hono-basic",
+    "templates/react-vite-worker",
+    "templates/worker-basic",
+  ]) {
+    await writeFixtureFile(
+      root,
+      `${dir}/package.json`,
+      JSON.stringify({
+        name: dir.replace("/", "-"),
+        packageManager: "pnpm@11.1.1",
+        scripts: {
+          build: 'node -e ""',
+          test: 'node -e ""',
+        },
+        dependencies: {
+          hono: "4.12.18",
+        },
+        devDependencies: {
+          typescript: "6.0.3",
+          vitest: "4.1.6",
+          wrangler: "4.90.1",
+        },
+        engines: {
+          node: ">=22.12.0",
+        },
+      }),
+    );
+    await writeFixtureFile(
+      root,
+      `${dir}/wrangler.jsonc`,
+      JSON.stringify(
+        {
+          $schema: "./node_modules/wrangler/config-schema.json",
+          compatibility_date: "2026-05-14",
+          compatibility_flags: ["nodejs_compat"],
+          observability: { enabled: true, head_sampling_rate: 1 },
+          vars: {
+            AUTH_ENV: "development",
+            AUTH_PUBLIC_ORIGIN: "http://localhost:8787",
+          },
+          d1_databases: [
+            {
+              binding: "AUTH_DB",
+              database_name: "auth",
+              database_id: "local-development",
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+    );
+  }
+  for (const template of [
+    "templates/hono-basic",
+    "templates/react-vite-worker",
+    "templates/worker-basic",
+  ]) {
+    await writeFixtureFile(
+      root,
+      `${template}/.dev.vars.example`,
+      "AUTH_SECRET=k1.REPLACE_WITH_32_BYTE_BASE64URL_SECRET\n",
+    );
+    await writeFixtureFile(
+      root,
+      `${template}/migrations/0001_initial.sql`,
+      "CREATE TABLE auth_schema_migrations(version TEXT);\n",
+    );
+    await writeFixtureFile(
+      root,
+      `${template}/migrations/0002_indexes.sql`,
+      "INSERT INTO auth_schema_migrations VALUES ('0002');\nUPDATE auth_meta SET schema_version = 2;\n",
+    );
+  }
+}
+
 async function writeDeployTemplateFixtures(root: string) {
   await writeFixtureFile(
     root,
     "scripts/version-matrix.json",
     JSON.stringify({
+      node: ">=22.12.0",
       pnpm: "11.1.1",
       hono: "4.12.18",
       typescript: "6.0.3",

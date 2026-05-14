@@ -49,6 +49,7 @@ await requireFile("scripts/verify-beta-evidence.mjs");
 await requireFile("scripts/verify-deploy-button-evidence.mjs");
 await requireFile("scripts/verify-deploy-template.mjs");
 await requireFile("scripts/verify-docs-coverage.mjs");
+await requireFile("scripts/verify-examples.mjs");
 await requireFile("scripts/verify-migrations.mjs");
 await requireFile("scripts/verify-package-ownership.mjs");
 await requireFile("scripts/verify-security-docs.mjs");
@@ -169,6 +170,7 @@ await requireText(
 
 requireVerifier("scripts/verify-deploy-template.mjs");
 requireVerifier("scripts/verify-docs-coverage.mjs");
+requireVerifier("scripts/verify-examples.mjs");
 requireVerifier("scripts/verify-migrations.mjs");
 requireVerifier("scripts/verify-security-docs.mjs");
 

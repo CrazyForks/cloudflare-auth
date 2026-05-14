@@ -1093,6 +1093,14 @@ export async function cleanCfAuth(
     authEventMs: 90 * day,
     ...input.retention,
   };
+  for (const [key, value] of Object.entries(retention)) {
+    if (!Number.isInteger(value) || value < 0) {
+      throw new AuthCryptoError(
+        `invalid cleanup retention ${key}`,
+        "invalid_cleanup_retention",
+      );
+    }
+  }
   const now = input.now ?? Date.now();
   const sessionCutoff = now - retention.closedSessionMs;
   const tokenCutoff = now - retention.closedVerificationTokenMs;

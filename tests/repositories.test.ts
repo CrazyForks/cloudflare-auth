@@ -542,6 +542,13 @@ describe("D1 migrations and repositories", () => {
         .prepare("SELECT id FROM auth_events ORDER BY id")
         .all<{ id: string }>(),
     ).resolves.toMatchObject({ results: [{ id: "evt_cleanup_live" }] });
+    await expect(
+      cleanCfAuth({
+        env: { AUTH_DB: db },
+        config: { appName: "Cleanup Test", basePath: "/auth" },
+        retention: { authEventMs: -1 },
+      }),
+    ).rejects.toThrow("invalid cleanup retention authEventMs");
   });
 
   it("isolates D1 rate limits by action and opaque derived key", async () => {

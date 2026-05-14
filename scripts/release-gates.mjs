@@ -97,6 +97,8 @@ const publishedReleasePackages = packages.filter((pkg) =>
   isPublishedReleaseVersion(pkg.version),
 );
 if (publishedReleasePackages.length > 0) {
+  await requireFile("docs/package-ownership.json");
+  await requireText("docs/package-ownership.json", '"ownershipConfirmed"');
   await requirePackageChangelogs(publishedReleasePackages);
 }
 if (betaPackages.length > 0) {

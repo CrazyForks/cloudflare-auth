@@ -77,8 +77,9 @@ npx --package @cf-auth/cli@latest cf-auth clean --dry-run --remote --env product
 npx --package @cf-auth/cli@latest cf-auth clean --remote --env production
 ```
 
-Cleanup removes expired sessions, expired or used verification tokens, expired
-rate-limit rows, and old auth events using the documented retention windows.
+Cleanup removes expired sessions, expired, used, or revoked verification tokens,
+expired rate-limit rows, and old auth events using the documented retention
+windows.
 
 ## Recovery Helpers
 

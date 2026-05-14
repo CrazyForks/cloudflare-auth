@@ -3366,7 +3366,7 @@ Default retention:
 | Table | Retention |
 |---|---:|
 | expired sessions | delete after 7 days |
-| used/expired verification tokens | delete after 7 days |
+| used/revoked/expired verification tokens | delete after 7 days |
 | expired rate limit rows | delete after 24 hours |
 | auth events | keep 90 days by default |
 
@@ -4462,4 +4462,3 @@ A GitHub repo is ready for public beta when:
 [^build-tool]: A single build tool reduces package-boundary drift and makes generated declaration output easier to verify across the monorepo. tsup is sufficient for ESM-first packages that emit JavaScript and `.d.ts` files without framework-specific build steps.
 
 [^secret-cli-input]: Command-line arguments are commonly stored in shell history and can be visible to local process inspection. Reading previous secrets from stdin or a named environment variable avoids teaching operators to paste long-lived credentials directly into command invocations.
-

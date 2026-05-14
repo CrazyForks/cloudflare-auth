@@ -77,6 +77,11 @@ function validateTracker(value, rawText) {
       `${trackerPath}: replace placeholder reviewer or advisory values before stable 1.0`,
     );
   }
+  if (containsSensitiveEvidence(rawText)) {
+    failures.push(
+      `${trackerPath}: must not include raw secrets, tokens, cookies, emails, IPs, or Cloudflare API tokens`,
+    );
+  }
 }
 
 function requireString(value, path) {
@@ -94,6 +99,19 @@ function requireDate(value, path) {
 
 function containsPlaceholderEvidence(text) {
   return /\bmaintainer-name\b|\bGHSA-example\b/u.test(text);
+}
+
+function containsSensitiveEvidence(text) {
+  return (
+    /\bAUTH_SECRET\s*=/u.test(text) ||
+    /\b(?:CLOUDFLARE_API_TOKEN|NODE_AUTH_TOKEN|NPM_TOKEN)\b/u.test(text) ||
+    /\bcfauth\.(?:session|magic|verify|reset)\.[A-Za-z0-9_-]{1,32}\.[A-Za-z0-9_-]{20,}/u.test(
+      text,
+    ) ||
+    /\b(?:__Host-|__Secure-)?cfauth-session=/u.test(text) ||
+    /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/iu.test(text) ||
+    /\b(?:\d{1,3}\.){3}\d{1,3}\b/u.test(text)
+  );
 }
 
 async function hasStablePackageVersions() {

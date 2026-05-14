@@ -93,8 +93,8 @@ Production smoke placeholders:
 
 The script creates a temporary app, runs `doctor --env production`, applies
 remote migrations, requires a clean second `doctor --env production`, deploys
-with `cf-auth deploy --env production`, and exercises deployed signup, login,
-`POST /auth/logout`, and `/auth/user`. Set
+with `cf-auth deploy --env production`, and exercises deployed `POST
+/auth/signup`, `POST /auth/login`, `POST /auth/logout`, and `GET /auth/user`. Set
 `CF_AUTH_PRODUCTION_SMOKE_PACKAGE_TAG=beta` to verify published beta packages
 instead of local tarballs.
 

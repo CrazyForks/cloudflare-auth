@@ -1264,7 +1264,7 @@ async function writeDocsCoverageFixtures(root: string) {
       "AUTH_SECRET",
       "AUTH_DB.database_id",
       "AUTH_EMAIL",
-      "/auth/logout",
+      ...authSmokeEndpoints,
     ].join("\n"),
   );
 }

@@ -2,6 +2,8 @@ import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import ts from "typescript";
 
+import { requiredAuthSmokeEndpoints } from "./smoke-endpoints.mjs";
+
 const docs = {
   api: await readFile("docs/api.md", "utf8"),
   apiReport: await readFile("docs/api-report.md", "utf8"),
@@ -96,9 +98,13 @@ for (const text of [
   "AUTH_SECRET",
   "AUTH_DB.database_id",
   "AUTH_EMAIL",
-  "/auth/logout",
 ]) {
   requireText("docs/deployment.md", docs.deployment, text);
+}
+for (const endpoint of await requiredAuthSmokeEndpoints(
+  process.env.CF_AUTH_SMOKE_ENDPOINTS_SOURCE || undefined,
+)) {
+  requireText("docs/deployment.md", docs.deployment, endpoint);
 }
 
 requireText("README.md", docs.readme, "SECURITY.md");

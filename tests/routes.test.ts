@@ -98,6 +98,15 @@ describe("auth HTTP runtime", () => {
     ).toThrow(AuthCryptoError);
     expect(() =>
       defineAuthConfig({
+        appName: "Bad Default Redirect",
+        basePath: "/auth",
+        redirects: {
+          defaultAfterLogin: "https://example.com/dashboard",
+        },
+      }),
+    ).toThrow(AuthCryptoError);
+    expect(() =>
+      defineAuthConfig({
         appName: "Bad Request Origin",
         basePath: "/auth",
         security: {

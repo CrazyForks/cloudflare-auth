@@ -1530,6 +1530,30 @@ function assertAuthConfigOrigins(config: AuthConfig): void {
     config.redirects.allowedPreviewOrigins,
     "invalid_redirect_origin",
   );
+  assertDefaultRedirects(config);
+}
+
+function assertDefaultRedirects(config: AuthConfig): void {
+  for (const value of [
+    config.redirects.defaultAfterLogin,
+    config.redirects.defaultAfterLogout,
+    config.redirects.defaultAfterEmailVerification,
+    config.redirects.defaultAfterPasswordReset,
+  ]) {
+    try {
+      validateRedirectTarget({
+        redirectTo: value,
+        requestOrigin: "https://example.com",
+        allowedOrigins: [],
+        defaultRedirect: "/",
+      });
+    } catch {
+      throw new AuthCryptoError(
+        "default redirect must be a safe relative path",
+        "invalid_redirect_origin",
+      );
+    }
+  }
 }
 
 function assertSessionOptions(config: AuthConfig): void {

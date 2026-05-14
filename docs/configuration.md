@@ -94,14 +94,14 @@ Email-token flows:
 
 Redirects:
 
-| Key                                       | Default | Notes                                   |
-| ----------------------------------------- | ------- | --------------------------------------- |
-| `redirects.defaultAfterLogin`             | `/`     | Used when login redirect is absent.     |
-| `redirects.defaultAfterLogout`            | `/`     | Reserved for logout flows.              |
-| `redirects.defaultAfterEmailVerification` | `/`     | Used by verification consume flow.      |
-| `redirects.defaultAfterPasswordReset`     | `/`     | Used by reset confirm flow.             |
-| `redirects.allowedOrigins`                | `[]`    | Exact external redirect origins.        |
-| `redirects.allowedPreviewOrigins`         | `[]`    | Preview-only external redirect origins. |
+| Key                                       | Default | Notes                                             |
+| ----------------------------------------- | ------- | ------------------------------------------------- |
+| `redirects.defaultAfterLogin`             | `/`     | Relative path used when login redirect is absent. |
+| `redirects.defaultAfterLogout`            | `/`     | Relative path reserved for logout flows.          |
+| `redirects.defaultAfterEmailVerification` | `/`     | Relative path used by verification consume flow.  |
+| `redirects.defaultAfterPasswordReset`     | `/`     | Relative path used by reset confirm flow.         |
+| `redirects.allowedOrigins`                | `[]`    | Exact external redirect origins.                  |
+| `redirects.allowedPreviewOrigins`         | `[]`    | Preview-only external redirect origins.           |
 
 The stable config surface is tracked in `docs/config-schema.md`.
 

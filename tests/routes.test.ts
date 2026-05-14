@@ -22,6 +22,16 @@ import { describe, expect, it } from "vitest";
 const origin = "http://localhost:8787";
 const authSecret = "k1.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 
+function setCookieHeaders(response: Response): string[] {
+  const headers = response.headers as Headers & {
+    getSetCookie?: () => string[];
+  };
+  const values = headers.getSetCookie?.();
+  if (values && values.length > 0) return values;
+  const header = response.headers.get("Set-Cookie");
+  return header ? header.split(/,\s*/u) : [];
+}
+
 async function setup(overrides: Partial<AuthConfigInput> = {}) {
   const db = createSqliteD1Database();
   await applyD1Migrations(db, [
@@ -588,6 +598,74 @@ describe("auth HTTP runtime", () => {
     });
     expect(login.status).toBe(200);
     expect(login.headers.get("Set-Cookie")).toContain("cfauth-session=");
+  });
+
+  it("clears production host-only and parent-domain cookie candidates on logout", async () => {
+    const hostOnlyPolicy = await setup({
+      runtime: {
+        mode: "from-env",
+        publicOrigin: "from-env",
+        trustedHosts: ["example.com"],
+      },
+    });
+    const hostOnlyLogout = await hostOnlyPolicy.handler.fetch(
+      new Request("https://example.com/auth/logout", {
+        method: "POST",
+        headers: { Origin: "https://example.com" },
+      }),
+      {
+        ...hostOnlyPolicy.env,
+        AUTH_ENV: "production",
+        AUTH_PUBLIC_ORIGIN: "https://example.com",
+      },
+      hostOnlyPolicy.ctx,
+    );
+    expect(hostOnlyLogout?.status).toBe(200);
+    if (!hostOnlyLogout) throw new Error("missing host-only logout response");
+    const hostOnlyCookies = setCookieHeaders(hostOnlyLogout);
+    expect(hostOnlyCookies).toHaveLength(1);
+    expect(hostOnlyCookies[0]).toContain("__Host-cfauth-session=;");
+    expect(hostOnlyCookies[0]).toContain("Max-Age=0");
+    expect(hostOnlyCookies[0]).toContain("Secure");
+    expect(hostOnlyCookies[0]).not.toContain("Domain=");
+
+    const parentDomainPolicy = await setup({
+      runtime: {
+        mode: "from-env",
+        publicOrigin: "from-env",
+        trustedHosts: ["api.example.com"],
+      },
+      session: { domain: ".example.com" },
+    });
+    const parentDomainLogout = await parentDomainPolicy.handler.fetch(
+      new Request("https://api.example.com/auth/logout", {
+        method: "POST",
+        headers: { Origin: "https://api.example.com" },
+      }),
+      {
+        ...parentDomainPolicy.env,
+        AUTH_ENV: "production",
+        AUTH_PUBLIC_ORIGIN: "https://api.example.com",
+      },
+      parentDomainPolicy.ctx,
+    );
+    expect(parentDomainLogout?.status).toBe(200);
+    if (!parentDomainLogout)
+      throw new Error("missing parent-domain logout response");
+    const parentDomainCookies = setCookieHeaders(parentDomainLogout);
+    expect(
+      parentDomainCookies.every((value) => value.includes("Max-Age=0")),
+    ).toBe(true);
+    expect(
+      parentDomainCookies.find((value) =>
+        value.startsWith("__Secure-cfauth-session=;"),
+      ),
+    ).toContain("Domain=.example.com");
+    const hostMigrationClear = parentDomainCookies.find((value) =>
+      value.startsWith("__Host-cfauth-session=;"),
+    );
+    expect(hostMigrationClear).toBeDefined();
+    expect(hostMigrationClear).not.toContain("Domain=");
   });
 
   it("runs dummy password verification for absent and passwordless users", async () => {

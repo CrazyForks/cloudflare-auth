@@ -11,7 +11,10 @@ Automatic cookie names:
 | production cross-subdomain HTTPS | `__Secure-cfauth-session` |
 | preview HTTPS host-only          | `__Host-cfauth-session`   |
 
-Logout revokes the session row and clears the cookie using the same name, path, domain, secure flag, and SameSite value.
+Logout revokes the session row and clears the active cookie using the same
+name, path, domain, secure flag, and SameSite value. In parent-domain cookie
+mode, logout also clears host-only migration candidates so browsers drop stale
+cookies from a previous host-only deployment.
 
 Cross-subdomain cookies require explicit `session.domain` configuration using
 a leading-dot parent domain such as `.example.com`. `Domain` values with

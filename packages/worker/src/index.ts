@@ -2238,9 +2238,11 @@ async function handleLogout(
       metadata: { reason: "logout" },
     });
   }
-  return json({ ok: true }, 200, {
-    "Set-Cookie": serializeClearSessionCookie(runtime.cookie),
-  });
+  const response = json({ ok: true });
+  for (const cookie of clearSessionCookieHeaders(runtime.cookie)) {
+    response.headers.append("Set-Cookie", cookie);
+  }
+  return response;
 }
 
 async function handleUser(
@@ -3449,6 +3451,25 @@ function canUseDevelopmentRequestOriginFallback(
     ["localhost", "127.0.0.1"].includes(requestUrl.hostname) &&
     config.runtime.trustedHosts.includes(requestUrl.host)
   );
+}
+
+function clearSessionCookieHeaders(cookie: RuntimeContext["cookie"]): string[] {
+  const candidates: RuntimeContext["cookie"][] = [cookie];
+  if (cookie.domain) {
+    const { domain: _domain, ...hostOnlyCookie } = cookie;
+    candidates.push(hostOnlyCookie);
+    if (cookie.name === "__Secure-cfauth-session") {
+      candidates.push({ ...hostOnlyCookie, name: "__Host-cfauth-session" });
+    }
+  }
+  const serialized = new Map<string, string>();
+  for (const candidate of candidates) {
+    serialized.set(
+      `${candidate.name}|${candidate.domain ?? ""}`,
+      serializeClearSessionCookie(candidate),
+    );
+  }
+  return [...serialized.values()];
 }
 
 function writeRuntimeConfigFailureEvent(input: {

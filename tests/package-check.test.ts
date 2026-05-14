@@ -65,7 +65,50 @@ describe("package checks", () => {
 
     expect(result.status).toBe(1);
     expect(result.stderr).toContain(
-      ".github/workflows/release.yml: pnpm changeset publish --provenance must appear after pnpm benchmark:password",
+      ".github/workflows/release.yml: pnpm changeset publish --provenance must appear after pnpm publish:dry-run",
+    );
+  });
+
+  it("requires dry-run publish before package publication", async () => {
+    const root = await packageCheckFixture();
+    await replaceFixtureText(
+      root,
+      ".github/workflows/release.yml",
+      "      - run: pnpm publish:dry-run",
+      "      - run: pnpm package:check",
+    );
+    const result = runPackageCheck(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      ".github/workflows/release.yml: missing pnpm publish:dry-run",
+    );
+  });
+
+  it("requires dry-run publish artifact upload", async () => {
+    const root = await packageCheckFixture();
+    await replaceFixtureText(
+      root,
+      ".github/workflows/release.yml",
+      "pnpm-publish-summary.json",
+      "publish-summary.json",
+    );
+    const result = runPackageCheck(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      ".github/workflows/release.yml: missing pnpm-publish-summary.json",
+    );
+  });
+
+  it("requires publish dry-run script to emit a summary artifact", async () => {
+    const root = await packageCheckFixture();
+    await replaceFixtureText(root, "package.json", " --report-summary", "");
+    const result = runPackageCheck(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "package.json: publish:dry-run missing --report-summary",
     );
   });
 

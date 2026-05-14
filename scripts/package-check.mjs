@@ -538,6 +538,10 @@ async function verifyReleaseControls() {
     "pnpm smoke:tarballs",
     "CF_AUTH_TARBALL_INSTALL",
     "pnpm benchmark:password",
+    "pnpm publish:dry-run",
+    "actions/upload-artifact",
+    "pnpm-publish-dry-run",
+    "pnpm-publish-summary.json",
     "pnpm changeset publish --provenance",
     "NODE_AUTH_TOKEN",
     "secrets.NPM_TOKEN",
@@ -571,6 +575,7 @@ async function verifyReleaseControls() {
     "pnpm release:gates",
     "pnpm smoke:tarballs",
     "pnpm benchmark:password",
+    "pnpm publish:dry-run",
     "pnpm changeset publish --provenance",
   ]);
 
@@ -665,6 +670,7 @@ async function verifyReleaseControls() {
         "secret scanning",
         "Changesets version/changelog",
         "Changesets fixed package group",
+        "dry-run publish summary artifact",
       ],
     ],
   ]) {
@@ -744,6 +750,7 @@ function verifyRootScripts() {
     "verify:security-docs",
     "verify:security-tracker",
     "release:gates",
+    "publish:dry-run",
     "smoke:wrangler-dev",
     "smoke:cloudflare-production",
     "smoke:published-quickstart",
@@ -752,6 +759,17 @@ function verifyRootScripts() {
   ]) {
     if (!rootPackage.scripts?.[script]) {
       failures.push(`package.json: missing script ${script}`);
+    }
+  }
+  const dryRunScript = rootPackage.scripts?.["publish:dry-run"] ?? "";
+  for (const needle of [
+    "publish",
+    "--dry-run",
+    "--no-git-checks",
+    "--report-summary",
+  ]) {
+    if (!dryRunScript.includes(needle)) {
+      failures.push(`package.json: publish:dry-run missing ${needle}`);
     }
   }
 }

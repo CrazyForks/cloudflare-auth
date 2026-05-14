@@ -409,6 +409,8 @@ async function releaseGateFixture(options: ReleaseGateFixtureOptions) {
         "pnpm install --frozen-lockfile",
         "pnpm package:check",
         "pnpm release:gates",
+        "pnpm publish:dry-run",
+        "pnpm-publish-summary.json",
         "pnpm changeset publish --provenance",
       ],
     ],

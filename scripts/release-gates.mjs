@@ -170,6 +170,8 @@ await requireText(
 );
 await requireText(".github/workflows/release.yml", "pnpm package:check");
 await requireText(".github/workflows/release.yml", "pnpm release:gates");
+await requireText(".github/workflows/release.yml", "pnpm publish:dry-run");
+await requireText(".github/workflows/release.yml", "pnpm-publish-summary.json");
 await requireText(
   ".github/workflows/release.yml",
   "pnpm changeset publish --provenance",

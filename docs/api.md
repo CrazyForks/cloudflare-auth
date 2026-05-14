@@ -41,6 +41,18 @@ Turnstile-protected endpoints also accept `turnstileToken` in the request body.
 Feature-disabled endpoints return `404 not_found` and perform no auth side
 effects.
 
+## Custom Password Reset Pages
+
+The built-in `GET /auth/password/reset?token=...` page keeps the token on a
+minimal page with `Referrer-Policy: no-referrer` and no third-party assets. A
+custom reset page must provide equivalent protection:
+
+- strip the token from the browser URL immediately after loading
+- set `Referrer-Policy: no-referrer`
+- avoid third-party scripts, images, analytics, and external styles while the
+  token is present
+- submit the raw token only to `POST /auth/password/reset/confirm`
+
 The public user object is:
 
 ```ts

@@ -1,5 +1,4 @@
-import { access, readdir, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { access, readFile } from "node:fs/promises";
 
 import {
   containsIpLiteral,
@@ -11,14 +10,19 @@ import {
   isIsoDateString,
   isJsonObject,
 } from "./evidence-validation.mjs";
+import { readReleasePackageState } from "./release-package-state.mjs";
 import { requiredAuthSmokeEndpoints } from "./smoke-endpoints.mjs";
 
 const evidencePath =
   process.env.CF_AUTH_DEPLOY_BUTTON_EVIDENCE_PATH ??
   "docs/deploy-button-evidence.json";
+const packageState = await readReleasePackageState();
+const failures = [...packageState.failures];
 const requireEvidence =
   process.env.CF_AUTH_REQUIRE_DEPLOY_BUTTON_EVIDENCE === "1" ||
-  (await hasBetaOrStablePackageVersions());
+  packageState.hasBetaOrStable;
+
+if (failures.length > 0) fail();
 
 if (!(await exists(evidencePath))) {
   if (requireEvidence) {
@@ -33,7 +37,6 @@ if (!(await exists(evidencePath))) {
   process.exit(0);
 }
 
-const failures = [];
 const text = await readFile(evidencePath, "utf8");
 let evidence;
 let parsedEvidence = false;
@@ -65,8 +68,7 @@ if (parsedEvidence) {
 }
 
 if (failures.length > 0) {
-  console.error(failures.join("\n"));
-  process.exit(1);
+  fail();
 }
 
 console.log(`Deploy to Cloudflare button evidence verified: ${evidencePath}`);
@@ -265,32 +267,6 @@ function containsPlaceholderEvidence(text) {
   return /\bOWNER\b|\bREPO\b|https:\/\/example\.com\b/u.test(text);
 }
 
-async function hasBetaOrStablePackageVersions() {
-  const packages = await readdir("packages", { withFileTypes: true });
-  for (const entry of packages) {
-    if (!entry.isDirectory()) continue;
-    const pkg = JSON.parse(
-      await readFile(join("packages", entry.name, "package.json"), "utf8"),
-    );
-    if (!pkg.private && typeof pkg.version === "string") {
-      if (isPublicBeta(pkg.version) || isStableOneOrLater(pkg.version)) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-function isPublicBeta(version) {
-  return /^\d+\.\d+\.\d+-beta(?:[.-].*)?$/u.test(version);
-}
-
-function isStableOneOrLater(version) {
-  const match = version.match(/^(\d+)\.(\d+)\.(\d+)(?:-.+)?$/);
-  if (!match || version.includes("-")) return false;
-  return Number(match[1]) >= 1;
-}
-
 async function exists(path) {
   try {
     await access(path);
@@ -298,4 +274,9 @@ async function exists(path) {
   } catch {
     return false;
   }
+}
+
+function fail() {
+  console.error(failures.join("\n"));
+  process.exit(1);
 }

@@ -871,6 +871,25 @@ describe("release evidence verifiers", () => {
     );
   });
 
+  it("rejects malformed package manifests before release evidence requirement checks", async () => {
+    const cwd = await packageVersionFixture("1.0.0");
+    await writeFile(join(cwd, "packages", "cli", "package.json"), "null\n");
+
+    for (const script of [
+      "scripts/verify-alpha-evidence.mjs",
+      "scripts/verify-beta-evidence.mjs",
+      "scripts/verify-deploy-button-evidence.mjs",
+      "scripts/verify-security-release-tracker.mjs",
+    ]) {
+      const result = runScript(script, {}, cwd);
+
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain(
+        "packages/cli/package.json: top-level JSON value must be an object",
+      );
+    }
+  });
+
   it("accepts package ownership evidence with private shim reservations", async () => {
     const cwd = await packageOwnershipFixture({
       publishCfAuthShim: false,

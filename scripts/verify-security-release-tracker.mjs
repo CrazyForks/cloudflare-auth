@@ -1,5 +1,4 @@
-import { access, readdir, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { access, readFile } from "node:fs/promises";
 
 import {
   containsIpLiteral,
@@ -11,13 +10,18 @@ import {
   isIsoDateString,
   isJsonObject,
 } from "./evidence-validation.mjs";
+import { readReleasePackageState } from "./release-package-state.mjs";
 
 const trackerPath =
   process.env.CF_AUTH_SECURITY_TRACKER_PATH ??
   "docs/security-release-tracker.json";
+const packageState = await readReleasePackageState();
+const failures = [...packageState.failures];
 const requireTracker =
   process.env.CF_AUTH_REQUIRE_SECURITY_TRACKER === "1" ||
-  (await hasStablePackageVersions());
+  packageState.hasStable;
+
+if (failures.length > 0) fail();
 
 if (!(await exists(trackerPath))) {
   if (requireTracker) {
@@ -32,7 +36,6 @@ if (!(await exists(trackerPath))) {
   process.exit(0);
 }
 
-const failures = [];
 let text = "";
 let tracker;
 let parsedTracker = false;
@@ -53,8 +56,7 @@ if (parsedTracker) {
 }
 
 if (failures.length > 0) {
-  console.error(failures.join("\n"));
-  process.exit(1);
+  fail();
 }
 
 console.log(`security release tracker verified: ${trackerPath}`);
@@ -245,25 +247,6 @@ function containsSensitiveEvidence(text) {
   );
 }
 
-async function hasStablePackageVersions() {
-  const packages = await readdir("packages", { withFileTypes: true });
-  for (const entry of packages) {
-    if (!entry.isDirectory()) continue;
-    const pkg = JSON.parse(
-      await readFile(join("packages", entry.name, "package.json"), "utf8"),
-    );
-    if (!pkg.private && isStableOneOrLater(pkg.version)) return true;
-  }
-  return false;
-}
-
-function isStableOneOrLater(version) {
-  if (typeof version !== "string") return false;
-  const match = version.match(/^(\d+)\.(\d+)\.(\d+)(?:-.+)?$/);
-  if (!match || version.includes("-")) return false;
-  return Number(match[1]) >= 1;
-}
-
 async function exists(path) {
   try {
     await access(path);
@@ -271,4 +254,9 @@ async function exists(path) {
   } catch {
     return false;
   }
+}
+
+function fail() {
+  console.error(failures.join("\n"));
+  process.exit(1);
 }

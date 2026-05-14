@@ -7,23 +7,24 @@ import { requiredAuthSmokeEndpoints } from "./smoke-endpoints.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = dirname(scriptDir);
+const failures = [];
 
 const packageDirs = (await readdir("packages", { withFileTypes: true }))
   .filter((entry) => entry.isDirectory())
   .map((entry) => join("packages", entry.name))
   .sort();
-const rootPackage = await readJsonFile("package.json");
+const rootPackage = await readJsonObject("package.json");
 const rootScripts =
   rootPackage && isRecord(rootPackage.scripts) ? rootPackage.scripts : {};
 
 const packages = [];
 for (const dir of packageDirs) {
-  const pkg = JSON.parse(await readFile(join(dir, "package.json"), "utf8"));
+  const pkg = await readJsonObject(join(dir, "package.json"));
+  if (!pkg) continue;
   if (!pkg.private)
     packages.push({ dir, name: pkg.name, version: pkg.version });
 }
 
-const failures = [];
 await requireFile(".github/dependabot.yml");
 await requireFile(".github/workflows/ci.yml");
 await requireFile(".github/workflows/codeql.yml");
@@ -315,8 +316,18 @@ async function readJsonFile(path) {
     return JSON.parse(await readFile(path, "utf8"));
   } catch {
     failures.push(`${path}: could not be read as JSON`);
+    return undefined;
+  }
+}
+
+async function readJsonObject(path) {
+  const value = await readJsonFile(path);
+  if (value === undefined) return null;
+  if (!isRecord(value)) {
+    failures.push(`${path}: top-level JSON value must be an object`);
     return null;
   }
+  return value;
 }
 
 async function requireText(path, needle) {

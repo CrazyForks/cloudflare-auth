@@ -69,6 +69,28 @@ describe("release gates", () => {
     expect(result.stdout).toContain("release gates passed");
   });
 
+  it("rejects non-object root package manifests", async () => {
+    const root = await releaseGateFixture({ deployButtonEvidence: true });
+    await writeFixtureFile(root, "package.json", "null\n");
+    const result = runReleaseGates(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "package.json: top-level JSON value must be an object",
+    );
+  });
+
+  it("rejects non-object workspace package manifests", async () => {
+    const root = await releaseGateFixture({ deployButtonEvidence: true });
+    await writeFixtureFile(root, "packages/cli/package.json", "null\n");
+    const result = runReleaseGates(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "packages/cli/package.json: top-level JSON value must be an object",
+    );
+  });
+
   it("runs evidence verifiers instead of accepting marker-only files", async () => {
     const root = await releaseGateFixture({ deployButtonEvidence: true });
     const evidence = validDeployButtonEvidence();

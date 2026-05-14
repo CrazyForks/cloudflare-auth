@@ -1843,12 +1843,15 @@ async function handleSignup(
         !runtime.config.signup.enumerationSafe,
     },
   });
-  if (runtime.config.emailVerification.enabled)
-    await sendVerificationEmail(user, runtime, null);
+  const verificationEmailSent = runtime.config.emailVerification.enabled
+    ? await sendVerificationEmail(user, runtime, null)
+    : true;
   if (
     runtime.config.signup.requireEmailVerificationBeforeSession ||
     runtime.config.signup.enumerationSafe
   ) {
+    if (!verificationEmailSent && !runtime.config.signup.enumerationSafe)
+      return errorResponse("Email could not be sent", 500, "email_send_failed");
     return runtime.config.signup.enumerationSafe
       ? json({ ok: true })
       : json({ user: publicUser(user) });
@@ -2468,13 +2471,13 @@ async function sendVerificationEmail(
   user: UserRow,
   runtime: RuntimeContext,
   redirectToInput: string | null,
-): Promise<void> {
+): Promise<boolean> {
   const redirectTo = safeRedirect(
     redirectToInput,
     runtime,
     runtime.config.redirects.defaultAfterEmailVerification,
   );
-  await createAndSendToken(
+  return createAndSendToken(
     runtime,
     "verify",
     "email_verification",
@@ -2495,7 +2498,7 @@ async function createAndSendToken(
   normalizedEmail: string | null,
   redirectTo: string,
   ttlMs: number,
-): Promise<void> {
+): Promise<boolean> {
   const now = Date.now();
   if (
     (userId || normalizedEmail) &&
@@ -2542,6 +2545,7 @@ async function createAndSendToken(
         input,
         emailRuntime(runtime),
       );
+    return true;
   } catch (error) {
     await recordEmailSendFailure(runtime, {
       type,
@@ -2549,6 +2553,7 @@ async function createAndSendToken(
       normalizedEmail,
       error,
     });
+    return false;
   }
 }
 
@@ -2643,7 +2648,10 @@ async function recordAuthEvent(
   }
 }
 
-function scheduleAuthTask(runtime: RuntimeContext, task: Promise<void>): void {
+function scheduleAuthTask(
+  runtime: RuntimeContext,
+  task: Promise<unknown>,
+): void {
   runtime.ctx.waitUntil(
     task.catch((error) => {
       runtime.logger.error("deferred_auth_task_failed", {

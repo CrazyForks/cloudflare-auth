@@ -238,6 +238,110 @@ describe("email adapters and templates", () => {
     expect(event?.metadata_json).toContain('"tokenType":"magic_link"');
     expect(event?.metadata_json).not.toMatch(/person@example\.com|cfauth\./);
   });
+
+  it("handles signup verification email failures by session policy", async () => {
+    const db = createSqliteD1Database();
+    await applyD1Migrations(db, [
+      await readFile("migrations/0001_initial.sql", "utf8"),
+      await readFile("migrations/0002_indexes.sql", "utf8"),
+    ]);
+    const adapter: AuthEmailAdapter = {
+      kind: "failing-verification",
+      async sendMagicLink() {},
+      async sendEmailVerification() {
+        throw new Error(
+          "provider failed for person@example.com cfauth.verify.k1.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        );
+      },
+      async sendPasswordReset() {},
+    };
+    const env = {
+      AUTH_DB: db,
+      AUTH_SECRET: authSecret,
+      AUTH_ENV: "production",
+      AUTH_PUBLIC_ORIGIN: "https://example.com",
+    };
+    const handler = createAuthHandler(
+      defineAuthConfig({
+        appName: "Signup Email Failure Test",
+        basePath: "/auth",
+        email: adapter,
+        signup: {
+          enabled: true,
+          requireEmailVerificationBeforeSession: true,
+          enumerationSafe: false,
+          username: { enabled: true, required: false },
+        },
+        passwordHashing: {
+          profile: "development-fast",
+          maxConcurrentHashesPerIsolate: 1,
+        },
+      }),
+    );
+
+    const failed = await handler.fetch(
+      new Request("https://example.com/auth/signup", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Origin: "https://example.com",
+        },
+        body: JSON.stringify({
+          email: "verify-fail@example.com",
+          password: "correct horse battery staple",
+        }),
+      }),
+      env,
+      { waitUntil() {} } as unknown as ExecutionContext,
+    );
+    expect(failed?.status).toBe(500);
+    await expect(failed?.json()).resolves.toMatchObject({
+      error: { code: "email_send_failed" },
+    });
+
+    const safeHandler = createAuthHandler(
+      defineAuthConfig({
+        appName: "Enumeration Safe Email Failure Test",
+        basePath: "/auth",
+        email: adapter,
+        signup: {
+          enabled: true,
+          requireEmailVerificationBeforeSession: true,
+          enumerationSafe: true,
+          username: { enabled: true, required: false },
+        },
+        passwordHashing: {
+          profile: "development-fast",
+          maxConcurrentHashesPerIsolate: 1,
+        },
+      }),
+    );
+    const safe = await safeHandler.fetch(
+      new Request("https://example.com/auth/signup", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Origin: "https://example.com",
+        },
+        body: JSON.stringify({
+          email: "safe-fail@example.com",
+          password: "correct horse battery staple",
+        }),
+      }),
+      env,
+      { waitUntil() {} } as unknown as ExecutionContext,
+    );
+    expect(safe?.status).toBe(200);
+    expect(safe?.headers.get("Set-Cookie")).toBeNull();
+    await expect(safe?.json()).resolves.toEqual({ ok: true });
+
+    const event = await db
+      .prepare(
+        "SELECT event_type, metadata_json FROM auth_events WHERE event_type = 'email_send_failed' ORDER BY created_at DESC LIMIT 1",
+      )
+      .first<{ event_type: string; metadata_json: string }>();
+    expect(event?.metadata_json).not.toMatch(/example\.com|cfauth\./);
+  });
 });
 
 function sampleEmail() {

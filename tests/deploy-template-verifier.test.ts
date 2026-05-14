@@ -98,6 +98,20 @@ describe("deploy template verifier", () => {
       "wrangler.jsonc: send_email must be an array",
     );
   });
+
+  it("rejects deploy scripts that run Wrangler before migrations", async () => {
+    const pkg = packageJson();
+    pkg.scripts.deploy = "wrangler deploy && pnpm db:migrations:apply";
+    const root = await deployTemplateFixture({
+      packageJson: `${JSON.stringify(pkg, null, 2)}\n`,
+    });
+    const result = runDeployTemplateVerifier(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "package.json: deploy script must apply D1 migrations before deploy",
+    );
+  });
 });
 
 async function deployTemplateFixture(

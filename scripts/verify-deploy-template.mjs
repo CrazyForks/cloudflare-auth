@@ -118,7 +118,10 @@ function checkPackageJson(pkg) {
       "package.json: db:migrations:apply must use the AUTH_DB binding name",
     );
   }
-  if (!String(pkg.scripts?.deploy ?? "").includes("db:migrations:apply")) {
+  const deployScript = String(pkg.scripts?.deploy ?? "");
+  const migrateIndex = deployScript.indexOf("db:migrations:apply");
+  const deployIndex = deployScript.indexOf("wrangler deploy");
+  if (migrateIndex === -1 || deployIndex === -1 || migrateIndex > deployIndex) {
     failures.push(
       "package.json: deploy script must apply D1 migrations before deploy",
     );

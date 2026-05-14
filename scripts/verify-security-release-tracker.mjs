@@ -79,6 +79,11 @@ function validateTracker(value, rawText) {
     );
   }
 
+  if (!Array.isArray(value.openHighCriticalAuthSecurityIssues)) {
+    failures.push(
+      `${trackerPath}: openHighCriticalAuthSecurityIssues must be an array`,
+    );
+  }
   const openIssues = Array.isArray(value.openHighCriticalAuthSecurityIssues)
     ? value.openHighCriticalAuthSecurityIssues
     : [];
@@ -88,6 +93,9 @@ function validateTracker(value, rawText) {
     );
   }
 
+  if (!Array.isArray(value.advisories)) {
+    failures.push(`${trackerPath}: advisories must be an array`);
+  }
   const advisories = Array.isArray(value.advisories) ? value.advisories : [];
   for (const [index, advisory] of advisories.entries()) {
     const path = `advisories[${index}]`;

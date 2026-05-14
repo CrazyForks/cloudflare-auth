@@ -1122,6 +1122,28 @@ describe("release evidence verifiers", () => {
     expect(result.stderr).toContain("advisorySearchUrl");
   });
 
+  it("rejects security tracker evidence without explicit issue and advisory arrays", async () => {
+    const evidence = validSecurityTracker() as Partial<
+      ReturnType<typeof validSecurityTracker>
+    >;
+    delete evidence.openHighCriticalAuthSecurityIssues;
+    delete evidence.advisories;
+    const path = await writeEvidence(
+      "security-tracker-missing-arrays",
+      evidence,
+    );
+    const result = runScript("scripts/verify-security-release-tracker.mjs", {
+      CF_AUTH_REQUIRE_SECURITY_TRACKER: "1",
+      CF_AUTH_SECURITY_TRACKER_PATH: path,
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "openHighCriticalAuthSecurityIssues must be an array",
+    );
+    expect(result.stderr).toContain("advisories must be an array");
+  });
+
   it("rejects security tracker evidence with raw IPv6 addresses", async () => {
     const evidence = validSecurityTracker();
     (evidence as Record<string, unknown>).reviewNotes =

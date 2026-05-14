@@ -119,6 +119,27 @@ describe("release gates", () => {
     );
   });
 
+  it("derives API endpoint docs coverage from worker routes", async () => {
+    const root = await releaseGateFixture({ deployButtonEvidence: true });
+    await replaceFixtureText(
+      root,
+      "packages/worker/src/index.ts",
+      '  return new Response("not found");',
+      [
+        '  if (path === "/session/refresh" && request.method === "POST")',
+        '    return new Response("session refresh");',
+        '  return new Response("not found");',
+      ].join("\n"),
+    );
+    const result = runReleaseGates(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("scripts/verify-docs-coverage.mjs");
+    expect(result.stderr).toContain(
+      "docs/api.md: missing POST /auth/session/refresh",
+    );
+  });
+
   it("requires config schema docs for every stable config key", async () => {
     const root = await releaseGateFixture({ deployButtonEvidence: true });
     await replaceFixtureText(
@@ -690,6 +711,52 @@ function configSchemaFixtureText(releaseApproval: string) {
 }
 
 async function writeDocsCoverageFixtures(root: string) {
+  await writeFixtureFile(
+    root,
+    "packages/worker/package.json",
+    JSON.stringify({
+      name: "@cf-auth/worker",
+      version: "0.1.0-beta.0",
+      private: true,
+    }),
+  );
+  await writeFixtureFile(
+    root,
+    "packages/worker/src/index.ts",
+    [
+      "async function dispatchAuthRequest(path: string, request: Request) {",
+      '  if (path === "/dev/emails" && request.method === "GET")',
+      '    return new Response("dev emails");',
+      '  if (path === "/signup" && request.method === "POST")',
+      '    return new Response("signup");',
+      '  if (path === "/login" && request.method === "POST")',
+      '    return new Response("login");',
+      '  if (path === "/logout" && request.method === "POST")',
+      '    return new Response("logout");',
+      '  if (path === "/user" && request.method === "GET")',
+      '    return new Response("user");',
+      '  if (path === "/magic-link/request" && request.method === "POST")',
+      '    return new Response("magic link request");',
+      '  if (path === "/magic-link/verify" && request.method === "GET")',
+      '    return new Response("magic link verify");',
+      '  if (path === "/magic-link/consume" && request.method === "POST")',
+      '    return new Response("magic link consume");',
+      '  if (path === "/email/verify/request" && request.method === "POST")',
+      '    return new Response("email verify request");',
+      '  if (path === "/email/verify" && request.method === "GET")',
+      '    return new Response("email verify");',
+      '  if (path === "/email/verify/consume" && request.method === "POST")',
+      '    return new Response("email verify consume");',
+      '  if (path === "/password/reset/request" && request.method === "POST")',
+      '    return new Response("password reset request");',
+      '  if (path === "/password/reset" && request.method === "GET")',
+      '    return new Response("password reset");',
+      '  if (path === "/password/reset/confirm" && request.method === "POST")',
+      '    return new Response("password reset confirm");',
+      '  return new Response("not found");',
+      "}",
+    ].join("\n"),
+  );
   await writeFixtureFile(
     root,
     "docs/cli.md",

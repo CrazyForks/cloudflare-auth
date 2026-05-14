@@ -1,5 +1,6 @@
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
+import ts from "typescript";
 
 const docs = {
   api: await readFile("docs/api.md", "utf8"),
@@ -114,22 +115,8 @@ for (const key of [
   requireText("docs/config-schema.md", docs.configSchema, key);
 }
 
-for (const endpoint of [
-  "POST /auth/signup",
-  "POST /auth/login",
-  "POST /auth/logout",
-  "GET /auth/user",
-  "POST /auth/magic-link/request",
-  "GET /auth/magic-link/verify",
-  "POST /auth/magic-link/consume",
-  "POST /auth/email/verify/request",
-  "GET /auth/email/verify",
-  "POST /auth/email/verify/consume",
-  "POST /auth/password/reset/request",
-  "GET /auth/password/reset",
-  "POST /auth/password/reset/confirm",
-  "GET /auth/dev/emails",
-]) {
+const authEndpoints = await authRouteEndpoints();
+for (const endpoint of authEndpoints) {
   requireText("docs/api.md", docs.api, endpoint);
 }
 
@@ -275,4 +262,115 @@ async function rootExportNames() {
     }
   }
   return [...names].sort();
+}
+
+async function authRouteEndpoints() {
+  const path = "packages/worker/src/index.ts";
+  let sourceText;
+  try {
+    sourceText = await readFile(path, "utf8");
+  } catch {
+    failures.push(`${path}: could not be read for auth endpoint docs coverage`);
+    return [];
+  }
+
+  const sourceFile = ts.createSourceFile(
+    path,
+    sourceText,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const endpoints = new Set();
+  let foundDispatcher = false;
+
+  function visit(node) {
+    if (
+      ts.isFunctionDeclaration(node) &&
+      node.name?.text === "dispatchAuthRequest"
+    ) {
+      foundDispatcher = true;
+      ts.forEachChild(node, collectEndpoint);
+      return;
+    }
+    ts.forEachChild(node, visit);
+  }
+
+  function collectEndpoint(node) {
+    if (ts.isIfStatement(node)) {
+      const endpoint = routeEndpointFromExpression(node.expression);
+      if (endpoint) endpoints.add(endpoint);
+    }
+    ts.forEachChild(node, collectEndpoint);
+  }
+
+  visit(sourceFile);
+
+  if (!foundDispatcher)
+    failures.push(
+      `${path}: missing dispatchAuthRequest for auth endpoint docs coverage`,
+    );
+  if (endpoints.size === 0)
+    failures.push(`${path}: no auth endpoints found in dispatchAuthRequest`);
+
+  return [...endpoints].sort();
+}
+
+function routeEndpointFromExpression(expression) {
+  let routePath = null;
+  let method = null;
+
+  for (const condition of flattenAndConditions(expression)) {
+    const equality = stringEquality(condition);
+    if (!equality) continue;
+    if (equality.name === "path") routePath = equality.value;
+    if (equality.name === "request.method") method = equality.value;
+  }
+
+  return routePath && method ? `${method} /auth${routePath}` : null;
+}
+
+function flattenAndConditions(expression) {
+  if (
+    ts.isBinaryExpression(expression) &&
+    expression.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken
+  ) {
+    return [
+      ...flattenAndConditions(expression.left),
+      ...flattenAndConditions(expression.right),
+    ];
+  }
+  return [expression];
+}
+
+function stringEquality(expression) {
+  if (
+    !ts.isBinaryExpression(expression) ||
+    expression.operatorToken.kind !== ts.SyntaxKind.EqualsEqualsEqualsToken
+  ) {
+    return null;
+  }
+
+  const leftName = expressionName(expression.left);
+  const rightValue = stringLiteralValue(expression.right);
+  if (leftName && rightValue !== null)
+    return { name: leftName, value: rightValue };
+
+  const rightName = expressionName(expression.right);
+  const leftValue = stringLiteralValue(expression.left);
+  if (rightName && leftValue !== null)
+    return { name: rightName, value: leftValue };
+
+  return null;
+}
+
+function expressionName(expression) {
+  if (ts.isIdentifier(expression)) return expression.text;
+  if (!ts.isPropertyAccessExpression(expression)) return null;
+  const parent = expressionName(expression.expression);
+  return parent ? `${parent}.${expression.name.text}` : null;
+}
+
+function stringLiteralValue(expression) {
+  return ts.isStringLiteral(expression) ? expression.text : null;
 }

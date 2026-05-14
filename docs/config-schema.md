@@ -1,5 +1,7 @@
 # Config Schema
 
+Release approval: pending.
+
 `defineAuthConfig()` is the public config entrypoint. Runtime secrets and bindings are resolved per request from the Worker environment.
 
 Stable top-level keys:
@@ -44,4 +46,4 @@ Defaults:
 
 `session.domain` must be a leading-dot parent domain such as `.example.com`.
 
-Breaking config changes require an upgrade-guide entry and public API report update.
+Breaking config changes require an upgrade-guide entry and public API report update. Change the release approval line to `release-approved` only after the 1.0 config review records the approver and date.

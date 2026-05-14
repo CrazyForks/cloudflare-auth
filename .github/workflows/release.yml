@@ -41,6 +41,7 @@ jobs:
       - run: pnpm version-matrix:check
       - run: pnpm verify:migrations
       - run: pnpm verify:examples
+      - run: pnpm release:gates
       - run: pnpm smoke:tarballs
         env:
           CF_AUTH_TARBALL_INSTALL: "1"

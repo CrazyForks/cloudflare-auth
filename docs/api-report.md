@@ -1,5 +1,7 @@
 # Public API Report
 
+Release approval: pending.
+
 This report is the reviewed v1 public surface. Any breaking change requires an upgrade note.
 
 ## Packages
@@ -33,4 +35,4 @@ The endpoint contract is documented in `docs/api.md`. Magic-link, email-verifica
 
 ## Stability Notes
 
-The report is checked in before 1.0 readiness, but it is not release-approved until the 1.0 release checklist is complete.
+The report is checked in before 1.0 readiness, but it is not release-approved until the 1.0 release checklist is complete. Change the release approval line to `release-approved` only after the release review records the approver and date.

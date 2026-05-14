@@ -1346,6 +1346,25 @@ describe("auth HTTP runtime", () => {
       error: { code: "unsupported_content_type" },
     });
 
+    let unsupportedPulls = 0;
+    const unsupportedStream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        unsupportedPulls += 1;
+        controller.enqueue(new TextEncoder().encode("not json"));
+      },
+    });
+    const unsupportedStreamResponse = await authFetch("/auth/signup", {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: unsupportedStream as unknown as BodyInit,
+      duplex: "half",
+    } as RequestInit & { duplex: "half" });
+    expect(unsupportedStreamResponse.status).toBe(415);
+    await expect(unsupportedStreamResponse.json()).resolves.toMatchObject({
+      error: { code: "unsupported_content_type" },
+    });
+    expect(unsupportedPulls).toBeLessThan(2);
+
     const prod = await handler.fetch(
       new Request("https://example.com/auth/logout", { method: "POST" }),
       {

@@ -3151,27 +3151,29 @@ async function parseBody(
   mode: "json" | "json-or-form",
 ): Promise<Record<string, unknown>> {
   const contentType = (request.headers.get("Content-Type") ?? "").toLowerCase();
+  const isJson = contentType.startsWith("application/json");
+  const isForm =
+    mode === "json-or-form" &&
+    contentType.startsWith("application/x-www-form-urlencoded");
+  if (!isJson && !isForm) {
+    if (!contentType && !request.body) return {};
+    throw new AuthCryptoError(
+      "Unsupported content type",
+      "unsupported_content_type",
+    );
+  }
   const text = await readLimitedBodyText(
     request,
     runtime.config.request.maxBodyBytes,
   );
-  if (contentType.startsWith("application/json")) {
+  if (isJson) {
     try {
       return JSON.parse(text || "{}") as Record<string, unknown>;
     } catch {
       throw new AuthCryptoError("Invalid JSON body", "validation_failed");
     }
   }
-  if (
-    mode === "json-or-form" &&
-    contentType.startsWith("application/x-www-form-urlencoded")
-  )
-    return Object.fromEntries(new URLSearchParams(text));
-  if (!contentType && !text) return {};
-  throw new AuthCryptoError(
-    "Unsupported content type",
-    "unsupported_content_type",
-  );
+  return Object.fromEntries(new URLSearchParams(text));
 }
 
 async function readLimitedBodyText(

@@ -66,6 +66,8 @@ The v1 surface supports Hono and plain Cloudflare Workers. The browser client SD
 
 ## Troubleshooting
 
+The full command surface is documented in [docs/cli.md](docs/cli.md).
+
 See [docs/troubleshooting.md](docs/troubleshooting.md) for missing D1 bindings, unapplied migrations, secret setup, cookie issues, email binding failures, and package-name fallback commands.
 
 Known v1 limitations are listed in [docs/known-limitations.md](docs/known-limitations.md).

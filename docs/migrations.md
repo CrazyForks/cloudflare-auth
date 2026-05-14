@@ -6,12 +6,14 @@ Run locally:
 
 ```bash
 npx --package @cf-auth/cli@latest cf-auth migrate --local
+npx --package @cf-auth/cli@latest cf-auth migrate --status --local
 ```
 
 Run remotely:
 
 ```bash
 npx --package @cf-auth/cli@latest cf-auth migrate --remote --env production
+npx --package @cf-auth/cli@latest cf-auth migrate --status --remote --env production
 ```
 
 Every migration updates `auth_schema_migrations` and `auth_meta.schema_version`. Future table rewrites that need temporary foreign-key deferral must use `PRAGMA defer_foreign_keys = on`.

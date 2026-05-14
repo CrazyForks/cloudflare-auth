@@ -13,6 +13,7 @@
 - `pnpm version-matrix:check`
 - `pnpm verify:alpha-evidence`
 - `pnpm verify:deploy-template`
+- `pnpm verify:docs-coverage`
 - `pnpm verify:migrations`
 - `pnpm verify:examples`
 - `pnpm verify:security-tracker`

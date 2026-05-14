@@ -42,6 +42,7 @@ jobs:
       - run: pnpm version-matrix:check
       - run: pnpm verify:alpha-evidence
       - run: pnpm verify:deploy-template
+      - run: pnpm verify:docs-coverage
       - run: pnpm verify:migrations
       - run: pnpm verify:examples
       - run: pnpm verify:security-tracker

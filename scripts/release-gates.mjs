@@ -22,6 +22,7 @@ await requireFile(".github/workflows/published-quickstart-smoke.yml");
 await requireFile("scripts/export-deploy-template.mjs");
 await requireFile("scripts/verify-alpha-evidence.mjs");
 await requireFile("scripts/verify-deploy-template.mjs");
+await requireFile("scripts/verify-docs-coverage.mjs");
 await requireFile("scripts/verify-security-release-tracker.mjs");
 await requireText("README.md", "SECURITY.md");
 await requireText("SECURITY.md", "Expected Response Window");

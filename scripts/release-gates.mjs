@@ -153,6 +153,9 @@ const stablePackages = packages.filter((pkg) =>
   isStableOneOrLater(pkg.version),
 );
 const betaPackages = packages.filter((pkg) => isPublicBeta(pkg.version));
+const betaOrStablePackages = packages.filter(
+  (pkg) => isPublicBeta(pkg.version) || isStableOneOrLater(pkg.version),
+);
 const publishedReleasePackages = packages.filter((pkg) =>
   isPublishedReleaseVersion(pkg.version),
 );
@@ -165,6 +168,16 @@ if (betaPackages.length > 0) {
   await requireFile("docs/alpha-evidence.json");
   await requireText("docs/alpha-evidence.json", '"localSetups"');
   await requireText("docs/alpha-evidence.json", '"productionDeploys"');
+}
+if (betaOrStablePackages.length > 0) {
+  await requireFile("docs/deploy-button-evidence.json");
+  await requireText("docs/deploy-button-evidence.json", '"status": "verified"');
+  await requireText(
+    "docs/deploy-button-evidence.json",
+    '"templateRepositoryUrl"',
+  );
+  await requireText("docs/deploy-button-evidence.json", '"deployButtonUrl"');
+  await requireText("docs/deploy-button-evidence.json", '"packageTag"');
 }
 if (stablePackages.length > 0) {
   await requireFile("docs/beta-evidence.json");

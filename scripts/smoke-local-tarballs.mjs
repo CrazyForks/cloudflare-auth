@@ -76,6 +76,7 @@ run("pnpm", [
 
 const appPackagePath = join(appDir, "package.json");
 const appPackage = JSON.parse(await readFile(appPackagePath, "utf8"));
+assertNoWorkspaceDependencies(appPackage, "generated app package.json");
 appPackage.dependencies["@cf-auth/hono"] = fileSpec("@cf-auth/hono");
 appPackage.dependencies["@cf-auth/worker"] = fileSpec("@cf-auth/worker");
 appPackage.dependencies["@cf-auth/email-cloudflare"] = fileSpec(
@@ -91,6 +92,7 @@ appPackage.pnpm = {
       .map((name) => [name, fileSpec(name)]),
   ),
 };
+assertNoWorkspaceDependencies(appPackage, "tarball smoke package.json");
 await writeFile(appPackagePath, JSON.stringify(appPackage, null, 2) + "\n");
 
 const installMode = process.env.CF_AUTH_TARBALL_INSTALL === "1";
@@ -145,6 +147,29 @@ async function rewriteWorkspaceDependencies(packageDir) {
     }
   }
   await writeFile(packageJsonPath, JSON.stringify(pkg, null, 2) + "\n");
+}
+
+function assertNoWorkspaceDependencies(pkg, label) {
+  const workspaceDependencies = [];
+  for (const section of [
+    "dependencies",
+    "devDependencies",
+    "peerDependencies",
+    "optionalDependencies",
+  ]) {
+    for (const [name, version] of Object.entries(pkg[section] ?? {})) {
+      if (String(version).startsWith("workspace:")) {
+        workspaceDependencies.push(`${section}.${name}`);
+      }
+    }
+  }
+  if (workspaceDependencies.length > 0) {
+    throw new Error(
+      `${label} contains workspace protocol dependencies: ${workspaceDependencies.join(
+        ", ",
+      )}`,
+    );
+  }
 }
 
 async function writePnpmBuildPolicy(dir) {

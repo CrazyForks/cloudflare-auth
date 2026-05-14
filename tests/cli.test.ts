@@ -81,9 +81,12 @@ describe("CLI MVP", () => {
     expect(source).toContain("app.route(authConfig.basePath");
     const wrangler = await readFile(join(app, "wrangler.jsonc"), "utf8");
     expect(wrangler).toContain('"$schema"');
+    expect(wrangler).toContain('"name": "my-app-dev"');
     expect(wrangler).toContain('"compatibility_date": "2026-05-14"');
     expect(wrangler).toContain('"compatibility_flags": ["nodejs_compat"]');
+    expect(wrangler).toContain('"database_name": "my-app-auth-dev"');
     expect(wrangler).toContain('"database_id": "local-development"');
+    expect(wrangler).toContain('"migrations_dir": "migrations"');
     expect(wrangler).toContain('"observability"');
     expect(wrangler).toContain('"head_sampling_rate": 1');
     expect(
@@ -110,6 +113,36 @@ describe("CLI MVP", () => {
     ).resolves.toBe(await readFile("migrations/0002_indexes.sql", "utf8"));
   });
 
+  it("uses Worker-safe names in generated Wrangler config", async () => {
+    const cwd = await tempDir();
+    const code = await runCli(["init", "My_App.v2", "--yes"], { cwd });
+    const app = join(cwd, "My_App.v2");
+
+    expect(code).toBe(0);
+    const generatedPackage = JSON.parse(
+      await readFile(join(app, "package.json"), "utf8"),
+    ) as { name: string };
+    const wrangler = JSON.parse(
+      await readFile(join(app, "wrangler.jsonc"), "utf8"),
+    ) as {
+      name: string;
+      d1_databases: Array<{ database_name: string }>;
+      env: {
+        production: {
+          name: string;
+          d1_databases: Array<{ database_name: string }>;
+        };
+      };
+    };
+    expect(generatedPackage.name).toBe("my_app.v2");
+    expect(wrangler.name).toBe("my-app-v2-dev");
+    expect(wrangler.d1_databases[0]?.database_name).toBe("my-app-v2-auth-dev");
+    expect(wrangler.env.production.name).toBe("my-app-v2");
+    expect(wrangler.env.production.d1_databases[0]?.database_name).toBe(
+      "my-app-v2-auth",
+    );
+  });
+
   it("honors the plain Worker init template", async () => {
     const cwd = await tempDir();
     const code = await runCli(
@@ -134,6 +167,34 @@ describe("CLI MVP", () => {
     const source = await readFile(join(app, "src", "index.ts"), "utf8");
     expect(source).toContain("createAuthHandler(authConfig)");
     expect(source).not.toContain("createAuthRoutes");
+    const wrangler = JSON.parse(
+      await readFile(join(app, "wrangler.jsonc"), "utf8"),
+    ) as {
+      name: string;
+      d1_databases: Array<{
+        database_name: string;
+        migrations_dir?: string;
+      }>;
+      env: {
+        production: {
+          name: string;
+          d1_databases: Array<{
+            database_name: string;
+            migrations_dir?: string;
+          }>;
+        };
+      };
+    };
+    expect(wrangler.name).toBe("worker-app-dev");
+    expect(wrangler.d1_databases[0]).toMatchObject({
+      database_name: "worker-app-auth-dev",
+      migrations_dir: "migrations",
+    });
+    expect(wrangler.env.production.name).toBe("worker-app");
+    expect(wrangler.env.production.d1_databases[0]).toMatchObject({
+      database_name: "worker-app-auth",
+      migrations_dir: "migrations",
+    });
   });
 
   it("prints snippets and writes nothing in dry-run init", async () => {

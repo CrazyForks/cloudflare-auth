@@ -189,6 +189,8 @@ async function commandInit(
 ): Promise<void> {
   const template = resolveInitTemplate(parsed.flags.template);
   const target = resolve(cwd, parsed.positionals[0] ?? ".");
+  const packageName = packageNameFromTarget(target);
+  const workerName = workerNameFromTarget(target);
   if (parsed.flags["dry-run"]) {
     out(
       `Would write ${template} package.json, pnpm-workspace.yaml, tsconfig.json, auth.config.ts, wrangler.jsonc, migrations, .gitignore, .dev.vars, .dev.vars.example, and route mount snippets.`,
@@ -201,7 +203,7 @@ async function commandInit(
   const localSecret = `k_dev.${base64urlEncode(randomBytes(32))}`;
   const packageResult = await writeOrPatchPackageJson(
     join(target, "package.json"),
-    packageNameFromTarget(target),
+    packageName,
     template,
   );
   const sourceIndexPath = join(target, "src", "index.ts");
@@ -216,7 +218,10 @@ async function commandInit(
     authConfigTemplate(),
   );
   await writeIfMissing(sourceIndexPath, indexTemplate(template));
-  await writeIfMissing(join(target, "wrangler.jsonc"), wranglerTemplate());
+  await writeIfMissing(
+    join(target, "wrangler.jsonc"),
+    wranglerTemplate(workerName),
+  );
   await writeIfMissing(join(target, ".gitignore"), gitignoreTemplate());
   await writeIfMissing(join(target, ".dev.vars"), devVarsTemplate(localSecret));
   await writeIfMissing(join(target, ".dev.vars.example"), devVarsTemplate());
@@ -229,10 +234,7 @@ async function commandInit(
     indexesMigrationSql(),
   );
   if (parsed.flags.repair) {
-    const repaired = await repairWranglerConfig(
-      target,
-      packageNameFromTarget(target),
-    );
+    const repaired = await repairWranglerConfig(target, workerName);
     if (repaired) out("Repaired wrangler.jsonc auth bindings and vars.");
   }
   out(`Initialized Cloudflare Auth in ${target}`);
@@ -2904,6 +2906,16 @@ function packageNameFromTarget(target: string): string {
   );
 }
 
+function workerNameFromTarget(target: string): string {
+  return (
+    basename(target)
+      .toLowerCase()
+      .replace(/[^a-z0-9-]+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-+|-+$/g, "") || "cf-auth-app"
+  );
+}
+
 function resolveInitTemplate(
   value: string | boolean | undefined,
 ): InitTemplate {
@@ -3089,10 +3101,10 @@ function tsconfigTemplate(): string {
 `;
 }
 
-function wranglerTemplate(): string {
+function wranglerTemplate(appName: string): string {
   return `{
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "my-app-dev",
+  "name": "${appName}-dev",
   "main": "src/index.ts",
   "compatibility_date": "2026-05-14",
   "compatibility_flags": ["nodejs_compat"],
@@ -3107,13 +3119,14 @@ function wranglerTemplate(): string {
   "d1_databases": [
     {
       "binding": "AUTH_DB",
-      "database_name": "my-app-auth-dev",
-      "database_id": "local-development"
+      "database_name": "${appName}-auth-dev",
+      "database_id": "local-development",
+      "migrations_dir": "migrations"
     }
   ],
   "env": {
     "production": {
-      "name": "my-app",
+      "name": "${appName}",
       "vars": {
         "AUTH_ENV": "production",
         "AUTH_PUBLIC_ORIGIN": "https://example.com"
@@ -3121,8 +3134,9 @@ function wranglerTemplate(): string {
       "d1_databases": [
         {
           "binding": "AUTH_DB",
-          "database_name": "my-app-auth",
-          "database_id": "REPLACE_WITH_DATABASE_ID"
+          "database_name": "${appName}-auth",
+          "database_id": "REPLACE_WITH_DATABASE_ID",
+          "migrations_dir": "migrations"
         }
       ],
       "send_email": [

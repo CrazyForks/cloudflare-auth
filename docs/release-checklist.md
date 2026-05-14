@@ -20,6 +20,7 @@
 - `pnpm verify:migrations`
 - `pnpm verify:examples`
 - `pnpm verify:package-ownership`
+- `pnpm verify:security-docs`
 - `pnpm verify:security-tracker`
 - `pnpm release:gates`
 - `CF_AUTH_TARBALL_INSTALL=1 pnpm smoke:tarballs`

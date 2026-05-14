@@ -39,6 +39,7 @@ await requireFile("scripts/verify-deploy-button-evidence.mjs");
 await requireFile("scripts/verify-deploy-template.mjs");
 await requireFile("scripts/verify-docs-coverage.mjs");
 await requireFile("scripts/verify-package-ownership.mjs");
+await requireFile("scripts/verify-security-docs.mjs");
 await requireFile("scripts/verify-security-release-tracker.mjs");
 await requireText("README.md", "SECURITY.md");
 await requireText("SECURITY.md", "Expected Response Window");
@@ -78,6 +79,7 @@ await requireText("docs/public-beta.md", "docs/known-limitations.md");
 await requireText("docs/public-beta.md", "pnpm verify:beta-evidence");
 await requireText("docs/public-beta.md", "pnpm verify:deploy-button-evidence");
 await requireText("docs/public-beta.md", "pnpm verify:package-ownership");
+await requireText("docs/release-checklist.md", "pnpm verify:security-docs");
 await requireText(
   "docs/public-beta.md",
   ".github/workflows/published-quickstart-smoke.yml",

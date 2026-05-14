@@ -195,6 +195,7 @@ async function verifyReleaseControls() {
     "continue-on-error: true",
     "pnpm verify:beta-evidence",
     "pnpm verify:package-ownership",
+    "pnpm verify:security-docs",
     "pnpm changeset publish --provenance",
   ]) {
     if (!releaseWorkflow.includes(needle)) {

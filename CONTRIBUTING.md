@@ -2,6 +2,8 @@
 
 Cloudflare Auth is built as a pnpm monorepo. Keep changes scoped, add tests for auth behavior changes, and avoid broad refactors in security-sensitive code unless they are part of the requested work.
 
+Follow [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) in project spaces.
+
 ## Local Setup
 
 ```bash

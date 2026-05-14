@@ -1,0 +1,183 @@
+import { spawnSync } from "node:child_process";
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { describe, expect, it } from "vitest";
+
+describe("release evidence verifiers", () => {
+  it("accepts redaction-safe alpha evidence with production command proof", async () => {
+    const path = await writeEvidence("alpha", validAlphaEvidence());
+    const result = runScript("scripts/verify-alpha-evidence.mjs", {
+      CF_AUTH_REQUIRE_ALPHA_EVIDENCE: "1",
+      CF_AUTH_ALPHA_EVIDENCE_PATH: path,
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("private-alpha evidence verified");
+  });
+
+  it("rejects alpha production deploys without required command proof", async () => {
+    const evidence = validAlphaEvidence();
+    evidence.productionDeploys[0]!.commands = [];
+    const path = await writeEvidence("alpha-missing-command", evidence);
+    const result = runScript("scripts/verify-alpha-evidence.mjs", {
+      CF_AUTH_REQUIRE_ALPHA_EVIDENCE: "1",
+      CF_AUTH_ALPHA_EVIDENCE_PATH: path,
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("cf-auth doctor --env production");
+    expect(result.stderr).toContain(
+      "cf-auth migrate --remote --env production",
+    );
+    expect(result.stderr).toContain("cf-auth deploy --env production");
+  });
+
+  it("accepts beta evidence for clean quickstart and opt-in production smoke", async () => {
+    const path = await writeEvidence("beta", validBetaEvidence());
+    const result = runScript("scripts/verify-beta-evidence.mjs", {
+      CF_AUTH_REQUIRE_BETA_EVIDENCE: "1",
+      CF_AUTH_BETA_EVIDENCE_PATH: path,
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("public-beta evidence verified");
+  });
+
+  it("accepts deploy button evidence for the documented template path", async () => {
+    const path = await writeEvidence(
+      "deploy-button",
+      validDeployButtonEvidence(),
+    );
+    const result = runScript("scripts/verify-deploy-button-evidence.mjs", {
+      CF_AUTH_REQUIRE_DEPLOY_BUTTON_EVIDENCE: "1",
+      CF_AUTH_DEPLOY_BUTTON_EVIDENCE_PATH: path,
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain(
+      "Deploy to Cloudflare button evidence verified",
+    );
+  });
+});
+
+async function writeEvidence(name: string, value: unknown): Promise<string> {
+  const dir = await mkdtemp(join(tmpdir(), `cf-auth-${name}-`));
+  const path = join(dir, "evidence.json");
+  await writeFile(path, `${JSON.stringify(value, null, 2)}\n`);
+  return path;
+}
+
+function runScript(script: string, env: Record<string, string>) {
+  return spawnSync(process.execPath, [script], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    env: { ...process.env, ...env },
+  });
+}
+
+function validAlphaEvidence() {
+  return {
+    schemaVersion: 1,
+    localSetups: Array.from({ length: 5 }, (_, index) => ({
+      user: `alpha-user-${index + 1}`,
+      completedAt: "2026-05-14T00:00:00.000Z",
+      setupMinutes: 8,
+      cleanDirectory: true,
+      documentedCommandsOnly: true,
+      signupLoginVerified: true,
+    })),
+    productionDeploys: Array.from({ length: 3 }, (_, index) => ({
+      user: `alpha-user-${index + 1}`,
+      completedAt: "2026-05-14T00:00:00.000Z",
+      commands: [
+        "npx --package @cf-auth/cli@alpha cf-auth doctor --env production",
+        "npx --package @cf-auth/cli@alpha cf-auth migrate --remote --env production",
+        "npx --package @cf-auth/cli@alpha cf-auth deploy --env production",
+      ],
+      doctorReportAttached: true,
+      doctorReportSchemaValid: true,
+      doctorReportRedactionChecked: true,
+      doctorPassed: true,
+      migratePassed: true,
+      deployPassed: true,
+      signupLoginVerified: true,
+    })),
+    failures: [],
+  };
+}
+
+function validBetaEvidence() {
+  return {
+    schemaVersion: 1,
+    reviewedAt: "2026-05-14T00:00:00.000Z",
+    reviewedBy: "release-reviewer",
+    publishedQuickstart: {
+      workflowRunUrl:
+        "https://github.com/acme/cloudflare-auth/actions/runs/123",
+      packageTag: "beta",
+      passed: true,
+      cleanDirectory: true,
+      documentedCommandsOnly: true,
+      noWorkspaceDependencies: true,
+      signupLoginVerified: true,
+    },
+    manualQuickstart: {
+      maintainer: "release-reviewer",
+      completedAt: "2026-05-14T00:00:00.000Z",
+      packageTag: "beta",
+      cleanDirectory: true,
+      documentedCommandsOnly: true,
+      signupLoginVerified: true,
+    },
+    productionSmoke: {
+      workflowRunUrl:
+        "https://github.com/acme/cloudflare-auth/actions/runs/124",
+      packageTag: "beta",
+      origin: "https://auth.acme.test",
+      passed: true,
+      documentedProductionPath: true,
+      optInCloudflareAccountFixture: true,
+      smokedEndpoints: [
+        "/auth/signup",
+        "/auth/login",
+        "/auth/logout",
+        "/auth/user",
+      ],
+    },
+    deployButton: {
+      evidencePath: "docs/deploy-button-evidence.json",
+      verified: true,
+      evidenceVerifierPassed: true,
+    },
+  };
+}
+
+function validDeployButtonEvidence() {
+  return {
+    schemaVersion: 1,
+    status: "verified",
+    verifiedAt: "2026-05-14T00:00:00.000Z",
+    verifiedBy: "release-reviewer",
+    templateRepositoryUrl: "https://github.com/acme/cloudflare-auth-template",
+    deployButtonUrl:
+      "https://deploy.workers.cloudflare.com/?url=https://github.com/acme/cloudflare-auth-template",
+    deployedOrigin: "https://auth.acme.test",
+    starterTemplateCreated: true,
+    templateRepositoryPublic: true,
+    templateHasNoWorkspaceDependencies: true,
+    d1BindingConfigured: true,
+    migrationsApplied: true,
+    authSecretConfigured: true,
+    publicOriginConfigured: true,
+    documentedPathFollowed: true,
+    signupLoginSmokePassed: true,
+    smokedEndpoints: [
+      "/auth/signup",
+      "/auth/login",
+      "/auth/logout",
+      "/auth/user",
+    ],
+  };
+}

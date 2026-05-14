@@ -239,6 +239,21 @@ describe("release evidence verifiers", () => {
     expect(result.stderr).toContain("cf-auth deploy --env production");
   });
 
+  it("rejects beta production smoke commands without package tag proof", async () => {
+    const evidence = validBetaEvidence();
+    evidence.productionSmoke.commands = evidence.productionSmoke.commands.map(
+      (command) => command.replace("@cf-auth/cli@beta", "@cf-auth/cli@latest"),
+    );
+    const path = await writeEvidence("beta-missing-package-command", evidence);
+    const result = runScript("scripts/verify-beta-evidence.mjs", {
+      CF_AUTH_REQUIRE_BETA_EVIDENCE: "1",
+      CF_AUTH_BETA_EVIDENCE_PATH: path,
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("@cf-auth/cli@beta");
+  });
+
   it("rejects beta evidence that uses a non-beta package tag", async () => {
     const evidence = validBetaEvidence();
     evidence.publishedQuickstart.packageTag = "latest";

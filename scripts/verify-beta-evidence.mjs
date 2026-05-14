@@ -138,6 +138,13 @@ function validateProductionSmoke(value) {
     "cf-auth deploy --env production",
     `${path}.commands`,
   );
+  if (typeof value.packageTag === "string") {
+    requireCommandContains(
+      value.commands,
+      `@cf-auth/cli@${value.packageTag}`,
+      `${path}.commands`,
+    );
+  }
   for (const endpoint of [
     "/auth/signup",
     "/auth/login",

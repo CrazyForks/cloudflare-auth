@@ -111,6 +111,30 @@ describe("package name registry checks", () => {
     expect(result.stderr).toContain("packages[0] must be an object");
     expect(result.stderr).toContain("reservedPackages[0] must be an object");
   });
+
+  it("rejects non-object npm package lookup results", async () => {
+    const fixture = await packageNameFixture({
+      cliRegistryOutput: "null",
+    });
+    const result = runPackageNameCheck(fixture.root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "@cf-auth/cli: npm view result: top-level JSON value must be an object",
+    );
+  });
+
+  it("rejects npm package lookup results without string versions", async () => {
+    const fixture = await packageNameFixture({
+      cliRegistryOutput: JSON.stringify({ name: "@cf-auth/cli", version: 1 }),
+    });
+    const result = runPackageNameCheck(fixture.root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "@cf-auth/cli: npm view result: version must be a non-empty string",
+    );
+  });
 });
 
 async function packageNameFixture(
@@ -121,6 +145,7 @@ async function packageNameFixture(
     staleCfAuthReservation?: boolean;
     publishCreatePackage?: boolean;
     staleCreateReservation?: boolean;
+    cliRegistryOutput?: string;
   } = {},
 ) {
   const root = await mkdtemp(join(tmpdir(), "cf-auth-package-names-"));
@@ -231,6 +256,10 @@ async function packageNameFixture(
 const args = process.argv.slice(2);
 const query = args[1] || "";
 if (args[0] !== "view") process.exit(2);
+if (query === "@cf-auth/cli" && ${JSON.stringify(options.cliRegistryOutput !== undefined)}) {
+  console.log(${JSON.stringify(options.cliRegistryOutput ?? "")});
+  process.exit(0);
+}
 if (query === "cf-auth") {
   console.log(JSON.stringify({ name: "cf-auth", version: "1.0.2" }));
   process.exit(0);

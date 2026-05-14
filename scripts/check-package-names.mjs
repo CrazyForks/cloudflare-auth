@@ -95,15 +95,12 @@ for (const pkg of packages) {
 
   const nameLookup = npmView([pkg.name, "name", "version"]);
   if (nameLookup.kind === "found") {
-    const value = parseJson(nameLookup.stdout, `${pkg.name}: npm view result`);
-    const registryName =
-      value && typeof value === "object" && "name" in value
-        ? value.name
-        : undefined;
-    const registryVersion =
-      value && typeof value === "object" && "version" in value
-        ? value.version
-        : undefined;
+    const registryPackage = parseRegistryPackageResult(
+      nameLookup.stdout,
+      `${pkg.name}: npm view result`,
+    );
+    if (!registryPackage) continue;
+    const { registryName, registryVersion } = registryPackage;
     if (registryName !== pkg.name) {
       failures.push(
         `${pkg.name}: npm registry returned mismatched name ${String(
@@ -141,15 +138,12 @@ for (const pkg of reservedPackages) {
 
   const nameLookup = npmView([pkg.name, "name", "version"]);
   if (nameLookup.kind === "found") {
-    const value = parseJson(nameLookup.stdout, `${pkg.name}: npm view result`);
-    const registryName =
-      value && typeof value === "object" && "name" in value
-        ? value.name
-        : undefined;
-    const registryVersion =
-      value && typeof value === "object" && "version" in value
-        ? value.version
-        : undefined;
+    const registryPackage = parseRegistryPackageResult(
+      nameLookup.stdout,
+      `${pkg.name}: npm view result`,
+    );
+    if (!registryPackage) continue;
+    const { registryName, registryVersion } = registryPackage;
     if (registryName !== pkg.name) {
       failures.push(
         `${pkg.name}: npm registry returned mismatched name ${String(
@@ -280,6 +274,31 @@ function parseJson(value, label) {
     failures.push(`${label}: must be valid JSON`);
     fail();
   }
+}
+
+function parseRegistryPackageResult(value, label) {
+  const parsed = parseJson(value, label);
+  if (!isJsonObject(parsed)) {
+    failures.push(`${label}: top-level JSON value must be an object`);
+    return null;
+  }
+  const registryName = parsed.name;
+  const registryVersion = parsed.version;
+  if (typeof registryName !== "string" || registryName.length === 0) {
+    failures.push(`${label}: name must be a non-empty string`);
+  }
+  if (typeof registryVersion !== "string" || registryVersion.length === 0) {
+    failures.push(`${label}: version must be a non-empty string`);
+  }
+  if (
+    typeof registryName !== "string" ||
+    registryName.length === 0 ||
+    typeof registryVersion !== "string" ||
+    registryVersion.length === 0
+  ) {
+    return null;
+  }
+  return { registryName, registryVersion };
 }
 
 function fail() {

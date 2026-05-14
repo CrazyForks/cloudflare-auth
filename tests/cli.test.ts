@@ -1793,6 +1793,10 @@ interface JsonSchema {
   additionalProperties?: boolean;
   properties?: Record<string, JsonSchema>;
   items?: JsonSchema;
+  minLength?: number;
+  minimum?: number;
+  pattern?: string;
+  format?: string;
 }
 
 function validateJsonSchema(
@@ -1834,8 +1838,20 @@ function validateJsonSchema(
         );
       });
     }
-  } else if (schema.type === "string" && typeof value !== "string") {
-    failures.push(`${path}: expected string`);
+  } else if (schema.type === "string") {
+    if (typeof value !== "string") {
+      failures.push(`${path}: expected string`);
+    } else {
+      if (schema.minLength !== undefined && value.length < schema.minLength) {
+        failures.push(`${path}: expected at least ${schema.minLength} chars`);
+      }
+      if (schema.pattern && !new RegExp(schema.pattern, "u").test(value)) {
+        failures.push(`${path}: expected pattern ${schema.pattern}`);
+      }
+      if (schema.format === "date-time" && Number.isNaN(Date.parse(value))) {
+        failures.push(`${path}: expected date-time`);
+      }
+    }
   } else if (schema.type === "boolean" && typeof value !== "boolean") {
     failures.push(`${path}: expected boolean`);
   } else if (
@@ -1843,6 +1859,13 @@ function validateJsonSchema(
     (!Number.isInteger(value) || typeof value !== "number")
   ) {
     failures.push(`${path}: expected integer`);
+  } else if (
+    schema.type === "integer" &&
+    schema.minimum !== undefined &&
+    typeof value === "number" &&
+    value < schema.minimum
+  ) {
+    failures.push(`${path}: expected minimum ${schema.minimum}`);
   }
   return failures;
 }

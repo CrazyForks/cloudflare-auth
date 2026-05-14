@@ -32,6 +32,7 @@ await requireFile("docs/known-limitations.md");
 await requireFile("docs/package-ownership.example.json");
 await requireFile("docs/public-beta.md");
 await requireFile("docs/security-release-tracker.example.json");
+await requireFile("schemas/doctor-report.schema.json");
 await requireFile("scripts/export-deploy-template.mjs");
 await requireFile("scripts/check-package-names.ts");
 await requireFile("scripts/verify-alpha-evidence.mjs");

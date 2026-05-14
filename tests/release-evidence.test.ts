@@ -188,6 +188,19 @@ describe("release evidence verifiers", () => {
     }
   });
 
+  it("rejects impossible ISO evidence dates", async () => {
+    const evidence = validAlphaEvidence();
+    evidence.localSetups[0]!.completedAt = "2026-02-31T00:00:00.000Z";
+    const path = await writeEvidence("alpha-impossible-date", evidence);
+    const result = runScript("scripts/verify-alpha-evidence.mjs", {
+      CF_AUTH_REQUIRE_ALPHA_EVIDENCE: "1",
+      CF_AUTH_ALPHA_EVIDENCE_PATH: path,
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("must be an ISO date string");
+  });
+
   it("requires alpha evidence for stable package versions", async () => {
     const cwd = await packageVersionFixture("1.0.0");
     const result = runScript("scripts/verify-alpha-evidence.mjs", {}, cwd);

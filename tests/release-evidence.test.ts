@@ -895,6 +895,33 @@ describe("release evidence verifiers", () => {
     expect(result.stdout).toContain("package ownership evidence verified");
   });
 
+  it("rejects malformed package manifests before package ownership release checks", async () => {
+    const cwd = await packageOwnershipFixture({
+      publishCfAuthShim: false,
+      staleCfAuthReservation: false,
+      publishCreatePackage: false,
+      staleCreateReservation: false,
+    });
+    await writeFile(join(cwd, "packages", "cli", "package.json"), "null\n");
+    const result = runScript(
+      "scripts/verify-package-ownership.mjs",
+      {
+        CF_AUTH_REQUIRE_PACKAGE_OWNERSHIP: "1",
+        CF_AUTH_PACKAGE_OWNERSHIP_PATH: join(
+          cwd,
+          "docs",
+          "package-ownership.json",
+        ),
+      },
+      cwd,
+    );
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "packages/cli/package.json: top-level JSON value must be an object",
+    );
+  });
+
   it("rejects package ownership evidence for placeholder package versions", async () => {
     const path = await writeEvidence(
       "package-ownership-placeholder",

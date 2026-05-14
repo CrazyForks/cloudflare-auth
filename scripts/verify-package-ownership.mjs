@@ -14,12 +14,35 @@ import {
 
 const evidencePath =
   process.env.CF_AUTH_PACKAGE_OWNERSHIP_PATH ?? "docs/package-ownership.json";
-const packages = await publishablePackages();
-const reservedPackages = await privateReservedPackages();
+const failures = [];
+const workspacePackages = await workspacePackageManifests();
+const packages = workspacePackages
+  .filter((entry) => !entry.pkg.private)
+  .map((entry) => ({
+    dir: entry.dir,
+    name: entry.pkg.name,
+    version: entry.pkg.version,
+  }))
+  .sort((a, b) => String(a.name).localeCompare(String(b.name)));
+const reservedPackages = workspacePackages
+  .filter(
+    (entry) =>
+      entry.pkg.private === true &&
+      (entry.pkg.name === "cf-auth" ||
+        entry.pkg.name === "create-cloudflare-auth"),
+  )
+  .map((entry) => ({
+    dir: entry.dir,
+    name: entry.pkg.name,
+    version: entry.pkg.version,
+  }))
+  .sort((a, b) => String(a.name).localeCompare(String(b.name)));
 const reservedPackageNames = new Set(reservedPackages.map((pkg) => pkg.name));
 const requireEvidence =
   process.env.CF_AUTH_REQUIRE_PACKAGE_OWNERSHIP === "1" ||
   packages.some((pkg) => isPublishedReleaseVersion(pkg.version));
+
+if (failures.length > 0) fail();
 
 if (!(await exists(evidencePath))) {
   if (requireEvidence) {
@@ -34,7 +57,6 @@ if (!(await exists(evidencePath))) {
   process.exit(0);
 }
 
-const failures = [];
 const text = await readFile(evidencePath, "utf8");
 let evidence;
 let parsedEvidence = false;
@@ -54,8 +76,7 @@ if (parsedEvidence) {
 }
 
 if (failures.length > 0) {
-  console.error(failures.join("\n"));
-  process.exit(1);
+  fail();
 }
 
 console.log(`package ownership evidence verified: ${evidencePath}`);
@@ -227,35 +248,31 @@ function containsPlaceholderEvidence(text) {
   return /\bmaintainer-name\b/u.test(text);
 }
 
-async function publishablePackages() {
+async function workspacePackageManifests() {
   const entries = await readdir("packages", { withFileTypes: true });
   const output = [];
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
     const dir = join("packages", entry.name);
-    const pkg = JSON.parse(await readFile(join(dir, "package.json"), "utf8"));
-    if (!pkg.private) {
-      output.push({ dir, name: pkg.name, version: pkg.version });
-    }
+    const pkg = await readJsonObject(join(dir, "package.json"));
+    if (pkg) output.push({ dir, pkg });
   }
-  return output.sort((a, b) => a.name.localeCompare(b.name));
+  return output;
 }
 
-async function privateReservedPackages() {
-  const entries = await readdir("packages", { withFileTypes: true });
-  const output = [];
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    const dir = join("packages", entry.name);
-    const pkg = JSON.parse(await readFile(join(dir, "package.json"), "utf8"));
-    if (
-      pkg.private === true &&
-      (pkg.name === "cf-auth" || pkg.name === "create-cloudflare-auth")
-    ) {
-      output.push({ dir, name: pkg.name, version: pkg.version });
-    }
+async function readJsonObject(path) {
+  let parsed;
+  try {
+    parsed = JSON.parse(await readFile(path, "utf8"));
+  } catch {
+    failures.push(`${path}: must be valid JSON`);
+    return null;
   }
-  return output.sort((a, b) => a.name.localeCompare(b.name));
+  if (!isJsonObject(parsed)) {
+    failures.push(`${path}: top-level JSON value must be an object`);
+    return null;
+  }
+  return parsed;
 }
 
 function isPublishedReleaseVersion(version) {
@@ -274,4 +291,9 @@ async function exists(path) {
   } catch {
     return false;
   }
+}
+
+function fail() {
+  console.error(failures.join("\n"));
+  process.exit(1);
 }

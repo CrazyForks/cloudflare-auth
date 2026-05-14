@@ -238,7 +238,7 @@ describe("security hardening helpers", () => {
         endpoints: ["magic_link_request"],
         verify: async ({ token }) => {
           throw new Error(
-            `verifier failed token=${token} email=person@example.com remoteIp=203.0.113.9 userAgent="Mozilla/5.0 Secret Browser" AUTH_SECRET=k1.${secretMaterial}`,
+            `verifier failed token=${token} identifier=raw-identifier username=raw-user email=person@example.com remoteIp=203.0.113.9 userAgent="Mozilla/5.0 Secret Browser" AUTH_SECRET=k1.${secretMaterial}`,
           );
         },
       },
@@ -256,9 +256,13 @@ describe("security hardening helpers", () => {
     const body = await response.text();
     expect(body).toContain('"code":"server_error"');
     expect(body).toContain("token=[REDACTED]");
-    expect(body).toContain("[REDACTED_EMAIL]");
+    expect(body).toContain("email=[REDACTED]");
     expect(body).toContain("AUTH_SECRET=[REDACTED]");
+    expect(body).toContain("identifier=[REDACTED]");
+    expect(body).toContain("username=[REDACTED]");
     expect(body).not.toContain(rawToken);
+    expect(body).not.toContain("raw-identifier");
+    expect(body).not.toContain("raw-user");
     expect(body).not.toContain("person@example.com");
     expect(body).not.toContain("203.0.113.9");
     expect(body).not.toContain("Secret Browser");
@@ -363,6 +367,8 @@ describe("security hardening helpers", () => {
       password: "correct horse battery staple",
       passwordHash,
       email: "person@example.com",
+      identifier: "raw-identifier",
+      normalized_username: "raw-user",
       remoteIp: "203.0.113.9",
       userAgent: "Mozilla/5.0 Secret Browser",
       raw_token: rawToken,
@@ -378,6 +384,9 @@ describe("security hardening helpers", () => {
 
     expect(redacted).toContain('"password":"[REDACTED]"');
     expect(redacted).toContain('"passwordHash":"[REDACTED]"');
+    expect(redacted).toContain('"email":"[REDACTED]"');
+    expect(redacted).toContain('"identifier":"[REDACTED]"');
+    expect(redacted).toContain('"normalized_username":"[REDACTED]"');
     expect(redacted).toContain('"raw_token":"[REDACTED]"');
     expect(redacted).toContain('"token_hash":"[REDACTED]"');
     expect(redacted).toContain('"sessionToken":"[REDACTED]"');
@@ -388,11 +397,12 @@ describe("security hardening helpers", () => {
     expect(redacted).not.toContain(rawToken);
     expect(redacted).not.toContain(tokenHash);
     expect(redacted).not.toContain(passwordHash);
+    expect(redacted).not.toContain("raw-identifier");
+    expect(redacted).not.toContain("raw-user");
     expect(redacted).not.toContain("correct horse battery staple");
     expect(redacted).not.toContain("person@example.com");
     expect(redacted).not.toContain("203.0.113.9");
     expect(redacted).not.toContain("Secret Browser");
-    expect(redacted).toContain("[REDACTED_EMAIL]");
     expect(redacted).toContain("[REDACTED_IP]");
     expect(redacted).toContain("[REDACTED_TOKEN_HASH]");
     expect(redacted).toContain("[REDACTED_PASSWORD_HASH]");

@@ -140,6 +140,7 @@ for (const dir of packageDirs) {
 await verifyPackageNamingDocs();
 await verifyReadmeAndNonGoals();
 await verifyDocsManifest();
+await verifyBenchmarkDocs();
 await verifyToolchainDocs();
 await verifyTroubleshootingDocs();
 await verifyRootScripts();
@@ -368,6 +369,7 @@ async function verifyPackageNamingDocs() {
 async function verifyDocsManifest() {
   for (const file of [
     "docs/decisions/package-naming.md",
+    "docs/decisions/password-benchmark.md",
     "docs/non-goals.md",
     "docs/quickstart.md",
     "docs/existing-hono-app.md",
@@ -407,6 +409,29 @@ async function verifyDocsManifest() {
       await access(file);
     } catch {
       failures.push(`${file}: required documentation file is missing`);
+    }
+  }
+}
+
+async function verifyBenchmarkDocs() {
+  const benchmark = await readFile(
+    "docs/decisions/password-benchmark.md",
+    "utf8",
+  );
+  for (const needle of [
+    "workers-balanced",
+    "workers-local",
+    "warmupHashes",
+    "measuredHashes",
+    "p50Ms",
+    "p95Ms",
+    "throughputHashesPerSecond",
+    "pnpm benchmark:password",
+  ]) {
+    if (!benchmark.includes(needle)) {
+      failures.push(
+        `docs/decisions/password-benchmark.md: missing benchmark evidence text ${needle}`,
+      );
     }
   }
 }

@@ -101,6 +101,22 @@ describe("package checks", () => {
     );
   });
 
+  it("requires checked-in password benchmark evidence", async () => {
+    const root = await packageCheckFixture();
+    await replaceFixtureText(
+      root,
+      "docs/decisions/password-benchmark.md",
+      "workers-local",
+      "node-local",
+    );
+    const result = runPackageCheck(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "docs/decisions/password-benchmark.md: missing benchmark evidence text workers-local",
+    );
+  });
+
   it("rejects workspace dependency ranges in packed manifests", async () => {
     const root = await packageCheckFixture();
     await writeFakePackTools(root);

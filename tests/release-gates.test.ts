@@ -102,6 +102,28 @@ describe("release gates", () => {
     expect(result.stderr).toContain("docs/api.md: missing hashPassword");
   });
 
+  it("requires password benchmark evidence in release gates", async () => {
+    const root = await releaseGateFixture({ deployButtonEvidence: true });
+    await writeFixtureFile(
+      root,
+      "docs/decisions/password-benchmark.md",
+      [
+        "workers-balanced",
+        "warmupHashes",
+        "measuredHashes",
+        "p50Ms",
+        "p95Ms",
+        "pnpm benchmark:password",
+      ].join("\n"),
+    );
+    const result = runReleaseGates(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("docs/decisions/password-benchmark.md");
+    expect(result.stderr).toContain("workers-local");
+    expect(result.stderr).toContain("throughputHashesPerSecond");
+  });
+
   it("requires production password hashing in examples and generated templates", async () => {
     const root = await releaseGateFixture({ deployButtonEvidence: true });
     await writeFixtureFile(
@@ -260,6 +282,7 @@ async function releaseGateFixture(options: ReleaseGateFixtureOptions) {
     "docs/alpha-evidence.example.json",
     "docs/alpha.md",
     "docs/beta-evidence.example.json",
+    "docs/decisions/password-benchmark.md",
     "docs/deploy-button-evidence.example.json",
     "docs/deploy-to-cloudflare.md",
     "docs/known-limitations.md",
@@ -286,6 +309,15 @@ async function releaseGateFixture(options: ReleaseGateFixtureOptions) {
     [
       "SECURITY.md",
       ["Expected Response Window", "secret scanning", "advisory evidence only"],
+    ],
+    [
+      "docs/decisions/password-benchmark.md",
+      [
+        "workers-local",
+        "p95Ms",
+        "throughputHashesPerSecond",
+        "pnpm benchmark:password",
+      ],
     ],
     [
       "docs/release-checklist.md",

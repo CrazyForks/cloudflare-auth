@@ -35,6 +35,7 @@ await requireFile(".github/ISSUE_TEMPLATE/security-contact.md");
 await requireFile("docs/alpha-evidence.example.json");
 await requireFile("docs/alpha.md");
 await requireFile("docs/beta-evidence.example.json");
+await requireFile("docs/decisions/password-benchmark.md");
 await requireFile("docs/deploy-button-evidence.example.json");
 await requireFile("docs/deploy-to-cloudflare.md");
 await requireFile("docs/known-limitations.md");
@@ -60,6 +61,16 @@ await requireText("docs/release-checklist.md", "unresolved high/critical");
 await requireText("docs/release-checklist.md", "public API report reviewed");
 await requireText("docs/release-checklist.md", "config schema reviewed");
 await requireText("docs/release-checklist.md", "security review decision");
+await requireText("docs/decisions/password-benchmark.md", "workers-local");
+await requireText("docs/decisions/password-benchmark.md", "p95Ms");
+await requireText(
+  "docs/decisions/password-benchmark.md",
+  "throughputHashesPerSecond",
+);
+await requireText(
+  "docs/decisions/password-benchmark.md",
+  "pnpm benchmark:password",
+);
 await requireText("SECURITY.md", "secret scanning");
 await requireText("SECURITY.md", "advisory evidence only");
 await requireText(

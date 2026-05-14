@@ -314,6 +314,43 @@ describe("CLI MVP", () => {
     expect(errors.join("\n")).toContain("Remote migrations require --env");
   });
 
+  it("rejects remote migrations without --env for top-level development configs", async () => {
+    const cwd = await tempDir();
+    await mkdir(join(cwd, "migrations"), { recursive: true });
+    await writeFile(join(cwd, "migrations", "0001_initial.sql"), "-- test\n");
+    await writeFile(
+      join(cwd, "wrangler.jsonc"),
+      JSON.stringify(
+        {
+          vars: {
+            AUTH_ENV: "development",
+            AUTH_PUBLIC_ORIGIN: "http://localhost:8787",
+          },
+          d1_databases: [
+            {
+              binding: "AUTH_DB",
+              database_name: "app-auth-dev",
+              database_id: "local-id",
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+    );
+
+    const errors: string[] = [];
+    const code = await runCli(["migrate", "--remote"], {
+      cwd,
+      stderr: (line) => errors.push(line),
+    });
+
+    expect(code).toBe(1);
+    expect(errors.join("\n")).toContain(
+      "Remote migrations without --env require top-level vars.AUTH_ENV=production",
+    );
+  });
+
   it("rejects unknown generate snippets instead of aliasing them", async () => {
     const output: string[] = [];
     const errors: string[] = [];
@@ -515,6 +552,46 @@ describe("CLI MVP", () => {
     expect(code).toBe(1);
     expect(errors.join("\n")).toContain(
       "Preview and production public origins must use HTTPS",
+    );
+  });
+
+  it("doctor requires exact preview and production public origins", async () => {
+    const cwd = await tempDir();
+    await writeWrangler(cwd);
+    const text = await readFile(join(cwd, "wrangler.jsonc"), "utf8");
+    const config = JSON.parse(text) as {
+      vars: Record<string, string>;
+      env?: { production: { vars: Record<string, string> } };
+    };
+    config.vars.AUTH_ENV = "preview";
+    delete config.vars.AUTH_PUBLIC_ORIGIN;
+    delete config.env;
+    await writeFile(join(cwd, "wrangler.jsonc"), JSON.stringify(config));
+
+    const missingOriginErrors: string[] = [];
+    const missingOriginCode = await runCli(["doctor"], {
+      cwd,
+      stderr: (line) => missingOriginErrors.push(line),
+      runCommand: remoteSecretRunner(),
+    });
+
+    expect(missingOriginCode).toBe(1);
+    expect(missingOriginErrors.join("\n")).toContain(
+      "Preview public origin is missing",
+    );
+
+    config.vars.AUTH_PUBLIC_ORIGIN = "https://preview.example.com/auth";
+    await writeFile(join(cwd, "wrangler.jsonc"), JSON.stringify(config));
+    const exactOriginErrors: string[] = [];
+    const exactOriginCode = await runCli(["doctor"], {
+      cwd,
+      stderr: (line) => exactOriginErrors.push(line),
+      runCommand: remoteSecretRunner(),
+    });
+
+    expect(exactOriginCode).toBe(1);
+    expect(exactOriginErrors.join("\n")).toContain(
+      "AUTH_PUBLIC_ORIGIN must be an exact origin",
     );
   });
 
@@ -1210,6 +1287,9 @@ export default app;
 
     expect(code).toBe(1);
     expect(errors.join("\n")).toContain("AUTH_SECRET is missing remotely");
+    expect(errors.join("\n")).toContain(
+      "npx --package @cf-auth/cli@latest cf-auth rotate-secret --apply --env production",
+    );
     expect(errors.join("\n")).not.toContain("k_dev.");
   });
 

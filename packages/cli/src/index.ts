@@ -287,14 +287,22 @@ async function buildMigrateCommand(
 ): Promise<{ command: string; args: string[] }> {
   const config = await readWrangler(cwd);
   const target = targetMode(parsed);
-  const database = selectD1(config, parsed.flags.env as string | undefined);
+  const envName = parsed.flags.env as string | undefined;
+  if (target.remote && !envName) {
+    if (hasNamedEnvironments(config)) {
+      throw new Error(
+        "Remote migrations require --env when Wrangler config uses named environments.",
+      );
+    }
+    if (config.vars?.AUTH_ENV !== "production") {
+      throw new Error(
+        "Remote migrations without --env require top-level vars.AUTH_ENV=production.",
+      );
+    }
+  }
+  const database = selectD1(config, envName);
   const status = parsed.flags.status ? "list" : "apply";
   const remoteFlag = target.remote ? "--remote" : "--local";
-  if (target.remote && hasNamedEnvironments(config) && !parsed.flags.env) {
-    throw new Error(
-      "Remote migrations require --env when Wrangler config uses named environments.",
-    );
-  }
   return {
     command: "wrangler",
     args: [
@@ -303,9 +311,7 @@ async function buildMigrateCommand(
       status,
       database.database_name,
       remoteFlag,
-      ...(target.remote && parsed.flags.env
-        ? ["--env", String(parsed.flags.env)]
-        : []),
+      ...(target.remote && envName ? ["--env", envName] : []),
     ],
   };
 }
@@ -404,7 +410,10 @@ async function commandDoctor(
     });
   }
   const vars = selected?.vars ?? {};
-  const remoteTarget = vars.AUTH_ENV === "production" || Boolean(envName);
+  const remoteTarget =
+    vars.AUTH_ENV === "preview" ||
+    vars.AUTH_ENV === "production" ||
+    Boolean(envName);
   if (!vars.AUTH_ENV) {
     addCheck({
       id: "auth_env",
@@ -426,11 +435,14 @@ async function commandDoctor(
       message: "AUTH_ENV configured",
     });
   }
-  if ((vars.AUTH_ENV === "production" || envName) && !vars.AUTH_PUBLIC_ORIGIN) {
+  if (remoteTarget && !vars.AUTH_PUBLIC_ORIGIN) {
     addCheck({
       id: "public_origin",
       status: "fail",
-      message: "Production public origin is missing",
+      message:
+        vars.AUTH_ENV === "preview"
+          ? "Preview public origin is missing"
+          : "Production public origin is missing",
       fix: "set AUTH_PUBLIC_ORIGIN=https://example.com",
     });
   } else if (vars.AUTH_PUBLIC_ORIGIN) {
@@ -1006,6 +1018,7 @@ function checkRemoteSecret(
   runner: CommandRunner,
   localOnly: boolean,
 ): DoctorCheck {
+  const envFlag = envName ? ` --env ${envName}` : "";
   return checkRemoteSecretName({
     name: "AUTH_SECRET",
     envName,
@@ -1016,9 +1029,8 @@ function checkRemoteSecret(
       : "AUTH_SECRET is missing remotely",
     unavailableMessage: "Remote AUTH_SECRET could not be verified",
     passMessage: "Remote AUTH_SECRET configured",
-    fix: "npx --package @cf-auth/cli@latest cf-auth rotate-secret --apply --env production",
-    unavailableFix:
-      "run wrangler login, then npx --package @cf-auth/cli@latest cf-auth rotate-secret --apply --env production",
+    fix: `npx --package @cf-auth/cli@latest cf-auth rotate-secret --apply${envFlag}`,
+    unavailableFix: `run wrangler login, then npx --package @cf-auth/cli@latest cf-auth rotate-secret --apply${envFlag}`,
   });
 }
 
@@ -1130,6 +1142,14 @@ function checkCookieConfig(vars: Record<string, string>): DoctorCheck | null {
       fix: "set AUTH_PUBLIC_ORIGIN to an https:// origin",
     };
   }
+  if (!isExactPublicOriginForDoctor(origin, mode)) {
+    return {
+      id: "cookie_config",
+      status: "fail",
+      message: "AUTH_PUBLIC_ORIGIN must be an exact origin",
+      fix: "set AUTH_PUBLIC_ORIGIN to an exact origin such as https://example.com",
+    };
+  }
   try {
     resolveSessionCookie({
       mode,
@@ -1149,6 +1169,26 @@ function checkCookieConfig(vars: Record<string, string>): DoctorCheck | null {
     status: "pass",
     message: "Session cookie configuration is valid",
   };
+}
+
+function isExactPublicOriginForDoctor(
+  value: string,
+  mode: "development" | "preview" | "production",
+): boolean {
+  if (value.includes("*")) return false;
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  if (value !== url.origin) return false;
+  if (url.protocol === "https:") return true;
+  return (
+    mode === "development" &&
+    url.protocol === "http:" &&
+    ["localhost", "127.0.0.1"].includes(url.hostname)
+  );
 }
 
 async function checkPackageVersions(

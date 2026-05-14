@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { access, readdir, readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 
+const rootPackage = JSON.parse(await readFile("package.json", "utf8"));
 const rootLicense = await readFile("LICENSE", "utf8");
 const expectedPackages = new Map([
   ["cf-auth-shim", { name: "cf-auth", bin: "cf-auth" }],
@@ -110,6 +111,7 @@ for (const dir of packageDirs) {
 }
 
 await verifyPackageNamingDocs();
+await verifyRootScripts();
 await verifyCiControls();
 await verifyReleaseControls();
 
@@ -312,6 +314,41 @@ async function verifyCiControls() {
     failures.push(
       ".github/workflows/examples.yml: missing pnpm verify:examples",
     );
+  }
+}
+
+function verifyRootScripts() {
+  for (const script of [
+    "format:check",
+    "lint",
+    "typecheck",
+    "test",
+    "test:workers",
+    "build",
+    "check:package-names",
+    "package:check",
+    "version-matrix:check",
+    "export:deploy-template",
+    "verify:alpha-evidence",
+    "verify:beta-evidence",
+    "verify:deploy-button-evidence",
+    "verify:deploy-template",
+    "verify:docs-coverage",
+    "verify:examples",
+    "verify:migrations",
+    "verify:package-ownership",
+    "verify:security-docs",
+    "verify:security-tracker",
+    "release:gates",
+    "smoke:wrangler-dev",
+    "smoke:cloudflare-production",
+    "smoke:published-quickstart",
+    "smoke:tarballs",
+    "benchmark:password",
+  ]) {
+    if (!rootPackage.scripts?.[script]) {
+      failures.push(`package.json: missing script ${script}`);
+    }
   }
 }
 

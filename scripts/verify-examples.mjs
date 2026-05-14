@@ -4,6 +4,14 @@ import { join } from "node:path";
 
 const rootPackage = JSON.parse(await readFile("package.json", "utf8"));
 const currentVersion = rootPackage.version;
+const rootMigrations = new Map(
+  await Promise.all(
+    ["0001_initial.sql", "0002_indexes.sql"].map(async (file) => [
+      file,
+      await readFile(join("migrations", file), "utf8"),
+    ]),
+  ),
+);
 const dirs = (await readdir("examples", { withFileTypes: true })).filter(
   (entry) => entry.isDirectory(),
 );
@@ -47,6 +55,20 @@ for (const root of ["examples", "templates"]) {
   }
 }
 
+for (const template of ["hono-basic", "worker-basic"]) {
+  const dir = join("templates", template);
+  await requireFile(join(dir, "wrangler.jsonc"));
+  await requireFile(join(dir, ".dev.vars.example"));
+  for (const [file, expected] of rootMigrations) {
+    const actual = await readFile(join(dir, "migrations", file), "utf8").catch(
+      () => null,
+    );
+    if (actual === null) failures.push(`${dir}: missing migrations/${file}`);
+    else if (actual !== expected)
+      failures.push(`${dir}: migrations/${file} differs from root migration`);
+  }
+}
+
 if (failures.length) {
   console.error(failures.join("\n"));
   process.exit(1);
@@ -70,4 +92,12 @@ function renderDependencySection(section) {
         : version,
     ]),
   );
+}
+
+async function requireFile(path) {
+  try {
+    await readFile(path, "utf8");
+  } catch {
+    failures.push(`${path}: missing required template file`);
+  }
 }

@@ -35,6 +35,8 @@ const packageDirs = (await readdir("packages", { withFileTypes: true }))
   .sort();
 
 const failures = [];
+const publishablePackageNames = [];
+let ownershipEvidence;
 for (const expectedDir of expectedPackages.keys()) {
   if (!packageDirs.includes(join("packages", expectedDir))) {
     failures.push(
@@ -66,11 +68,12 @@ for (const dir of packageDirs) {
   if (!pkg.types) failures.push(`${pkg.name}: missing types field`);
   if (!pkg.files?.includes("dist"))
     failures.push(`${pkg.name}: package files must include dist`);
+  if (pkg.private !== true) {
+    publishablePackageNames.push(pkg.name);
+  }
   if (expected?.privateUntilOwnershipConfirmed) {
     if (pkg.private !== true) {
-      failures.push(
-        `${pkg.name}: package must remain private until npm ownership is confirmed`,
-      );
+      await requireOwnershipEvidenceForUnreservedPackage(pkg);
     }
   } else if (pkg.private) {
     failures.push(`${pkg.name}: publishable packages must not be private`);
@@ -168,6 +171,71 @@ function packDryRun(dir, name) {
 function packagePath(value) {
   if (!value) return "";
   return String(value).replace(/^\.\//, "");
+}
+
+async function requireOwnershipEvidenceForUnreservedPackage(pkg) {
+  const evidence = await readOwnershipEvidence();
+  const item = evidence.packagesByName.get(pkg.name);
+  if (!item) {
+    failures.push(
+      `${pkg.name}: docs/package-ownership.json must include ownership evidence before removing private: true`,
+    );
+    return;
+  }
+  if (evidence.reservedByName.has(pkg.name)) {
+    failures.push(
+      `${pkg.name}: docs/package-ownership.json must move this package from reservedPackages to packages before publishing`,
+    );
+  }
+  if (item.registry !== "https://registry.npmjs.org/") {
+    failures.push(
+      `${pkg.name}: docs/package-ownership.json registry must be https://registry.npmjs.org/`,
+    );
+  }
+  if (item.version !== pkg.version) {
+    failures.push(
+      `${pkg.name}: docs/package-ownership.json version must match ${pkg.version}`,
+    );
+  }
+  for (const field of [
+    "ownershipConfirmed",
+    "publisherTwoFactorEnabled",
+    "provenancePublish",
+  ]) {
+    if (item[field] !== true) {
+      failures.push(
+        `${pkg.name}: docs/package-ownership.json ${field} must be true before publishing`,
+      );
+    }
+  }
+}
+
+async function readOwnershipEvidence() {
+  if (ownershipEvidence) return ownershipEvidence;
+  let parsed = {};
+  try {
+    parsed = JSON.parse(await readFile("docs/package-ownership.json", "utf8"));
+  } catch {
+    failures.push(
+      "docs/package-ownership.json: required before publishing reserved packages",
+    );
+  }
+  const packagesByName = new Map();
+  const reservedByName = new Map();
+  for (const item of Array.isArray(parsed.packages) ? parsed.packages : []) {
+    if (item && typeof item.name === "string") {
+      packagesByName.set(item.name, item);
+    }
+  }
+  for (const item of Array.isArray(parsed.reservedPackages)
+    ? parsed.reservedPackages
+    : []) {
+    if (item && typeof item.name === "string") {
+      reservedByName.set(item.name, item);
+    }
+  }
+  ownershipEvidence = { packagesByName, reservedByName };
+  return ownershipEvidence;
 }
 
 async function verifyPackageNamingDocs() {
@@ -485,10 +553,7 @@ async function verifyReleaseControls() {
   if (changesets.access !== "public") {
     failures.push(".changeset/config.json: access must be public");
   }
-  const expectedPackageNames = [...expectedPackages.values()]
-    .filter((pkg) => !pkg.privateUntilOwnershipConfirmed)
-    .map(({ name }) => name)
-    .sort();
+  const expectedPackageNames = [...publishablePackageNames].sort();
   const fixedGroups = Array.isArray(changesets.fixed) ? changesets.fixed : [];
   const hasExpectedFixedGroup = fixedGroups.some(
     (group) =>

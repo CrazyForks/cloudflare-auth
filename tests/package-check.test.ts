@@ -93,7 +93,64 @@ describe("package checks", () => {
       ".github/workflows/release.yml: missing NODE_AUTH_TOKEN",
     );
   });
+
+  it("rejects publishing reserved package shims without ownership evidence", async () => {
+    const root = await packageCheckFixture();
+    await updatePackageJson(root, "packages/cf-auth-shim/package.json", {
+      privateValue: false,
+      version: "0.1.0-beta.0",
+    });
+    await writeChangesetFixedGroup(root, [
+      ...defaultPublishablePackages,
+      "cf-auth",
+    ]);
+    const result = runPackageCheck(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "docs/package-ownership.json: required before publishing reserved packages",
+    );
+    expect(result.stderr).toContain(
+      "cf-auth: docs/package-ownership.json must include ownership evidence before removing private: true",
+    );
+  });
+
+  it("allows reserved package shims to publish after ownership evidence", async () => {
+    const root = await packageCheckFixture();
+    await updatePackageJson(root, "packages/cf-auth-shim/package.json", {
+      privateValue: false,
+      version: "0.1.0-beta.0",
+    });
+    await updatePackageJson(
+      root,
+      "packages/create-cloudflare-auth/package.json",
+      {
+        privateValue: false,
+        version: "0.1.0-beta.0",
+      },
+    );
+    await writeOwnershipEvidence(root, ["cf-auth", "create-cloudflare-auth"]);
+    await writeChangesetFixedGroup(root, [
+      ...defaultPublishablePackages,
+      "cf-auth",
+      "create-cloudflare-auth",
+    ]);
+    const result = runPackageCheck(root);
+
+    expect(result.status).toBe(0);
+    expect(result.stderr).toBe("");
+  });
 });
+
+const defaultPublishablePackages = [
+  "@cf-auth/cli",
+  "@cf-auth/client",
+  "@cf-auth/core",
+  "@cf-auth/email-cloudflare",
+  "@cf-auth/hono",
+  "@cf-auth/testing",
+  "@cf-auth/worker",
+];
 
 async function packageCheckFixture() {
   const sourceRoot = process.cwd();
@@ -124,6 +181,49 @@ async function replaceFixtureText(
     throw new Error(`${path}: missing fixture text ${search}`);
   }
   await writeFile(target, text.replace(search, replacement));
+}
+
+async function updatePackageJson(
+  root: string,
+  path: string,
+  options: { privateValue: boolean; version: string },
+) {
+  const target = join(root, path);
+  const pkg = JSON.parse(await readFile(target, "utf8"));
+  pkg.private = options.privateValue;
+  pkg.version = options.version;
+  await writeFile(target, `${JSON.stringify(pkg, null, 2)}\n`);
+}
+
+async function writeChangesetFixedGroup(root: string, packageNames: string[]) {
+  const target = join(root, ".changeset", "config.json");
+  const config = JSON.parse(await readFile(target, "utf8"));
+  config.fixed = [[...packageNames].sort()];
+  await writeFile(target, `${JSON.stringify(config, null, 2)}\n`);
+}
+
+async function writeOwnershipEvidence(root: string, packageNames: string[]) {
+  await writeFile(
+    join(root, "docs", "package-ownership.json"),
+    `${JSON.stringify(
+      {
+        schemaVersion: 1,
+        verifiedAt: "2026-05-14T00:00:00.000Z",
+        verifiedBy: "release-reviewer",
+        packages: packageNames.map((name) => ({
+          name,
+          registry: "https://registry.npmjs.org/",
+          version: "0.1.0-beta.0",
+          ownershipConfirmed: true,
+          publisherTwoFactorEnabled: true,
+          provenancePublish: true,
+        })),
+        reservedPackages: [],
+      },
+      null,
+      2,
+    )}\n`,
+  );
 }
 
 function runPackageCheck(cwd: string) {

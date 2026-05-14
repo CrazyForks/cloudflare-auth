@@ -42,6 +42,19 @@ describe("release gates", () => {
     );
   });
 
+  it("requires alpha evidence when packages enter 1.0", async () => {
+    const root = await releaseGateFixture({
+      alphaEvidence: false,
+      deployButtonEvidence: true,
+      packageVersion: "1.0.0",
+      stableEvidence: true,
+    });
+    const result = runReleaseGates(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("docs/alpha-evidence.json");
+  });
+
   it("accepts stable release gates when 1.0 artifacts are present", async () => {
     const root = await releaseGateFixture({
       deployButtonEvidence: true,
@@ -59,6 +72,7 @@ describe("release gates", () => {
 });
 
 interface ReleaseGateFixtureOptions {
+  alphaEvidence?: boolean;
   deployButtonEvidence: boolean;
   packageVersion?: string;
   stableEvidence?: boolean;
@@ -219,11 +233,13 @@ async function releaseGateFixture(options: ReleaseGateFixtureOptions) {
     "docs/package-ownership.json",
     '{"ownershipConfirmed": true}\n',
   );
-  await writeFixtureFile(
-    root,
-    "docs/alpha-evidence.json",
-    '{"localSetups": [], "productionDeploys": []}\n',
-  );
+  if (options.alphaEvidence ?? true) {
+    await writeFixtureFile(
+      root,
+      "docs/alpha-evidence.json",
+      '{"localSetups": [], "productionDeploys": []}\n',
+    );
+  }
   if (options.deployButtonEvidence) {
     await writeFixtureFile(
       root,

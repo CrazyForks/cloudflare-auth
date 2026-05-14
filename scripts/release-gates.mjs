@@ -176,7 +176,7 @@ if (publishedReleasePackages.length > 0) {
   await requireText("docs/package-ownership.json", '"ownershipConfirmed"');
   await requirePackageChangelogs(publishedReleasePackages);
 }
-if (betaPackages.length > 0) {
+if (betaOrStablePackages.length > 0) {
   await requireFile("docs/alpha-evidence.json");
   await requireText("docs/alpha-evidence.json", '"localSetups"');
   await requireText("docs/alpha-evidence.json", '"productionDeploys"');

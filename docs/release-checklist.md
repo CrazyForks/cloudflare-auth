@@ -29,7 +29,7 @@
 ## Public Beta
 
 - beta packages published from a dry-run artifact
-- quickstart passes in CI using published beta versions
+- published quickstart smoke workflow passes using the beta package tag
 - maintainer manually verifies the quickstart
 - opt-in Wrangler dev smoke workflow passes for at least one Worker example
 - opt-in Cloudflare production smoke workflow passes against the dedicated fixture

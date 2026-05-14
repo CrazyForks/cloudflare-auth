@@ -1,0 +1,200 @@
+import { spawn, spawnSync } from "node:child_process";
+import { mkdtemp, readFile } from "node:fs/promises";
+import { createServer } from "node:net";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+const root = process.cwd();
+const packageTag =
+  process.env.CF_AUTH_PUBLISHED_QUICKSTART_PACKAGE_TAG?.trim() || "beta";
+const temp = await mkdtemp(join(tmpdir(), "cf-auth-published-quickstart-"));
+const appDir = join(temp, "app");
+const port = await findOpenPort();
+const origin = `http://127.0.0.1:${port}`;
+const authSecret = `k_smoke.${"A".repeat(43)}`;
+
+runCfAuth(["init", appDir, "--template", "hono-basic", "--yes"]);
+await assertNoWorkspaceDependencies(appDir);
+
+run("pnpm", ["--dir", appDir, "install", "--no-frozen-lockfile"]);
+run("pnpm", ["--dir", appDir, "build"]);
+runCfAuth(["migrate", "--local"], { cwd: appDir });
+
+const dev = spawn(
+  "pnpm",
+  [
+    "--dir",
+    appDir,
+    "exec",
+    "wrangler",
+    "dev",
+    "--local",
+    "--ip",
+    "127.0.0.1",
+    "--port",
+    String(port),
+    "--var",
+    `AUTH_SECRET:${authSecret}`,
+    "--var",
+    `AUTH_PUBLIC_ORIGIN:${origin}`,
+    "--show-interactive-dev-session=false",
+    "--log-level",
+    "error",
+  ],
+  {
+    cwd: root,
+    env: { ...process.env, CI: "true" },
+    stdio: ["ignore", "pipe", "pipe"],
+  },
+);
+
+let output = "";
+dev.stdout.on("data", (chunk) => {
+  output += chunk.toString();
+});
+dev.stderr.on("data", (chunk) => {
+  output += chunk.toString();
+});
+
+try {
+  await waitForHttp(origin);
+  await exerciseAuth(origin);
+  console.log(
+    `published quickstart smoke passed: @cf-auth/cli@${packageTag} in ${appDir}`,
+  );
+} finally {
+  await stopDevServer();
+}
+
+async function assertNoWorkspaceDependencies(appDir) {
+  const pkg = JSON.parse(await readFile(join(appDir, "package.json"), "utf8"));
+  const sections = [
+    "dependencies",
+    "devDependencies",
+    "peerDependencies",
+    "optionalDependencies",
+  ];
+  const workspaceDeps = [];
+  for (const section of sections) {
+    for (const [name, version] of Object.entries(pkg[section] ?? {})) {
+      if (String(version).startsWith("workspace:")) {
+        workspaceDeps.push(`${section}:${name}`);
+      }
+    }
+  }
+  if (workspaceDeps.length > 0) {
+    throw new Error(
+      `Generated quickstart app contains workspace dependencies: ${workspaceDeps.join(", ")}`,
+    );
+  }
+}
+
+function runCfAuth(args, options = {}) {
+  return run(
+    "npx",
+    ["--yes", "--package", `@cf-auth/cli@${packageTag}`, "cf-auth", ...args],
+    options,
+  );
+}
+
+function run(command, args, options = {}) {
+  const result = spawnSync(command, args, {
+    cwd: options.cwd ?? root,
+    encoding: "utf8",
+    env: { ...process.env, CI: "true" },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  if (result.status !== 0) {
+    process.stdout.write(result.stdout);
+    process.stderr.write(result.stderr);
+    throw new Error(`${command} ${args.join(" ")} failed`);
+  }
+  return result;
+}
+
+async function findOpenPort() {
+  return new Promise((resolve, reject) => {
+    const server = createServer();
+    server.on("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      server.close(() => {
+        if (address && typeof address === "object") resolve(address.port);
+        else reject(new Error("Could not allocate local port"));
+      });
+    });
+  });
+}
+
+async function waitForHttp(originUrl) {
+  const deadline = Date.now() + 30_000;
+  let lastError;
+  while (Date.now() < deadline) {
+    if (dev.exitCode !== null) {
+      throw new Error(`wrangler dev exited early:\n${output}`);
+    }
+    try {
+      const response = await fetch(originUrl);
+      if (response.ok) return;
+    } catch (error) {
+      lastError = error;
+    }
+    await delay(250);
+  }
+  throw new Error(
+    `Timed out waiting for wrangler dev: ${
+      lastError instanceof Error ? lastError.message : String(lastError)
+    }\n${output}`,
+  );
+}
+
+async function exerciseAuth(originUrl) {
+  const email = `smoke-${Date.now()}@example.com`;
+  const password = "correct horse battery staple";
+  const signup = await jsonPost(`${originUrl}/auth/signup`, {
+    email,
+    password,
+  });
+  if (signup.status !== 200) {
+    throw new Error(`signup failed: ${signup.status} ${await signup.text()}`);
+  }
+  const signupCookie = signup.headers.get("Set-Cookie") ?? "";
+  if (!signupCookie.includes("cfauth-session=")) {
+    throw new Error("signup did not set a session cookie");
+  }
+
+  const login = await jsonPost(`${originUrl}/auth/login`, {
+    identifier: email,
+    password,
+  });
+  if (login.status !== 200) {
+    throw new Error(`login failed: ${login.status} ${await login.text()}`);
+  }
+  const loginCookie = login.headers.get("Set-Cookie") ?? "";
+  if (!loginCookie.includes("cfauth-session=")) {
+    throw new Error("login did not set a session cookie");
+  }
+}
+
+function jsonPost(url, body) {
+  return fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Origin: new URL(url).origin,
+    },
+    body: JSON.stringify(body),
+  });
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function stopDevServer() {
+  if (dev.exitCode !== null) return;
+  await new Promise((resolve) => {
+    dev.once("close", resolve);
+    dev.kill();
+  });
+}

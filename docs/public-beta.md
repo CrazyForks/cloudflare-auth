@@ -15,6 +15,12 @@ npx --package @cf-auth/cli@beta cf-auth deploy --env production
 ```
 
 The checked-in opt-in workflow for this gate is
+`.github/workflows/published-quickstart-smoke.yml`. It runs
+`npx --package @cf-auth/cli@<package_tag> cf-auth init` from a clean temporary
+directory, verifies the generated app has no `workspace:*` dependencies, builds
+it, applies local migrations, starts `wrangler dev`, and exercises signup/login.
+
+The checked-in opt-in workflow for the production account gate is
 `.github/workflows/cloudflare-production-smoke.yml`. It requires a dedicated
 Worker/D1 fixture, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`,
 `CF_AUTH_PRODUCTION_SMOKE_DATABASE_ID`, `CF_AUTH_PRODUCTION_SMOKE_ORIGIN`, and

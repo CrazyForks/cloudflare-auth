@@ -1,0 +1,27 @@
+name: Published Quickstart Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      package_tag:
+        description: "npm dist-tag or version to smoke, for example beta."
+        required: true
+        default: beta
+        type: string
+
+jobs:
+  published-quickstart:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 11.1.1
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22.12.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm smoke:published-quickstart
+        env:
+          CF_AUTH_PUBLISHED_QUICKSTART_PACKAGE_TAG: ${{ inputs.package_tag }}

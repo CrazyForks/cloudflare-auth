@@ -252,6 +252,40 @@ process.exit(1);
       "stable gates checked for @cf-auth/cli@1.0.0",
     );
   });
+
+  it("rejects malformed stable beta upgrade fixture manifests", async () => {
+    const root = await releaseGateFixture({
+      deployButtonEvidence: true,
+      packageVersion: "1.0.0",
+      stableEvidence: true,
+    });
+    await writeFixtureFile(
+      root,
+      "tests/fixtures/upgrade/beta-schema-versions.json",
+      JSON.stringify(
+        {
+          schemaVersion: 1,
+          betaVersions: [
+            { version: "1.0.0-beta.0" },
+            {
+              version: "not-a-version",
+              schemaVersion: 1,
+              fixture: "../outside",
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+    );
+    const result = runReleaseGates(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("betaVersions[0].schemaVersion");
+    expect(result.stderr).toContain("betaVersions[0].fixture");
+    expect(result.stderr).toContain("betaVersions[1].version");
+    expect(result.stderr).toContain("betaVersions[1].fixture");
+  });
 });
 
 interface ReleaseGateFixtureOptions {
@@ -977,7 +1011,26 @@ async function writeStableEvidence(root: string) {
   await writeFixtureFile(
     root,
     "tests/fixtures/upgrade/beta-schema-versions.json",
-    '{"betaVersions": [{"version": "1.0.0-beta.0"}]}\n',
+    JSON.stringify({
+      schemaVersion: 1,
+      betaVersions: [
+        {
+          version: "1.0.0-beta.0",
+          schemaVersion: 1,
+          fixture: "beta-1",
+        },
+      ],
+    }),
+  );
+  await writeFixtureFile(
+    root,
+    "tests/fixtures/upgrade/beta-1/schema.sql",
+    "-- beta schema fixture\n",
+  );
+  await writeFixtureFile(
+    root,
+    "tests/fixtures/upgrade/beta-1/expected.json",
+    "{}\n",
   );
   await writeFixtureFile(root, "tests/upgrade.test.ts", "upgrade tests\n");
 }

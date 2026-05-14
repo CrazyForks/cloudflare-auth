@@ -359,6 +359,36 @@ async function requireUpgradeFixtures() {
       "tests/fixtures/upgrade/beta-schema-versions.json: stable 1.0 release requires beta schema upgrade fixtures",
     );
   }
+  for (const [index, beta] of betaVersions.entries()) {
+    const path = `tests/fixtures/upgrade/beta-schema-versions.json: betaVersions[${index}]`;
+    if (!beta || typeof beta !== "object" || Array.isArray(beta)) {
+      failures.push(`${path} must be an object`);
+      continue;
+    }
+    if (
+      typeof beta.version !== "string" ||
+      !/^\d+\.\d+\.\d+(?:-[\w.-]+)?$/u.test(beta.version)
+    ) {
+      failures.push(`${path}.version must be a package version string`);
+    }
+    if (!Number.isSafeInteger(beta.schemaVersion) || beta.schemaVersion <= 0) {
+      failures.push(`${path}.schemaVersion must be a positive integer`);
+    }
+    if (
+      typeof beta.fixture !== "string" ||
+      !/^[A-Za-z0-9][A-Za-z0-9._-]*$/u.test(beta.fixture) ||
+      beta.fixture.includes("..")
+    ) {
+      failures.push(`${path}.fixture must be a safe fixture directory name`);
+      continue;
+    }
+    await requireFile(
+      join("tests", "fixtures", "upgrade", beta.fixture, "schema.sql"),
+    );
+    await requireFile(
+      join("tests", "fixtures", "upgrade", beta.fixture, "expected.json"),
+    );
+  }
 }
 
 async function requirePackageChangelogs(releasePackages) {

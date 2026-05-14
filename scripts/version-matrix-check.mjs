@@ -1,9 +1,36 @@
 import { readFile } from "node:fs/promises";
 
-const matrix = JSON.parse(
-  await readFile("scripts/version-matrix.json", "utf8"),
-);
-const pkg = JSON.parse(await readFile("package.json", "utf8"));
+import { isJsonObject } from "./evidence-validation.mjs";
+
+const failures = [];
+const matrix = await readJsonObject("scripts/version-matrix.json");
+const pkg = await readJsonObject("package.json");
+const requiredMatrixFields = [
+  "node",
+  "pnpm",
+  "typescript",
+  "wrangler",
+  "hono",
+  "tsup",
+  "vitest",
+  "zod",
+  "changesets",
+  "workersCompatibilityDate",
+  "workersCompatibilityDateFloor",
+];
+
+if (matrix) {
+  for (const field of requiredMatrixFields) {
+    if (typeof matrix[field] !== "string" || matrix[field].trim() === "") {
+      failures.push(`scripts/version-matrix.json: ${field} must be a string`);
+    }
+  }
+}
+
+if (!matrix || !pkg || failures.length > 0) {
+  fail();
+}
+
 const required = {
   packageManager: `pnpm@${matrix.pnpm}`,
   typescript: matrix.typescript,
@@ -15,7 +42,6 @@ const required = {
   "@changesets/cli": matrix.changesets,
 };
 
-const failures = [];
 if (pkg.packageManager !== required.packageManager) {
   failures.push(`packageManager must be ${required.packageManager}`);
 }
@@ -104,6 +130,25 @@ await requireText(
 );
 
 if (failures.length) {
+  fail();
+}
+
+async function readJsonObject(path) {
+  let parsed;
+  try {
+    parsed = JSON.parse(await readFile(path, "utf8"));
+  } catch {
+    failures.push(`${path}: must be valid JSON`);
+    return null;
+  }
+  if (!isJsonObject(parsed)) {
+    failures.push(`${path}: top-level JSON value must be an object`);
+    return null;
+  }
+  return parsed;
+}
+
+function fail() {
   console.error(failures.join("\n"));
   process.exit(1);
 }

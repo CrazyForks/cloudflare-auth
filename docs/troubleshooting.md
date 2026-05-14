@@ -6,6 +6,7 @@
 | Wrangler unavailable or wrong version          | Run `pnpm install`, `npx wrangler --version`, and rerun `npx --package @cf-auth/cli@latest cf-auth doctor`.                                                          |
 | Cloudflare login or account mismatch           | Run `wrangler login`, then set Wrangler `account_id` to the intended authenticated account.                                                                          |
 | Missing D1 binding                             | Run `npx --package @cf-auth/cli@latest cf-auth init --repair` or add `AUTH_DB` to `wrangler.jsonc`.                                                                  |
+| Missing production D1 database ID              | Set `AUTH_DB.database_id` in the selected Wrangler environment to the real D1 database UUID.                                                                         |
 | Need support diagnostics                       | Run `npx --package @cf-auth/cli@latest cf-auth doctor --report --env production` and attach the redaction-safe JSON.                                                 |
 | Migrations not applied                         | Run `npx --package @cf-auth/cli@latest cf-auth migrate --local` or `npx --package @cf-auth/cli@latest cf-auth migrate --remote --env production`.                    |
 | Schema version mismatch                        | Run migrations and inspect `auth_schema_migrations`.                                                                                                                 |

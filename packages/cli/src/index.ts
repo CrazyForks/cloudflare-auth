@@ -384,6 +384,11 @@ async function commandDoctor(
   for (const check of checkWorkersCompatibility(config, selected ?? config)) {
     addCheck(check);
   }
+  const vars = selected?.vars ?? {};
+  const remoteTarget =
+    vars.AUTH_ENV === "preview" ||
+    vars.AUTH_ENV === "production" ||
+    Boolean(envName);
   d1 =
     selected?.d1_databases?.find((item) => item.binding === "AUTH_DB") ?? null;
   if (!d1) {
@@ -393,7 +398,21 @@ async function commandDoctor(
       message: "D1 binding AUTH_DB is missing",
       fix: "npx --package @cf-auth/cli@latest cf-auth init --repair or add d1_databases binding AUTH_DB",
     });
-  } else if (d1.database_id?.startsWith("REPLACE_")) {
+  } else if (!d1.database_name?.trim()) {
+    addCheck({
+      id: "d1_database_name",
+      status: "fail",
+      message: "D1 database_name is missing for AUTH_DB",
+      fix: "set database_name for the AUTH_DB D1 binding",
+    });
+  } else if (remoteTarget && !d1.database_id?.trim()) {
+    addCheck({
+      id: "d1_database_id",
+      status: "fail",
+      message: "D1 database_id is missing for remote target",
+      fix: "set the real D1 database_id for AUTH_DB in the selected Wrangler environment",
+    });
+  } else if (isPlaceholderD1DatabaseId(d1.database_id)) {
     addCheck({
       id: "d1_database_id",
       status: "fail",
@@ -422,11 +441,6 @@ async function commandDoctor(
       message: "Local migration files found",
     });
   }
-  const vars = selected?.vars ?? {};
-  const remoteTarget =
-    vars.AUTH_ENV === "preview" ||
-    vars.AUTH_ENV === "production" ||
-    Boolean(envName);
   if (!vars.AUTH_ENV) {
     addCheck({
       id: "auth_env",
@@ -477,7 +491,7 @@ async function commandDoctor(
     await checkPasswordBenchmark(authSource, remoteTarget, passwordBenchmark),
   );
   if (remoteTarget) {
-    addCheck(checkCloudflareAccount(cwd, runner, config));
+    addCheck(checkCloudflareAccount(cwd, runner, selected ?? config, config));
   }
   if (d1 && localMigrationVersions.length > 0) {
     const migrationCheck = checkD1MigrationState({
@@ -714,10 +728,16 @@ function isCompatibilityDate(value: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/u.test(value);
 }
 
+function isPlaceholderD1DatabaseId(value: string | undefined): boolean {
+  const normalized = value?.trim().toUpperCase();
+  return Boolean(normalized && normalized.startsWith("REPLACE_"));
+}
+
 function checkCloudflareAccount(
   cwd: string,
   runner: CommandRunner,
-  config: WranglerConfig,
+  selected: WranglerConfig,
+  root: WranglerConfig,
 ): DoctorCheck {
   const result = runner("wrangler", ["whoami", "--json"], { cwd });
   if (result.status !== 0) {
@@ -730,7 +750,8 @@ function checkCloudflareAccount(
   }
   const account = parseWhoamiResult(result.stdout);
   if (!account.ok) return account.check;
-  const configuredAccount = config.account_id?.trim();
+  const configuredAccount =
+    selected.account_id?.trim() || root.account_id?.trim();
   if (configuredAccount) {
     const found = account.accounts.some(
       (item) => item.id === configuredAccount,

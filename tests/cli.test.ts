@@ -798,6 +798,31 @@ describe("CLI MVP", () => {
     );
   });
 
+  it("doctor validates environment-specific Cloudflare account selections", async () => {
+    const cwd = await tempDir();
+    await writeWrangler(cwd);
+    const text = await readFile(join(cwd, "wrangler.jsonc"), "utf8");
+    const config = JSON.parse(text) as {
+      account_id?: string;
+      env: { production: { account_id?: string } };
+    };
+    config.account_id = "acct_prod";
+    config.env.production.account_id = "missing-account";
+    await writeFile(join(cwd, "wrangler.jsonc"), JSON.stringify(config));
+    const errors: string[] = [];
+
+    const code = await runCli(["doctor", "--env", "production"], {
+      cwd,
+      stderr: (line) => errors.push(line),
+      runCommand: remoteSecretRunner([{ id: "acct_prod" }]),
+    });
+
+    expect(code).toBe(1);
+    expect(errors.join("\n")).toContain(
+      "Wrangler account_id is not available to the authenticated user",
+    );
+  });
+
   it("doctor warns when production account selection is implicit", async () => {
     const cwd = await tempDir();
     await writeWrangler(cwd);
@@ -835,6 +860,33 @@ describe("CLI MVP", () => {
     expect(code).toBe(1);
     expect(errors.join("\n")).toContain(
       "Cloudflare Email binding AUTH_EMAIL is missing",
+    );
+  });
+
+  it("doctor rejects remote D1 bindings without database ids", async () => {
+    const cwd = await tempDir();
+    await writeWrangler(cwd);
+    const text = await readFile(join(cwd, "wrangler.jsonc"), "utf8");
+    const config = JSON.parse(text) as {
+      env: {
+        production: {
+          d1_databases: Array<{ binding: string; database_id?: string }>;
+        };
+      };
+    };
+    delete config.env.production.d1_databases[0]?.database_id;
+    await writeFile(join(cwd, "wrangler.jsonc"), JSON.stringify(config));
+    const errors: string[] = [];
+
+    const code = await runCli(["doctor", "--env", "production"], {
+      cwd,
+      stderr: (line) => errors.push(line),
+      runCommand: remoteSecretRunner(),
+    });
+
+    expect(code).toBe(1);
+    expect(errors.join("\n")).toContain(
+      "D1 database_id is missing for remote target",
     );
   });
 

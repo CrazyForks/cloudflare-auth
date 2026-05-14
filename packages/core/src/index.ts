@@ -8,6 +8,13 @@ import {
 import { isIP } from "node:net";
 export const corePackageName = "@cf-auth/core";
 
+const sensitiveFieldNamePattern = String.raw`(?:password(?:[_-]?hash)?|secret(?:[_-]?material)?|cookie|authorization|api[_-]?key|auth[_-]?token|session[_-]?token|(?:raw[_-]?)?token(?:[_-]?hash)?|AUTH_SECRET|AUTH_SECRET_PREVIOUS|(?:normalized[_-]?)?email|(?:normalized[_-]?)?identifier|(?:normalized[_-]?)?username|user[_-]?agent)`;
+const sensitiveFieldBoundaryPattern = String.raw`(?:${sensitiveFieldNamePattern}|CF-Connecting-IP|remote[_-]?ip|client[_-]?ip)`;
+const sensitiveColonFieldPattern = new RegExp(
+  String.raw`(^|[\s,;&])(${sensitiveFieldNamePattern}:\s*)(?:"[^"]*"|'[^']*'|[^\r\n,;&]*?)(?=\s+${sensitiveFieldBoundaryPattern}\s*[:=]|[\r\n,;&]|$)`,
+  "giu",
+);
+
 export function redactLogValue(value: string): string {
   const redacted = value
     .replace(
@@ -26,6 +33,7 @@ export function redactLogValue(value: string): string {
       /\b((?:password(?:[_-]?hash)?|secret(?:[_-]?material)?|cookie|authorization|api[_-]?key|auth[_-]?token|session[_-]?token|(?:raw[_-]?)?token(?:[_-]?hash)?|AUTH_SECRET|AUTH_SECRET_PREVIOUS)=)[^\s,;&"']+/giu,
       "$1[REDACTED]",
     )
+    .replace(sensitiveColonFieldPattern, "$1$2[REDACTED]")
     .replace(/\b(Bearer\s+)[A-Za-z0-9._~+/-]+=*/giu, "$1[REDACTED]")
     .replace(
       /\b((?:__Host-|__Secure-)?cfauth-session=)[^\s;,]+/giu,

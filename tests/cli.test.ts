@@ -1167,6 +1167,8 @@ export default app;
     const userOutput: string[] = [];
     const tokenHash = `hmac-sha256$v=1$kid=k1$purpose=session$hash=${"B".repeat(43)}`;
     const passwordHash = `scrypt$v=1$n=16384$r=8$p=1$keylen=32$maxmem=67108864$salt=${"C".repeat(22)}$hash=${"D".repeat(43)}`;
+    const colonToken = `cfauth.magic.k1.${"E".repeat(43)}`;
+    const secretMaterial = "F".repeat(43);
     const disableCode = await runCli(
       ["users", "disable", "person@example.com", "--local"],
       {
@@ -1176,7 +1178,7 @@ export default app;
           userCalls.push({ args, sql: args.at(-1) ?? "" });
           return {
             status: 0,
-            stdout: `disabled token=cfauth.magic.k1.${"A".repeat(43)} identifier=raw-identifier username=raw-user token_hash=${tokenHash} passwordHash=${passwordHash} user_agent="Mozilla/5.0 Secret Browser" leaked ${tokenHash} ${passwordHash} person@example.com 2001:db8::1 __Host-cfauth-session=raw-cookie`,
+            stdout: `disabled token=cfauth.magic.k1.${"A".repeat(43)} identifier=raw-identifier username=raw-user token_hash=${tokenHash} passwordHash=${passwordHash} user_agent="Mozilla/5.0 Secret Browser" leaked ${tokenHash} ${passwordHash} person@example.com 2001:db8::1 __Host-cfauth-session=raw-cookie; token: ${colonToken} identifier: colon-identifier username: colon-user password: correct horse battery staple User-Agent: Mozilla/5.0 Colon Browser CF-Connecting-IP: [2001:db8::1] AUTH_SECRET:k1.${secretMaterial}`,
             stderr: "",
           };
         },
@@ -1203,13 +1205,24 @@ export default app;
     expect(userOutput.join("\n")).not.toContain("cfauth.magic");
     expect(userOutput.join("\n")).not.toContain("raw-identifier");
     expect(userOutput.join("\n")).not.toContain("raw-user");
+    expect(userOutput.join("\n")).not.toContain(colonToken);
+    expect(userOutput.join("\n")).not.toContain("colon-identifier");
+    expect(userOutput.join("\n")).not.toContain("colon-user");
+    expect(userOutput.join("\n")).not.toContain("correct horse battery staple");
+    expect(userOutput.join("\n")).not.toContain(secretMaterial);
     expect(userOutput.join("\n")).not.toContain(tokenHash);
     expect(userOutput.join("\n")).not.toContain(passwordHash);
     expect(userOutput.join("\n")).not.toContain("hmac-sha256");
     expect(userOutput.join("\n")).not.toContain("scrypt$v=1");
     expect(userOutput.join("\n")).not.toContain("Secret Browser");
+    expect(userOutput.join("\n")).not.toContain("Colon Browser");
     expect(userOutput.join("\n")).toContain("identifier=[REDACTED]");
     expect(userOutput.join("\n")).toContain("username=[REDACTED]");
+    expect(userOutput.join("\n")).toContain("identifier: [REDACTED]");
+    expect(userOutput.join("\n")).toContain("username: [REDACTED]");
+    expect(userOutput.join("\n")).toContain("password: [REDACTED]");
+    expect(userOutput.join("\n")).toContain("User-Agent: [REDACTED]");
+    expect(userOutput.join("\n")).toContain("AUTH_SECRET:[REDACTED]");
     expect(userOutput.join("\n")).toContain("[REDACTED_EMAIL]");
     expect(userOutput.join("\n")).toContain("[REDACTED_IP]");
     expect(userOutput.join("\n")).toContain("user_agent=[REDACTED]");

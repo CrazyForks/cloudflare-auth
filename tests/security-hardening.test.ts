@@ -232,13 +232,14 @@ describe("security hardening helpers", () => {
   it("redacts sensitive values from API error messages", async () => {
     const rawToken = `cfauth.magic.k1.${"A".repeat(43)}`;
     const secretMaterial = "B".repeat(43);
+    const previousSecretMaterial = "C".repeat(43);
     const required = await setup({
       turnstile: {
         mode: "required",
         endpoints: ["magic_link_request"],
         verify: async ({ token }) => {
           throw new Error(
-            `verifier failed token=${token} identifier=raw-identifier username=raw-user email=person@example.com remoteIp=2001:db8::1 userAgent="Mozilla/5.0 Secret Browser" AUTH_SECRET=k1.${secretMaterial}`,
+            `verifier failed token=${token} identifier=raw-identifier username=raw-user email=person@example.com remoteIp=2001:db8::1 userAgent="Mozilla/5.0 Secret Browser" AUTH_SECRET=k1.${secretMaterial}; token: ${token} identifier: colon-identifier username: colon-user User-Agent: Mozilla/5.0 Colon Browser CF-Connecting-IP: [2001:db8::1] AUTH_SECRET_PREVIOUS: k0.${previousSecretMaterial}`,
           );
         },
       },
@@ -260,13 +261,22 @@ describe("security hardening helpers", () => {
     expect(body).toContain("AUTH_SECRET=[REDACTED]");
     expect(body).toContain("identifier=[REDACTED]");
     expect(body).toContain("username=[REDACTED]");
+    expect(body).toContain("token: [REDACTED]");
+    expect(body).toContain("identifier: [REDACTED]");
+    expect(body).toContain("username: [REDACTED]");
+    expect(body).toContain("User-Agent: [REDACTED]");
+    expect(body).toContain("AUTH_SECRET_PREVIOUS: [REDACTED]");
     expect(body).not.toContain(rawToken);
     expect(body).not.toContain("raw-identifier");
     expect(body).not.toContain("raw-user");
+    expect(body).not.toContain("colon-identifier");
+    expect(body).not.toContain("colon-user");
     expect(body).not.toContain("person@example.com");
     expect(body).not.toContain("2001:db8::1");
     expect(body).not.toContain("Secret Browser");
+    expect(body).not.toContain("Colon Browser");
     expect(body).not.toContain(secretMaterial);
+    expect(body).not.toContain(previousSecretMaterial);
     expect(body).toContain("[REDACTED_IP]");
     expect(body).toContain("userAgent=[REDACTED]");
   });
@@ -356,6 +366,29 @@ describe("security hardening helpers", () => {
     expect(redacted).not.toContain(rawToken);
     expect(redacted).not.toContain("B".repeat(43));
     expect(redacted).not.toContain("C".repeat(43));
+  });
+
+  it("redacts colon-separated sensitive log fields", () => {
+    const rawToken = `cfauth.magic.k1.${"A".repeat(43)}`;
+    const secretMaterial = "B".repeat(43);
+    const redacted = redactLogValue(
+      `AUTH_SECRET:k1.${secretMaterial} token: ${rawToken} identifier: raw-identifier username: raw-user password: correct horse battery staple User-Agent: Mozilla/5.0 Secret Browser CF-Connecting-IP: [2001:db8::1]`,
+    );
+
+    expect(redacted).toContain("AUTH_SECRET:[REDACTED]");
+    expect(redacted).toContain("token: [REDACTED]");
+    expect(redacted).toContain("identifier: [REDACTED]");
+    expect(redacted).toContain("username: [REDACTED]");
+    expect(redacted).toContain("password: [REDACTED]");
+    expect(redacted).toContain("User-Agent: [REDACTED]");
+    expect(redacted).toContain("[REDACTED_IP]");
+    expect(redacted).not.toContain(rawToken);
+    expect(redacted).not.toContain(secretMaterial);
+    expect(redacted).not.toContain("raw-identifier");
+    expect(redacted).not.toContain("raw-user");
+    expect(redacted).not.toContain("correct horse battery staple");
+    expect(redacted).not.toContain("Secret Browser");
+    expect(redacted).not.toContain("2001:db8::1");
   });
 
   it("redacts token URLs, passwords, emails, and authorization material", () => {

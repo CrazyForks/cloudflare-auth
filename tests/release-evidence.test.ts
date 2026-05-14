@@ -926,7 +926,9 @@ describe("release evidence verifiers", () => {
 
   it("rejects security tracker evidence with unresolved high or critical issues", async () => {
     const evidence = validSecurityTracker();
-    evidence.openHighCriticalAuthSecurityIssues = ["issue-123"];
+    (
+      evidence as { openHighCriticalAuthSecurityIssues: string[] }
+    ).openHighCriticalAuthSecurityIssues = ["issue-123"];
     evidence.advisories[0]!.status = "open";
     const path = await writeEvidence("security-tracker-open-issue", evidence);
     const result = runScript("scripts/verify-security-release-tracker.mjs", {

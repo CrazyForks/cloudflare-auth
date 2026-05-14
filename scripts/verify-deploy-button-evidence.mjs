@@ -54,6 +54,10 @@ function validateEvidence(value, rawText) {
   requireUrl(value.templateRepositoryUrl, "templateRepositoryUrl");
   requireUrl(value.deployButtonUrl, "deployButtonUrl");
   requireBetaPackageTag(value.packageTag, "packageTag");
+  requireDeployButtonTemplateMatch(
+    value.templateRepositoryUrl,
+    value.deployButtonUrl,
+  );
   if (
     typeof value.deployButtonUrl === "string" &&
     !value.deployButtonUrl.startsWith(
@@ -142,6 +146,29 @@ function requireUrl(value, path) {
     }
   } catch {
     failures.push(`${evidencePath}: ${path} must be a valid URL`);
+  }
+}
+
+function requireDeployButtonTemplateMatch(
+  templateRepositoryUrl,
+  deployButtonUrl,
+) {
+  if (
+    typeof templateRepositoryUrl !== "string" ||
+    typeof deployButtonUrl !== "string"
+  ) {
+    return;
+  }
+  let parsedDeployButtonUrl;
+  try {
+    parsedDeployButtonUrl = new URL(deployButtonUrl);
+  } catch {
+    return;
+  }
+  if (parsedDeployButtonUrl.searchParams.get("url") !== templateRepositoryUrl) {
+    failures.push(
+      `${evidencePath}: deployButtonUrl url parameter must match templateRepositoryUrl`,
+    );
   }
 }
 

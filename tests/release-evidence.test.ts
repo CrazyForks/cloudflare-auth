@@ -164,6 +164,24 @@ describe("release evidence verifiers", () => {
     expect(result.stderr).toContain("packageTag");
   });
 
+  it("rejects deploy button evidence whose button URL uses another template", async () => {
+    const evidence = validDeployButtonEvidence();
+    evidence.deployButtonUrl =
+      "https://deploy.workers.cloudflare.com/?url=https://github.com/acme/other-template";
+    const path = await writeEvidence(
+      "deploy-button-template-mismatch",
+      evidence,
+    );
+    const result = runScript("scripts/verify-deploy-button-evidence.mjs", {
+      CF_AUTH_REQUIRE_DEPLOY_BUTTON_EVIDENCE: "1",
+      CF_AUTH_DEPLOY_BUTTON_EVIDENCE_PATH: path,
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("deployButtonUrl url parameter");
+    expect(result.stderr).toContain("templateRepositoryUrl");
+  });
+
   it("accepts package ownership evidence with private shim reservations", async () => {
     const path = await writeEvidence(
       "package-ownership",

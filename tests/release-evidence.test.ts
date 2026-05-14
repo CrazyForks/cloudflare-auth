@@ -120,6 +120,16 @@ describe("release evidence verifiers", () => {
     expect(result.stderr).toContain("user agents");
   });
 
+  it("requires alpha evidence for stable package versions", async () => {
+    const cwd = await packageVersionFixture("1.0.0");
+    const result = runScript("scripts/verify-alpha-evidence.mjs", {}, cwd);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "private-alpha evidence is required before public beta or stable release",
+    );
+  });
+
   it("accepts beta evidence for clean quickstart and opt-in production smoke", async () => {
     const path = await writeEvidence("beta", validBetaEvidence());
     const result = runScript("scripts/verify-beta-evidence.mjs", {

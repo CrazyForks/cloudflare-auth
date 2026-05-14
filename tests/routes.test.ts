@@ -810,8 +810,25 @@ describe("auth HTTP runtime", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: "jit@example.com" }),
     });
+    await authFetch("/auth/magic-link/request", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "jit@example.com" }),
+    });
+    const jitTokenState = await db
+      .prepare(
+        `SELECT
+          sum(CASE WHEN revoked_at IS NULL THEN 1 ELSE 0 END) AS active,
+          sum(CASE WHEN revoked_at IS NOT NULL THEN 1 ELSE 0 END) AS revoked
+        FROM verification_tokens
+        WHERE type = 'magic_link' AND normalized_email = ?`,
+      )
+      .bind("jit@example.com")
+      .first<{ active: number; revoked: number }>();
+    expect(jitTokenState).toMatchObject({ active: 1, revoked: 1 });
     const token =
-      email.messages.find((item) => item.type === "magic")?.token ?? "";
+      email.messages.filter((item) => item.type === "magic").at(-1)?.token ??
+      "";
     const [first, second] = await Promise.all([
       authFetch("/auth/magic-link/consume", {
         method: "POST",

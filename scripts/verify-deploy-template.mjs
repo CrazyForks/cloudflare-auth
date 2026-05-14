@@ -173,9 +173,11 @@ function checkWrangler(config) {
       "wrangler.jsonc: AUTH_PUBLIC_ORIGIN must be an exact https origin",
     );
   }
-  const authDb = config.d1_databases?.find(
-    (item) => item.binding === "AUTH_DB",
-  );
+  if (!Array.isArray(config.d1_databases)) {
+    failures.push("wrangler.jsonc: d1_databases must be an array");
+    return;
+  }
+  const authDb = config.d1_databases.find((item) => item.binding === "AUTH_DB");
   if (!authDb) {
     failures.push("wrangler.jsonc: missing AUTH_DB D1 binding");
     return;
@@ -188,7 +190,11 @@ function checkWrangler(config) {
   if (authDb.migrations_dir !== "migrations") {
     failures.push("wrangler.jsonc: AUTH_DB migrations_dir must be migrations");
   }
-  const authEmail = config.send_email?.find(
+  if (!Array.isArray(config.send_email)) {
+    failures.push("wrangler.jsonc: send_email must be an array");
+    return;
+  }
+  const authEmail = config.send_email.find(
     (item) => item.name === "AUTH_EMAIL",
   );
   if (!authEmail) {

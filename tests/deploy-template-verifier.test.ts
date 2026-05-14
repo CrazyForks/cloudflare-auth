@@ -63,6 +63,41 @@ describe("deploy template verifier", () => {
       "wrangler.jsonc: missing AUTH_EMAIL send_email binding",
     );
   });
+
+  it("rejects malformed generated Wrangler binding sections", async () => {
+    const root = await deployTemplateFixture({
+      wranglerJson: `${JSON.stringify(
+        {
+          ...wranglerJson(),
+          d1_databases: "bad-d1",
+        },
+        null,
+        2,
+      )}\n`,
+    });
+    const result = runDeployTemplateVerifier(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "wrangler.jsonc: d1_databases must be an array",
+    );
+  });
+
+  it("rejects malformed generated Cloudflare Email binding sections", async () => {
+    const root = await deployTemplateFixture({
+      wranglerJson: `${JSON.stringify(
+        { ...wranglerJson(), send_email: "bad-email" },
+        null,
+        2,
+      )}\n`,
+    });
+    const result = runDeployTemplateVerifier(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "wrangler.jsonc: send_email must be an array",
+    );
+  });
 });
 
 async function deployTemplateFixture(

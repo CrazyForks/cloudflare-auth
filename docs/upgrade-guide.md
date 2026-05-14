@@ -24,6 +24,12 @@ Upgrade tests for 1.0 must prove every beta schema version migrates to the 1.0 s
 - `auth_schema_migrations`
 - `auth_meta.schema_version`
 
+The checked-in manifest for this gate is
+`tests/fixtures/upgrade/beta-schema-versions.json`. It is intentionally empty
+before beta packages exist. Once beta packages exist, every beta schema version
+must have a fixture listed there before a stable 1.0 release can pass
+`pnpm test` and `pnpm release:gates`.
+
 ## Config Changes
 
 Config changes must be explicit. Do not silently change password hashing parameters, cookie domain behavior, redirect allowlists, request-origin allowlists, or email adapter behavior during an upgrade.

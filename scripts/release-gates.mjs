@@ -31,6 +31,9 @@ if (stablePackages.length > 0) {
   await requireReleaseApproval("docs/api-report.md", "Public API report");
   await requireReleaseApproval("docs/config-schema.md", "Config schema");
   await requireSecurityReviewDecision();
+  await requireFile("tests/upgrade.test.ts");
+  await requireFile("tests/fixtures/upgrade/beta-schema-versions.json");
+  await requireUpgradeFixtures();
 }
 
 if (failures.length) {
@@ -85,6 +88,31 @@ async function requireSecurityReviewDecision() {
   ) {
     failures.push(
       "docs/decisions/security-review.md: security review decision must be completed before 1.0",
+    );
+  }
+}
+
+async function requireUpgradeFixtures() {
+  const text = await requireText(
+    "tests/fixtures/upgrade/beta-schema-versions.json",
+    '"betaVersions"',
+  );
+  if (!text) return;
+  let manifest;
+  try {
+    manifest = JSON.parse(text);
+  } catch {
+    failures.push(
+      "tests/fixtures/upgrade/beta-schema-versions.json: must be valid JSON",
+    );
+    return;
+  }
+  const betaVersions = Array.isArray(manifest.betaVersions)
+    ? manifest.betaVersions
+    : [];
+  if (betaVersions.length === 0) {
+    failures.push(
+      "tests/fixtures/upgrade/beta-schema-versions.json: stable 1.0 release requires beta schema upgrade fixtures",
     );
   }
 }

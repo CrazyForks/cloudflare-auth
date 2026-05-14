@@ -36,61 +36,7 @@ for (const command of [
   requireText("docs/cli.md", docs.cli, command);
 }
 
-const configKeys = [
-  "appName",
-  "basePath",
-  "runtime.mode",
-  "runtime.publicOrigin",
-  "runtime.trustedHosts",
-  "database.binding",
-  "session.cookieName",
-  "session.maxAgeDays",
-  "session.sameSite",
-  "session.secure",
-  "session.domain",
-  "session.requireVerifiedEmail",
-  "request.maxBodyBytes",
-  "request.requireOriginOnUnsafeMethods",
-  "request.enumerationMinResponseMs",
-  "request.enumerationJitterMs",
-  "security.allowedRequestOrigins",
-  "security.allowedPreviewRequestOrigins",
-  "passwordHashing.profile",
-  "passwordHashing.maxConcurrentHashesPerIsolate",
-  "passwordHashing.queueTimeoutMs",
-  "signup.enabled",
-  "signup.requireEmailVerificationBeforeSession",
-  "signup.enumerationSafe",
-  "signup.username.enabled",
-  "signup.username.required",
-  "login.emailPassword",
-  "login.usernamePassword",
-  "login.magicLink",
-  "login.requireVerifiedEmail",
-  "magicLink.allowSignups",
-  "magicLink.expiresInMinutes",
-  "magicLink.activeTokenPolicy",
-  "passwordReset.enabled",
-  "passwordReset.expiresInMinutes",
-  "passwordReset.revokeExistingSessions",
-  "passwordReset.createSessionAfterReset",
-  "passwordReset.markEmailVerifiedOnReset",
-  "passwordReset.activeTokenPolicy",
-  "emailVerification.enabled",
-  "emailVerification.expiresInHours",
-  "emailVerification.createSessionAfterVerification",
-  "emailVerification.activeTokenPolicy",
-  "turnstile.mode",
-  "turnstile.endpoints",
-  "turnstile.verify",
-  "email",
-  "redirects.defaultAfterLogin",
-  "redirects.defaultAfterLogout",
-  "redirects.defaultAfterEmailVerification",
-  "redirects.defaultAfterPasswordReset",
-  "redirects.allowedOrigins",
-  "redirects.allowedPreviewOrigins",
-];
+const configKeys = await authConfigKeys();
 for (const key of configKeys) {
   requireText("docs/configuration.md", docs.config, key);
 }
@@ -273,6 +219,71 @@ async function workspacePackageNames() {
   return [...names].sort();
 }
 
+async function authConfigKeys() {
+  const path = "packages/worker/src/index.ts";
+  let sourceText;
+  try {
+    sourceText = await readFile(path, "utf8");
+  } catch {
+    failures.push(`${path}: could not be read for config docs coverage`);
+    return [];
+  }
+
+  const sourceFile = ts.createSourceFile(
+    path,
+    sourceText,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const interfaces = new Map();
+  const keys = new Set();
+
+  ts.forEachChild(sourceFile, function collect(node) {
+    if (ts.isInterfaceDeclaration(node)) interfaces.set(node.name.text, node);
+    ts.forEachChild(node, collect);
+  });
+
+  const authConfig = interfaces.get("AuthConfig");
+  if (!authConfig) {
+    failures.push(
+      `${path}: missing AuthConfig interface for config docs coverage`,
+    );
+    return [];
+  }
+
+  collectInterfaceKeys(authConfig, "");
+
+  if (keys.size === 0)
+    failures.push(`${path}: no config keys found in AuthConfig interface`);
+
+  return [...keys].sort();
+
+  function collectInterfaceKeys(node, prefix) {
+    for (const clause of node.heritageClauses ?? []) {
+      for (const type of clause.types) {
+        const parent = interfaces.get(type.expression.getText(sourceFile));
+        if (parent) collectInterfaceKeys(parent, prefix);
+      }
+    }
+    collectMemberKeys(node.members, prefix);
+  }
+
+  function collectMemberKeys(members, prefix) {
+    for (const member of members) {
+      if (!ts.isPropertySignature(member)) continue;
+      const name = propertyNameText(member.name);
+      if (!name) continue;
+      const key = prefix ? `${prefix}.${name}` : name;
+      if (member.type && ts.isTypeLiteralNode(member.type)) {
+        collectMemberKeys(member.type.members, key);
+      } else {
+        keys.add(key);
+      }
+    }
+  }
+}
+
 async function authRouteEndpoints() {
   const path = "packages/worker/src/index.ts";
   let sourceText;
@@ -436,6 +447,11 @@ function expressionName(expression) {
   if (!ts.isPropertyAccessExpression(expression)) return null;
   const parent = expressionName(expression.expression);
   return parent ? `${parent}.${expression.name.text}` : null;
+}
+
+function propertyNameText(name) {
+  if (ts.isIdentifier(name) || ts.isStringLiteral(name)) return name.text;
+  return null;
 }
 
 function stringLiteralValue(expression) {

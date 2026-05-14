@@ -194,6 +194,26 @@ describe("release gates", () => {
     );
   });
 
+  it("derives config docs coverage from the AuthConfig interface", async () => {
+    const root = await releaseGateFixture({ deployButtonEvidence: true });
+    await replaceFixtureText(
+      root,
+      "packages/worker/src/index.ts",
+      "  redirects: {",
+      ["  analytics: { samplingRate: number };", "  redirects: {"].join("\n"),
+    );
+    const result = runReleaseGates(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("scripts/verify-docs-coverage.mjs");
+    expect(result.stderr).toContain(
+      "docs/configuration.md: missing analytics.samplingRate",
+    );
+    expect(result.stderr).toContain(
+      "docs/config-schema.md: missing analytics.samplingRate",
+    );
+  });
+
   it("requires CLI docs for every shipped command variant", async () => {
     const root = await releaseGateFixture({ deployButtonEvidence: true });
     await replaceFixtureText(
@@ -787,6 +807,86 @@ async function writeDocsCoverageFixtures(root: string) {
     root,
     "packages/worker/src/index.ts",
     [
+      "interface MinimalAuthConfig {",
+      "  appName: string;",
+      "  basePath: string;",
+      "  email?: AuthEmailAdapter;",
+      "}",
+      "interface AuthConfig extends MinimalAuthConfig {",
+      "  runtime: {",
+      "    mode: string;",
+      "    publicOrigin: string;",
+      "    trustedHosts: string[];",
+      "  };",
+      "  database: { binding: string };",
+      "  session: {",
+      "    cookieName: string;",
+      "    maxAgeDays: number;",
+      "    sameSite: string;",
+      "    secure: string;",
+      "    domain?: string;",
+      "    requireVerifiedEmail: boolean;",
+      "  };",
+      "  request: {",
+      "    maxBodyBytes: number;",
+      "    requireOriginOnUnsafeMethods: boolean;",
+      "    enumerationMinResponseMs: number;",
+      "    enumerationJitterMs: number;",
+      "  };",
+      "  security: {",
+      "    allowedRequestOrigins: string[];",
+      "    allowedPreviewRequestOrigins: string[];",
+      "  };",
+      "  passwordHashing: {",
+      "    profile: string;",
+      "    maxConcurrentHashesPerIsolate: number;",
+      "    queueTimeoutMs: number;",
+      "  };",
+      "  signup: {",
+      "    enabled: boolean;",
+      "    requireEmailVerificationBeforeSession: boolean;",
+      "    enumerationSafe: boolean;",
+      "    username: { enabled: boolean; required: boolean };",
+      "  };",
+      "  login: {",
+      "    emailPassword: boolean;",
+      "    usernamePassword: boolean;",
+      "    magicLink: boolean;",
+      "    requireVerifiedEmail: boolean;",
+      "  };",
+      "  magicLink: {",
+      "    allowSignups: boolean;",
+      "    expiresInMinutes: number;",
+      "    activeTokenPolicy: string;",
+      "  };",
+      "  passwordReset: {",
+      "    enabled: boolean;",
+      "    expiresInMinutes: number;",
+      "    revokeExistingSessions: boolean;",
+      "    createSessionAfterReset: boolean;",
+      "    markEmailVerifiedOnReset: boolean;",
+      "    activeTokenPolicy: string;",
+      "  };",
+      "  emailVerification: {",
+      "    enabled: boolean;",
+      "    expiresInHours: number;",
+      "    createSessionAfterVerification: boolean;",
+      "    activeTokenPolicy: string;",
+      "  };",
+      "  turnstile: {",
+      "    mode: string;",
+      "    endpoints: string[];",
+      "    verify?: () => Promise<boolean>;",
+      "  };",
+      "  redirects: {",
+      "    defaultAfterLogin: string;",
+      "    defaultAfterLogout: string;",
+      "    defaultAfterEmailVerification: string;",
+      "    defaultAfterPasswordReset: string;",
+      "    allowedOrigins: string[];",
+      "    allowedPreviewOrigins: string[];",
+      "  };",
+      "}",
       "async function dispatchAuthRequest(path: string, request: Request) {",
       '  if (path === "/dev/emails" && request.method === "GET")',
       '    return new Response("dev emails");',

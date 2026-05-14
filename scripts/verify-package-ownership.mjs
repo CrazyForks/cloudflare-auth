@@ -4,6 +4,7 @@ import { join } from "node:path";
 const evidencePath =
   process.env.CF_AUTH_PACKAGE_OWNERSHIP_PATH ?? "docs/package-ownership.json";
 const packages = await publishablePackages();
+const reservedPackages = await privateReservedPackages();
 const requireEvidence =
   process.env.CF_AUTH_REQUIRE_PACKAGE_OWNERSHIP === "1" ||
   packages.some((pkg) => isPublishedReleaseVersion(pkg.version));
@@ -51,7 +52,19 @@ function validateEvidence(value, rawText) {
   for (const [index, item] of packageEvidence.entries()) {
     const path = `packages[${index}]`;
     requireString(item.name, `${path}.name`);
-    if (typeof item.name === "string") byName.set(item.name, item);
+    if (typeof item.name === "string") {
+      if (byName.has(item.name)) {
+        failures.push(
+          `${evidencePath}: duplicate package evidence for ${item.name}`,
+        );
+      }
+      if (reservedPackages.some((pkg) => pkg.name === item.name)) {
+        failures.push(
+          `${evidencePath}: ${item.name} must be listed under reservedPackages while its workspace package is private`,
+        );
+      }
+      byName.set(item.name, item);
+    }
     requireString(item.registry, `${path}.registry`);
     if (item.registry !== "https://registry.npmjs.org/") {
       failures.push(`${evidencePath}: ${path}.registry must be npmjs.org`);
@@ -78,6 +91,48 @@ function validateEvidence(value, rawText) {
     if (item.version && item.version !== pkg.version) {
       failures.push(
         `${evidencePath}: ${pkg.name} evidence version must be ${pkg.version}`,
+      );
+    }
+  }
+
+  const reservedEvidence = Array.isArray(value.reservedPackages)
+    ? value.reservedPackages
+    : [];
+  const reservedByName = new Map();
+  for (const [index, item] of reservedEvidence.entries()) {
+    const path = `reservedPackages[${index}]`;
+    requireString(item.name, `${path}.name`);
+    if (typeof item.name === "string") {
+      if (reservedByName.has(item.name)) {
+        failures.push(
+          `${evidencePath}: duplicate reserved package evidence for ${item.name}`,
+        );
+      }
+      reservedByName.set(item.name, item);
+    }
+    requireString(item.registry, `${path}.registry`);
+    if (item.registry !== "https://registry.npmjs.org/") {
+      failures.push(`${evidencePath}: ${path}.registry must be npmjs.org`);
+    }
+    if (item.publishableAfterOwnershipConfirmed !== true) {
+      failures.push(
+        `${evidencePath}: ${path}.publishableAfterOwnershipConfirmed must be true`,
+      );
+    }
+    if (
+      "registryVersion" in item &&
+      (typeof item.registryVersion !== "string" ||
+        item.registryVersion.length === 0)
+    ) {
+      failures.push(
+        `${evidencePath}: ${path}.registryVersion must be a non-empty string when present`,
+      );
+    }
+  }
+  for (const pkg of reservedPackages) {
+    if (!reservedByName.has(pkg.name)) {
+      failures.push(
+        `${evidencePath}: missing reserved package evidence for ${pkg.name}`,
       );
     }
   }
@@ -127,6 +182,23 @@ async function publishablePackages() {
     const dir = join("packages", entry.name);
     const pkg = JSON.parse(await readFile(join(dir, "package.json"), "utf8"));
     if (!pkg.private) {
+      output.push({ dir, name: pkg.name, version: pkg.version });
+    }
+  }
+  return output.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+async function privateReservedPackages() {
+  const entries = await readdir("packages", { withFileTypes: true });
+  const output = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const dir = join("packages", entry.name);
+    const pkg = JSON.parse(await readFile(join(dir, "package.json"), "utf8"));
+    if (
+      pkg.private === true &&
+      (pkg.name === "cf-auth" || pkg.name === "create-cloudflare-auth")
+    ) {
       output.push({ dir, name: pkg.name, version: pkg.version });
     }
   }

@@ -183,6 +183,18 @@ async function verifyPackageNamingDocs() {
       "docs/package-ownership.example.json: missing registryVersion example for already-published package names",
     );
   }
+  if (!ownershipExample.includes('"reservedPackages"')) {
+    failures.push(
+      "docs/package-ownership.example.json: missing reservedPackages for private unowned package shims",
+    );
+  }
+  for (const reservedName of ["cf-auth", "create-cloudflare-auth"]) {
+    if (!ownershipExample.includes(`"name": "${reservedName}"`)) {
+      failures.push(
+        `docs/package-ownership.example.json: missing reserved package ${reservedName}`,
+      );
+    }
+  }
 
   const fallback = "npx --package @cf-auth/cli@latest cf-auth init";
   for (const file of ["README.md", "docs/quickstart.md"]) {

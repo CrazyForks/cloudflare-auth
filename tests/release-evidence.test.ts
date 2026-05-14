@@ -60,6 +60,40 @@ describe("release evidence verifiers", () => {
       "Deploy to Cloudflare button evidence verified",
     );
   });
+
+  it("accepts package ownership evidence with private shim reservations", async () => {
+    const path = await writeEvidence(
+      "package-ownership",
+      validPackageEvidence(),
+    );
+    const result = runScript("scripts/verify-package-ownership.mjs", {
+      CF_AUTH_REQUIRE_PACKAGE_OWNERSHIP: "1",
+      CF_AUTH_PACKAGE_OWNERSHIP_PATH: path,
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("package ownership evidence verified");
+  });
+
+  it("rejects private shim package names in publishable ownership evidence", async () => {
+    const evidence = validPackageEvidence();
+    evidence.packages.push({
+      name: "cf-auth",
+      registry: "https://registry.npmjs.org/",
+      version: "0.0.0",
+      ownershipConfirmed: true,
+      publisherTwoFactorEnabled: true,
+      provenancePublish: true,
+    });
+    const path = await writeEvidence("package-ownership-reserved", evidence);
+    const result = runScript("scripts/verify-package-ownership.mjs", {
+      CF_AUTH_REQUIRE_PACKAGE_OWNERSHIP: "1",
+      CF_AUTH_PACKAGE_OWNERSHIP_PATH: path,
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("reservedPackages");
+  });
 });
 
 async function writeEvidence(name: string, value: unknown): Promise<string> {
@@ -178,6 +212,43 @@ function validDeployButtonEvidence() {
       "/auth/login",
       "/auth/logout",
       "/auth/user",
+    ],
+  };
+}
+
+function validPackageEvidence() {
+  return {
+    schemaVersion: 1,
+    verifiedAt: "2026-05-14T00:00:00.000Z",
+    verifiedBy: "release-reviewer",
+    packages: [
+      "@cf-auth/cli",
+      "@cf-auth/client",
+      "@cf-auth/core",
+      "@cf-auth/email-cloudflare",
+      "@cf-auth/hono",
+      "@cf-auth/testing",
+      "@cf-auth/worker",
+    ].map((name) => ({
+      name,
+      registry: "https://registry.npmjs.org/",
+      version: "0.0.0",
+      ownershipConfirmed: true,
+      publisherTwoFactorEnabled: true,
+      provenancePublish: true,
+    })),
+    reservedPackages: [
+      {
+        name: "cf-auth",
+        registry: "https://registry.npmjs.org/",
+        registryVersion: "1.0.2",
+        publishableAfterOwnershipConfirmed: true,
+      },
+      {
+        name: "create-cloudflare-auth",
+        registry: "https://registry.npmjs.org/",
+        publishableAfterOwnershipConfirmed: true,
+      },
     ],
   };
 }

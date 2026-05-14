@@ -3,6 +3,8 @@ import { access, readdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { requiredAuthSmokeEndpoints } from "./smoke-endpoints.mjs";
+
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = dirname(scriptDir);
 
@@ -48,6 +50,7 @@ await requireFile("docs/security-release-tracker.example.json");
 await requireFile("schemas/doctor-report.schema.json");
 await requireFile("scripts/export-deploy-template.mjs");
 await requireFile("scripts/check-package-names.mjs");
+await requireFile("scripts/smoke-endpoints.mjs");
 await requireFile("scripts/verify-alpha-evidence.mjs");
 await requireFile("scripts/verify-beta-evidence.mjs");
 await requireFile("scripts/verify-deploy-button-evidence.mjs");
@@ -164,8 +167,11 @@ await requireText(
   "docs/public-beta.md",
   ".github/workflows/cloudflare-production-smoke.yml",
 );
-await requireText("docs/beta-evidence.example.json", "/auth/logout");
-await requireText("docs/deploy-button-evidence.example.json", "/auth/logout");
+const authSmokeEndpoints = await releaseAuthSmokeEndpoints();
+for (const endpoint of authSmokeEndpoints) {
+  await requireText("docs/beta-evidence.example.json", endpoint);
+  await requireText("docs/deploy-button-evidence.example.json", endpoint);
+}
 await requireText(
   "docs/deploy-button-evidence.example.json",
   '"starterTemplateCreated"',
@@ -373,6 +379,21 @@ function releaseChecklistScripts(scripts) {
       failures.push(`package.json: missing release checklist script ${script}`);
   }
   return scriptsToCheck.sort();
+}
+
+async function releaseAuthSmokeEndpoints() {
+  try {
+    return await requiredAuthSmokeEndpoints(
+      process.env.CF_AUTH_SMOKE_ENDPOINTS_SOURCE || undefined,
+    );
+  } catch (error) {
+    failures.push(
+      `scripts/smoke-production-cloudflare.mjs: could not derive auth smoke endpoints: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+    return [];
+  }
 }
 
 function isRecord(value) {

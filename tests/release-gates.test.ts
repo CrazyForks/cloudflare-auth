@@ -5,6 +5,13 @@ import { spawnSync } from "node:child_process";
 
 import { describe, expect, it } from "vitest";
 
+const authSmokeEndpoints = [
+  "/auth/signup",
+  "/auth/login",
+  "/auth/logout",
+  "/auth/user",
+];
+
 describe("release gates", () => {
   it("requires deploy button evidence when packages enter public beta", async () => {
     const root = await releaseGateFixture({ deployButtonEvidence: false });
@@ -27,6 +34,30 @@ describe("release gates", () => {
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("docs/release-checklist.md");
     expect(result.stderr).toContain("pnpm verify:new-gate");
+  });
+
+  it("derives evidence example endpoint coverage from the smoke script", async () => {
+    const root = await releaseGateFixture({ deployButtonEvidence: true });
+    await writeFixtureFile(
+      root,
+      "scripts/custom-smoke.mjs",
+      [
+        "const origin = 'https://auth.acme.test';",
+        "await fetch(`${origin}/auth/signup`);",
+        "await fetch(`${origin}/auth/login`);",
+        "await fetch(`${origin}/auth/logout`);",
+        "await fetch(`${origin}/auth/user`);",
+        "await fetch(`${origin}/auth/session/refresh`);",
+      ].join("\n"),
+    );
+    const result = runReleaseGates(root, {
+      CF_AUTH_SMOKE_ENDPOINTS_SOURCE: "scripts/custom-smoke.mjs",
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("docs/beta-evidence.example.json");
+    expect(result.stderr).toContain("docs/deploy-button-evidence.example.json");
+    expect(result.stderr).toContain("/auth/session/refresh");
   });
 
   it("accepts beta package gates when deploy button evidence is present", async () => {
@@ -578,6 +609,7 @@ async function releaseGateFixture(options: ReleaseGateFixtureOptions) {
     "schemas/doctor-report.schema.json",
     "scripts/export-deploy-template.mjs",
     "scripts/check-package-names.mjs",
+    "scripts/smoke-endpoints.mjs",
     "scripts/verify-alpha-evidence.mjs",
     "scripts/verify-beta-evidence.mjs",
     "scripts/verify-deploy-button-evidence.mjs",
@@ -676,13 +708,13 @@ async function releaseGateFixture(options: ReleaseGateFixtureOptions) {
         "cf-auth migrate --local",
         "pnpm install",
         "npm run dev",
-        "/auth/logout",
+        ...authSmokeEndpoints,
       ],
     ],
     [
       "docs/deploy-button-evidence.example.json",
       [
-        "/auth/logout",
+        ...authSmokeEndpoints,
         '"starterTemplateCreated"',
         '"documentedPathFollowed"',
         '"packageTag"',
@@ -1757,7 +1789,7 @@ async function replaceFixtureText(
   await writeFile(target, text.replace(search, replacement));
 }
 
-function runReleaseGates(cwd: string) {
+function runReleaseGates(cwd: string, env: Record<string, string> = {}) {
   const root = process.cwd();
   return spawnSync(
     process.execPath,
@@ -1767,6 +1799,7 @@ function runReleaseGates(cwd: string) {
       encoding: "utf8",
       env: {
         ...process.env,
+        ...env,
         PATH: `${join(cwd, "bin")}${delimiter}${process.env.PATH ?? ""}`,
       },
     },

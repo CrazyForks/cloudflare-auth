@@ -126,7 +126,7 @@ function validateEvidence(value, rawText) {
 
   if (containsSensitiveAlphaEvidence(rawText)) {
     failures.push(
-      `${evidencePath}: must not include raw secrets, cookies, or cf-auth tokens`,
+      `${evidencePath}: must not include raw secrets, tokens, cookies, emails, IPs, or Cloudflare API tokens`,
     );
   }
 }
@@ -159,10 +159,13 @@ function median(values) {
 function containsSensitiveAlphaEvidence(text) {
   return (
     /\bAUTH_SECRET\s*=/u.test(text) ||
+    /\b(?:CLOUDFLARE_API_TOKEN|NODE_AUTH_TOKEN|NPM_TOKEN)\b/u.test(text) ||
     /\bcfauth\.(?:ses|magic|verify|reset)\.[A-Za-z0-9_-]{1,32}\.[A-Za-z0-9_-]{20,}/u.test(
       text,
     ) ||
-    /\b(?:__Host-|__Secure-)?cfauth-session=/u.test(text)
+    /\b(?:__Host-|__Secure-)?cfauth-session=/u.test(text) ||
+    /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/iu.test(text) ||
+    /\b(?:\d{1,3}\.){3}\d{1,3}\b/u.test(text)
   );
 }
 

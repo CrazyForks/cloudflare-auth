@@ -240,6 +240,18 @@ describe("CLI MVP", () => {
       ) + "\n",
     );
     await writeFile(join(app, "src", "index.ts"), existingSource);
+    await writeFile(
+      join(app, "wrangler.json"),
+      JSON.stringify(
+        {
+          name: "existing-app-dev",
+          main: "src/index.ts",
+          vars: {},
+        },
+        null,
+        2,
+      ) + "\n",
+    );
     const output: string[] = [];
 
     const code = await runCli(["init", "existing-app"], {
@@ -267,6 +279,32 @@ describe("CLI MVP", () => {
     expect(packageJson.devDependencies.wrangler).toBe("4.90.1");
     await expect(readFile(join(app, "src", "index.ts"), "utf8")).resolves.toBe(
       existingSource,
+    );
+    expect(existsSync(join(app, "wrangler.jsonc"))).toBe(false);
+    const wrangler = JSON.parse(
+      await readFile(join(app, "wrangler.json"), "utf8"),
+    ) as {
+      vars: Record<string, string>;
+      d1_databases: Array<{ binding: string; migrations_dir?: string }>;
+      env: {
+        production: {
+          vars: Record<string, string>;
+          d1_databases: Array<{ binding: string; migrations_dir?: string }>;
+        };
+      };
+    };
+    expect(wrangler.vars.AUTH_ENV).toBe("development");
+    expect(wrangler.d1_databases[0]).toMatchObject({
+      binding: "AUTH_DB",
+      migrations_dir: "migrations",
+    });
+    expect(wrangler.env.production.vars.AUTH_ENV).toBe("production");
+    expect(wrangler.env.production.d1_databases[0]).toMatchObject({
+      binding: "AUTH_DB",
+      migrations_dir: "migrations",
+    });
+    expect(output.join("\n")).toContain(
+      "Repaired Wrangler auth bindings and vars.",
     );
     expect(output.join("\n")).toContain(
       "Existing src/index.ts was left unchanged",
@@ -313,11 +351,19 @@ describe("CLI MVP", () => {
       compatibility_flags?: string[];
       vars: Record<string, string>;
       observability?: { enabled?: boolean; head_sampling_rate?: number };
-      d1_databases: Array<{ binding: string; database_id: string }>;
+      d1_databases: Array<{
+        binding: string;
+        database_id: string;
+        migrations_dir?: string;
+      }>;
       env: {
         production: {
           vars: Record<string, string>;
-          d1_databases: Array<{ binding: string; database_id: string }>;
+          d1_databases: Array<{
+            binding: string;
+            database_id: string;
+            migrations_dir?: string;
+          }>;
           send_email: Array<{ name: string }>;
         };
       };
@@ -333,17 +379,19 @@ describe("CLI MVP", () => {
     expect(wrangler.d1_databases[0]).toMatchObject({
       binding: "AUTH_DB",
       database_id: "local-development",
+      migrations_dir: "migrations",
     });
     expect(wrangler.env.production.vars.AUTH_ENV).toBe("production");
     expect(wrangler.env.production.d1_databases[0]).toMatchObject({
       binding: "AUTH_DB",
       database_id: "REPLACE_WITH_DATABASE_ID",
+      migrations_dir: "migrations",
     });
     expect(wrangler.env.production.send_email).toContainEqual({
       name: "AUTH_EMAIL",
     });
     expect(output.join("\n")).toContain(
-      "Repaired wrangler.jsonc auth bindings and vars.",
+      "Repaired Wrangler auth bindings and vars.",
     );
   });
 

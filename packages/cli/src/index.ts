@@ -206,6 +206,8 @@ async function commandInit(
     packageName,
     template,
   );
+  const wranglerConfigPath =
+    existingWranglerPath(target) ?? join(target, "wrangler.jsonc");
   const sourceIndexPath = join(target, "src", "index.ts");
   const sourceIndexExists = existsSync(sourceIndexPath);
   await writeIfMissing(
@@ -218,10 +220,7 @@ async function commandInit(
     authConfigTemplate(),
   );
   await writeIfMissing(sourceIndexPath, indexTemplate(template));
-  await writeIfMissing(
-    join(target, "wrangler.jsonc"),
-    wranglerTemplate(workerName),
-  );
+  await writeIfMissing(wranglerConfigPath, wranglerTemplate(workerName));
   await writeIfMissing(join(target, ".gitignore"), gitignoreTemplate());
   await writeIfMissing(join(target, ".dev.vars"), devVarsTemplate(localSecret));
   await writeIfMissing(join(target, ".dev.vars.example"), devVarsTemplate());
@@ -233,10 +232,8 @@ async function commandInit(
     join(target, "migrations", "0002_indexes.sql"),
     indexesMigrationSql(),
   );
-  if (parsed.flags.repair) {
-    const repaired = await repairWranglerConfig(target, workerName);
-    if (repaired) out("Repaired wrangler.jsonc auth bindings and vars.");
-  }
+  const repaired = await repairWranglerConfig(target, workerName);
+  if (repaired) out("Repaired Wrangler auth bindings and vars.");
   out(`Initialized Cloudflare Auth in ${target}`);
   if (packageResult === "updated")
     out("Updated package.json with Cloudflare Auth dependencies.");
@@ -2703,6 +2700,7 @@ interface WranglerConfig {
     binding: string;
     database_name: string;
     database_id?: string;
+    migrations_dir?: string;
   }>;
   env?: Record<string, WranglerConfig>;
 }
@@ -2745,9 +2743,15 @@ function hasNamedEnvironments(config: WranglerConfig): boolean {
 }
 
 function wranglerPath(cwd: string): string {
-  return existsSync(join(cwd, "wrangler.jsonc"))
-    ? join(cwd, "wrangler.jsonc")
-    : join(cwd, "wrangler.json");
+  return existingWranglerPath(cwd) ?? join(cwd, "wrangler.json");
+}
+
+function existingWranglerPath(cwd: string): string | null {
+  const jsoncPath = join(cwd, "wrangler.jsonc");
+  if (existsSync(jsoncPath)) return jsoncPath;
+  const jsonPath = join(cwd, "wrangler.json");
+  if (existsSync(jsonPath)) return jsonPath;
+  return null;
 }
 
 function stripJsonComments(text: string): string {
@@ -2874,6 +2878,7 @@ function ensureD1Binding(
       binding: "AUTH_DB",
       database_name: databaseName,
       database_id: databaseId,
+      migrations_dir: "migrations",
     };
     config.d1_databases.push(binding);
     return true;
@@ -2887,6 +2892,10 @@ function ensureD1Binding(
     (replacePlaceholder && binding.database_id.startsWith("REPLACE_"))
   ) {
     binding.database_id = databaseId;
+    changed = true;
+  }
+  if (!binding.migrations_dir) {
+    binding.migrations_dir = "migrations";
     changed = true;
   }
   return changed;

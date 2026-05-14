@@ -15,10 +15,11 @@ npx --package @cf-auth/cli@latest cf-auth init --repair
 
 `init` writes a runnable Worker auth app or prints route snippets in dry-run
 mode. Generated projects keep local and production Wrangler environments
-separate. `init --repair` restores missing auth Wrangler vars, D1 bindings,
-Workers compatibility settings, production email binding, and migration files
-without changing existing app source. Supported templates are `hono-basic` and
-`worker-basic`.
+separate. For existing apps, `init` preserves `wrangler.json` versus
+`wrangler.jsonc` and restores missing auth Wrangler vars, D1 bindings, Workers
+compatibility settings, production email binding, and migration files without
+changing existing app source. `init --repair` reruns the same safe repair path.
+Supported templates are `hono-basic` and `worker-basic`.
 
 ## Migrations
 

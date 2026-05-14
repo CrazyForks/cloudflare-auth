@@ -31,7 +31,8 @@ wrapped in wildcard credentialed CORS.
 
 When `src/index.ts` already exists, `init` leaves it unchanged and prints the
 mount snippet. It does update `package.json` with missing Cloudflare Auth
-dependencies.
+dependencies and repairs missing auth vars and D1 bindings in the existing
+Wrangler config.
 
 Protect app routes with the plain Worker helpers:
 

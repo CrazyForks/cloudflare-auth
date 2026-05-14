@@ -232,6 +232,28 @@ async function verifyReleaseControls() {
   if (changesets.access !== "public") {
     failures.push(".changeset/config.json: access must be public");
   }
+  const expectedPackageNames = [...expectedPackages.values()]
+    .map(({ name }) => name)
+    .sort();
+  const fixedGroups = Array.isArray(changesets.fixed) ? changesets.fixed : [];
+  const hasExpectedFixedGroup = fixedGroups.some(
+    (group) =>
+      Array.isArray(group) &&
+      group.length === expectedPackageNames.length &&
+      [...group]
+        .sort()
+        .every((name, index) => name === expectedPackageNames[index]),
+  );
+  if (!hasExpectedFixedGroup) {
+    failures.push(
+      ".changeset/config.json: fixed group must include every publishable package",
+    );
+  }
+  if (Array.isArray(changesets.linked) && changesets.linked.length > 0) {
+    failures.push(
+      ".changeset/config.json: linked groups must be empty when all packages are fixed together",
+    );
+  }
 
   for (const [file, needles] of [
     [
@@ -247,6 +269,7 @@ async function verifyReleaseControls() {
         "not as the sole security gate",
         "secret scanning",
         "Changesets version/changelog",
+        "Changesets fixed package group",
       ],
     ],
   ]) {

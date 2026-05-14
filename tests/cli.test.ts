@@ -19,6 +19,9 @@ const runCli: typeof runCliRaw = (args, io = {}) =>
     }),
     ...io,
   });
+const generatedPackageVersion = JSON.parse(
+  await readFile("packages/cli/package.json", "utf8"),
+).version as string;
 
 describe("CLI MVP", () => {
   it("scaffolds a new Hono app without manual source mutation", async () => {
@@ -45,10 +48,14 @@ describe("CLI MVP", () => {
     };
     expect(generatedPackage.name).toBe("my-app");
     expect(generatedPackage.dependencies["@cf-auth/email-cloudflare"]).toBe(
-      "0.0.0",
+      generatedPackageVersion,
     );
-    expect(generatedPackage.dependencies["@cf-auth/hono"]).toBe("0.0.0");
-    expect(generatedPackage.dependencies["@cf-auth/worker"]).toBe("0.0.0");
+    expect(generatedPackage.dependencies["@cf-auth/hono"]).toBe(
+      generatedPackageVersion,
+    );
+    expect(generatedPackage.dependencies["@cf-auth/worker"]).toBe(
+      generatedPackageVersion,
+    );
     expect(generatedPackage.scripts.test).toBe("vitest run --passWithNoTests");
     expect(generatedPackage.pnpm.onlyBuiltDependencies).toEqual([
       "esbuild",
@@ -109,9 +116,11 @@ describe("CLI MVP", () => {
     const generatedPackage = JSON.parse(
       await readFile(join(app, "package.json"), "utf8"),
     ) as { dependencies: Record<string, string> };
-    expect(generatedPackage.dependencies["@cf-auth/worker"]).toBe("0.0.0");
+    expect(generatedPackage.dependencies["@cf-auth/worker"]).toBe(
+      generatedPackageVersion,
+    );
     expect(generatedPackage.dependencies["@cf-auth/email-cloudflare"]).toBe(
-      "0.0.0",
+      generatedPackageVersion,
     );
     expect(generatedPackage.dependencies["@cf-auth/hono"]).toBeUndefined();
     expect(generatedPackage.dependencies.hono).toBeUndefined();
@@ -178,9 +187,15 @@ describe("CLI MVP", () => {
       devDependencies: Record<string, string>;
     };
     expect(packageJson.dependencies.hono).toBe("4.12.18");
-    expect(packageJson.dependencies["@cf-auth/hono"]).toBe("0.0.0");
-    expect(packageJson.dependencies["@cf-auth/worker"]).toBe("0.0.0");
-    expect(packageJson.dependencies["@cf-auth/email-cloudflare"]).toBe("0.0.0");
+    expect(packageJson.dependencies["@cf-auth/hono"]).toBe(
+      generatedPackageVersion,
+    );
+    expect(packageJson.dependencies["@cf-auth/worker"]).toBe(
+      generatedPackageVersion,
+    );
+    expect(packageJson.dependencies["@cf-auth/email-cloudflare"]).toBe(
+      generatedPackageVersion,
+    );
     expect(packageJson.devDependencies.wrangler).toBe("4.90.1");
     await expect(readFile(join(app, "src", "index.ts"), "utf8")).resolves.toBe(
       existingSource,

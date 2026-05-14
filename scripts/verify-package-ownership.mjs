@@ -65,6 +65,7 @@ function validateEvidence(value, rawText) {
       }
       byName.set(item.name, item);
     }
+    requireString(item.version, `${path}.version`);
     requireString(item.registry, `${path}.registry`);
     if (item.registry !== "https://registry.npmjs.org/") {
       failures.push(`${evidencePath}: ${path}.registry must be npmjs.org`);
@@ -88,7 +89,7 @@ function validateEvidence(value, rawText) {
       );
       continue;
     }
-    if (item.version && item.version !== pkg.version) {
+    if (item.version !== pkg.version) {
       failures.push(
         `${evidencePath}: ${pkg.name} evidence version must be ${pkg.version}`,
       );

@@ -198,6 +198,22 @@ describe("release evidence verifiers", () => {
     expect(result.stderr).toContain("reservedPackages");
   });
 
+  it("rejects package ownership evidence without target package versions", async () => {
+    const evidence = validPackageEvidence();
+    delete (evidence.packages[0] as Record<string, unknown>).version;
+    const path = await writeEvidence(
+      "package-ownership-missing-version",
+      evidence,
+    );
+    const result = runScript("scripts/verify-package-ownership.mjs", {
+      CF_AUTH_REQUIRE_PACKAGE_OWNERSHIP: "1",
+      CF_AUTH_PACKAGE_OWNERSHIP_PATH: path,
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("packages[0].version");
+  });
+
   it("accepts security tracker evidence with issue and advisory search proof", async () => {
     const path = await writeEvidence(
       "security-tracker",

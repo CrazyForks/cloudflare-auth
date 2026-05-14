@@ -10,6 +10,7 @@ type PackageInfo = {
 type OwnershipEvidence = {
   registry?: unknown;
   registryVersion?: unknown;
+  version?: unknown;
   ownershipConfirmed?: unknown;
   publisherTwoFactorEnabled?: unknown;
   provenancePublish?: unknown;
@@ -36,6 +37,11 @@ for (const pkg of packages) {
   }
   if (evidence.registry !== registry) {
     failures.push(`${evidencePath}: ${pkg.name} registry must be ${registry}`);
+  }
+  if (evidence.version !== pkg.version) {
+    failures.push(
+      `${evidencePath}: ${pkg.name} evidence version must be ${pkg.version}`,
+    );
   }
   for (const field of [
     "ownershipConfirmed",

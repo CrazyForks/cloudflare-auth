@@ -295,6 +295,12 @@ async function verifyPackageNamingDocs() {
     "docs/package-ownership.example.json",
     "utf8",
   );
+  let ownershipExampleJson = {};
+  try {
+    ownershipExampleJson = JSON.parse(ownershipExample);
+  } catch {
+    failures.push("docs/package-ownership.example.json: must be valid JSON");
+  }
   for (const { name } of expectedPackages.values()) {
     if (!naming.includes(`\`${name}\``)) {
       failures.push(`docs/decisions/package-naming.md: missing ${name}`);
@@ -310,7 +316,10 @@ async function verifyPackageNamingDocs() {
       "docs/package-ownership.example.json: missing reservedPackages for private unowned package shims",
     );
   }
-  if (ownershipExample.includes('"version": "0.0.0"')) {
+  const ownershipExamplePackages = Array.isArray(ownershipExampleJson.packages)
+    ? ownershipExampleJson.packages
+    : [];
+  if (ownershipExamplePackages.some((item) => item?.version === "0.0.0")) {
     failures.push(
       "docs/package-ownership.example.json: package examples must use non-placeholder target versions",
     );

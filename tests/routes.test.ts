@@ -313,6 +313,66 @@ describe("auth HTTP runtime", () => {
     expect(login.headers.get("Set-Cookie")).toContain("cfauth-session=");
   });
 
+  it("runs dummy password verification for absent and passwordless users", async () => {
+    const { authFetch, db } = await setup();
+    const now = Date.now();
+    await db
+      .prepare(
+        `INSERT INTO users (
+          id, email, normalized_email, username, normalized_username,
+          password_hash, email_verified_at, created_at, updated_at, metadata_json
+        ) VALUES (?, ?, ?, NULL, NULL, NULL, NULL, ?, ?, '{}')`,
+      )
+      .bind(
+        "usr_passwordless",
+        "passwordless@example.com",
+        "passwordless@example.com",
+        now,
+        now,
+      )
+      .run();
+
+    const absent = await authFetch("/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        identifier: "absent@example.com",
+        password: "correct horse battery staple",
+      }),
+    });
+    const passwordless = await authFetch("/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        identifier: "passwordless@example.com",
+        password: "correct horse battery staple",
+      }),
+    });
+
+    expect(absent.status).toBe(401);
+    expect(passwordless.status).toBe(401);
+    const events = await db
+      .prepare(
+        "SELECT event_type, user_id, metadata_json FROM auth_events WHERE event_type = 'dummy_password_verification' ORDER BY created_at",
+      )
+      .all<{
+        event_type: string;
+        user_id: string | null;
+        metadata_json: string;
+      }>();
+    expect(events.results).toHaveLength(2);
+    expect(events.results?.map((event) => event.user_id)).toEqual([null, null]);
+    expect(
+      events.results?.map((event) => JSON.parse(event.metadata_json)),
+    ).toEqual([
+      { subjectType: "email", userPresent: false },
+      { subjectType: "email", userPresent: true },
+    ]);
+    expect(JSON.stringify(events.results)).not.toContain(
+      "passwordless@example.com",
+    );
+  });
+
   it("returns public rate limit errors when the password hash queue times out", async () => {
     const { authFetch } = await setup({
       passwordHashing: {

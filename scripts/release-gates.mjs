@@ -70,6 +70,12 @@ const stablePackages = packages.filter((pkg) =>
   isStableOneOrLater(pkg.version),
 );
 const betaPackages = packages.filter((pkg) => isPublicBeta(pkg.version));
+const publishedReleasePackages = packages.filter((pkg) =>
+  isPublishedReleaseVersion(pkg.version),
+);
+if (publishedReleasePackages.length > 0) {
+  await requirePackageChangelogs(publishedReleasePackages);
+}
 if (betaPackages.length > 0) {
   await requireFile("docs/alpha-evidence.json");
   await requireText("docs/alpha-evidence.json", '"localSetups"');
@@ -170,6 +176,14 @@ async function requireUpgradeFixtures() {
   }
 }
 
+async function requirePackageChangelogs(releasePackages) {
+  for (const pkg of releasePackages) {
+    const changelog = join(pkg.dir, "CHANGELOG.md");
+    await requireFile(changelog);
+    await requireText(changelog, pkg.version);
+  }
+}
+
 function isStableOneOrLater(version) {
   if (typeof version !== "string") return false;
   const match = version.match(/^(\d+)\.(\d+)\.(\d+)(?:-.+)?$/);
@@ -181,4 +195,13 @@ function isStableOneOrLater(version) {
 function isPublicBeta(version) {
   if (typeof version !== "string") return false;
   return /^\d+\.\d+\.\d+-beta(?:[.-].*)?$/u.test(version);
+}
+
+function isPublishedReleaseVersion(version) {
+  if (typeof version !== "string") return false;
+  const match = version.match(/^(\d+)\.(\d+)\.(\d+)(?:-[\w.-]+)?$/u);
+  if (!match) return false;
+  return (
+    Number(match[1]) !== 0 || Number(match[2]) !== 0 || Number(match[3]) !== 0
+  );
 }

@@ -27,6 +27,7 @@
 - package names confirmed or fallback docs updated
 - npm publisher 2FA and package ownership verified before dispatching the release workflow
 - release workflow `package_names_confirmed` gate set only after package names are verified
+- Changesets version/changelog output reviewed before publishing
 - local clean-directory quickstart passes
 - private-alpha evidence verifier passes before public beta
 - `doctor --report` attached to the release issue

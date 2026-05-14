@@ -203,6 +203,11 @@ async function verifyReleaseControls() {
   const changesets = JSON.parse(
     await readFile(".changeset/config.json", "utf8"),
   );
+  if (changesets.changelog !== "@changesets/cli/changelog") {
+    failures.push(
+      ".changeset/config.json: changelog must use @changesets/cli/changelog",
+    );
+  }
   if (changesets.access !== "public") {
     failures.push(".changeset/config.json: access must be public");
   }
@@ -219,6 +224,7 @@ async function verifyReleaseControls() {
         "package ownership verified",
         "not as the sole security gate",
         "secret scanning",
+        "Changesets version/changelog",
       ],
     ],
   ]) {

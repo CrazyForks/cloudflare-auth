@@ -1854,6 +1854,42 @@ describe("auth HTTP runtime", () => {
       { waitUntil() {} } as unknown as ExecutionContext,
     );
     expect(previewPreflight?.status).toBe(403);
+
+    const previewAllowedPolicy = await setup({
+      security: {
+        allowedRequestOrigins: [],
+        allowedPreviewRequestOrigins: ["https://preview-ui.example.com"],
+      },
+      runtime: {
+        mode: "from-env",
+        publicOrigin: "from-env",
+        trustedHosts: ["preview.example.com"],
+      },
+      session: {
+        cookieName: "auto",
+        maxAgeDays: 30,
+        sameSite: "lax",
+        secure: "auto",
+        requireVerifiedEmail: false,
+        domain: ".example.com",
+      },
+    });
+    const previewAllowedPreflight = await previewAllowedPolicy.handler.fetch(
+      new Request("https://preview.example.com/auth/signup", {
+        method: "OPTIONS",
+        headers: { Origin: "https://preview-ui.example.com" },
+      }),
+      {
+        ...previewAllowedPolicy.env,
+        AUTH_ENV: "preview",
+        AUTH_PUBLIC_ORIGIN: "https://preview.example.com",
+      },
+      previewAllowedPolicy.ctx,
+    );
+    expect(previewAllowedPreflight?.status).toBe(204);
+    expect(
+      previewAllowedPreflight?.headers.get("Access-Control-Allow-Origin"),
+    ).toBe("https://preview-ui.example.com");
   });
 
   it("parses supported content types with parameters", async () => {

@@ -47,6 +47,22 @@ describe("deploy template verifier", () => {
       "scripts/version-matrix.json: must be valid JSON",
     );
   });
+
+  it("rejects generated templates without the Cloudflare Email binding", async () => {
+    const root = await deployTemplateFixture({
+      wranglerJson: `${JSON.stringify(
+        { ...wranglerJson(), send_email: [] },
+        null,
+        2,
+      )}\n`,
+    });
+    const result = runDeployTemplateVerifier(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "wrangler.jsonc: missing AUTH_EMAIL send_email binding",
+    );
+  });
 });
 
 async function deployTemplateFixture(
@@ -111,6 +127,7 @@ function packageJson() {
             "Generate with `npx --package @cf-auth/cli@beta cf-auth rotate-secret --print`.",
         },
         AUTH_PUBLIC_ORIGIN: { description: "Public origin" },
+        AUTH_EMAIL: { description: "Email binding" },
       },
     },
   };
@@ -137,6 +154,7 @@ function wranglerJson() {
         migrations_dir: "migrations",
       },
     ],
+    send_email: [{ name: "AUTH_EMAIL", remote: true }],
   };
 }
 
@@ -147,7 +165,7 @@ await mkdir(dir + "/src", { recursive: true });
 await mkdir(dir + "/migrations", { recursive: true });
 await writeFile(dir + "/package.json", ${JSON.stringify(input.packageJson)});
 await writeFile(dir + "/wrangler.jsonc", ${JSON.stringify(input.wranglerJson)});
-await writeFile(dir + "/README.md", "https://deploy.workers.cloudflare.com/?url=https://github.com/acme/cloudflare-auth-template\\nAUTH_PUBLIC_ORIGIN\\nAUTH_SECRET\\nnpx --package @cf-auth/cli@beta cf-auth rotate-secret --print\\n");
+await writeFile(dir + "/README.md", "https://deploy.workers.cloudflare.com/?url=https://github.com/acme/cloudflare-auth-template\\nAUTH_PUBLIC_ORIGIN\\nAUTH_SECRET\\nAUTH_EMAIL\\nnpx --package @cf-auth/cli@beta cf-auth rotate-secret --print\\n");
 await writeFile(dir + "/.dev.vars.example", "AUTH_SECRET=k1.REPLACE_WITH_32_BYTE_BASE64URL_SECRET\\n");
 `;
 }

@@ -123,7 +123,12 @@ function checkPackageJson(pkg) {
       "package.json: deploy script must apply D1 migrations before deploy",
     );
   }
-  for (const binding of ["AUTH_DB", "AUTH_SECRET", "AUTH_PUBLIC_ORIGIN"]) {
+  for (const binding of [
+    "AUTH_DB",
+    "AUTH_SECRET",
+    "AUTH_PUBLIC_ORIGIN",
+    "AUTH_EMAIL",
+  ]) {
     if (!pkg.cloudflare?.bindings?.[binding]?.description) {
       failures.push(
         `package.json: missing Cloudflare binding description for ${binding}`,
@@ -183,6 +188,14 @@ function checkWrangler(config) {
   if (authDb.migrations_dir !== "migrations") {
     failures.push("wrangler.jsonc: AUTH_DB migrations_dir must be migrations");
   }
+  const authEmail = config.send_email?.find(
+    (item) => item.name === "AUTH_EMAIL",
+  );
+  if (!authEmail) {
+    failures.push("wrangler.jsonc: missing AUTH_EMAIL send_email binding");
+  } else if (authEmail.remote !== true) {
+    failures.push("wrangler.jsonc: AUTH_EMAIL send_email must set remote true");
+  }
 }
 
 async function checkIsolatedTree(dir) {
@@ -213,7 +226,11 @@ function checkReadme(text) {
   if (!text.includes("deploy.workers.cloudflare.com/?url=")) {
     failures.push("README.md: missing Deploy to Cloudflare button URL");
   }
-  if (!text.includes("AUTH_PUBLIC_ORIGIN") || !text.includes("AUTH_SECRET")) {
+  if (
+    !text.includes("AUTH_PUBLIC_ORIGIN") ||
+    !text.includes("AUTH_SECRET") ||
+    !text.includes("AUTH_EMAIL")
+  ) {
     failures.push("README.md: missing required variable instructions");
   }
   const expectedSecretCommand = `npx --package @cf-auth/cli@${expectedPackageTag} cf-auth rotate-secret --print`;

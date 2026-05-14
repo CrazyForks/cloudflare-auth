@@ -21,8 +21,20 @@ const packages = [];
 for (const dir of packageDirs) {
   const pkg = await readJsonObject(join(dir, "package.json"));
   if (!pkg) continue;
-  if (!pkg.private)
-    packages.push({ dir, name: pkg.name, version: pkg.version });
+  if (!pkg.private) {
+    let validPackageIdentity = true;
+    if (typeof pkg.name !== "string" || pkg.name.length === 0) {
+      failures.push(`${dir}/package.json: name must be a non-empty string`);
+      validPackageIdentity = false;
+    }
+    if (typeof pkg.version !== "string" || pkg.version.length === 0) {
+      failures.push(`${dir}/package.json: version must be a non-empty string`);
+      validPackageIdentity = false;
+    }
+    if (validPackageIdentity) {
+      packages.push({ dir, name: pkg.name, version: pkg.version });
+    }
+  }
 }
 
 await requireFile(".github/dependabot.yml");

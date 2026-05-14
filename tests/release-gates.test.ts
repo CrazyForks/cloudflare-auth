@@ -526,6 +526,23 @@ process.exit(1);
     }
   }, 20_000);
 
+  it("rejects publishable packages without string names and versions", async () => {
+    const root = await releaseGateFixture({ deployButtonEvidence: true });
+    await writeFile(
+      join(root, "packages", "cli", "package.json"),
+      `${JSON.stringify({ name: 1, version: 1 })}\n`,
+    );
+    const result = runReleaseGates(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "packages/cli/package.json: name must be a non-empty string",
+    );
+    expect(result.stderr).toContain(
+      "packages/cli/package.json: version must be a non-empty string",
+    );
+  });
+
   it("accepts alpha package gates before beta evidence is required", async () => {
     const root = await releaseGateFixture({
       alphaEvidence: false,

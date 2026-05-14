@@ -435,6 +435,31 @@ describe("release evidence verifiers", () => {
     expect(result.stderr).toContain("cf-auth deploy --env production");
   });
 
+  it("derives beta production smoke endpoint requirements from the smoke script", async () => {
+    const smokeEndpointSource = await writeSmokeEndpointSource(
+      "beta-smoke-endpoints",
+      [
+        "/auth/signup",
+        "/auth/login",
+        "/auth/logout",
+        "/auth/user",
+        "/auth/session/refresh",
+      ],
+    );
+    const path = await writeEvidence("beta-derived-smoke-endpoints", {
+      ...validBetaEvidence(),
+    });
+    const result = runScript("scripts/verify-beta-evidence.mjs", {
+      CF_AUTH_REQUIRE_BETA_EVIDENCE: "1",
+      CF_AUTH_BETA_EVIDENCE_PATH: path,
+      CF_AUTH_SMOKE_ENDPOINTS_SOURCE: smokeEndpointSource,
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("productionSmoke.smokedEndpoints");
+    expect(result.stderr).toContain("/auth/session/refresh");
+  });
+
   it("rejects beta manual quickstart evidence without command proof", async () => {
     const evidence = validBetaEvidence();
     evidence.manualQuickstart.commands = [];
@@ -635,6 +660,31 @@ describe("release evidence verifiers", () => {
     expect(result.stderr).toContain("/auth/login");
     expect(result.stderr).toContain("/auth/logout");
     expect(result.stderr).toContain("/auth/user");
+  });
+
+  it("derives deploy button smoke endpoint requirements from the smoke script", async () => {
+    const smokeEndpointSource = await writeSmokeEndpointSource(
+      "deploy-button-smoke-endpoints",
+      [
+        "/auth/signup",
+        "/auth/login",
+        "/auth/logout",
+        "/auth/user",
+        "/auth/session/refresh",
+      ],
+    );
+    const path = await writeEvidence("deploy-button-derived-smoke-endpoints", {
+      ...validDeployButtonEvidence(),
+    });
+    const result = runScript("scripts/verify-deploy-button-evidence.mjs", {
+      CF_AUTH_REQUIRE_DEPLOY_BUTTON_EVIDENCE: "1",
+      CF_AUTH_DEPLOY_BUTTON_EVIDENCE_PATH: path,
+      CF_AUTH_SMOKE_ENDPOINTS_SOURCE: smokeEndpointSource,
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("smokedEndpoints");
+    expect(result.stderr).toContain("/auth/session/refresh");
   });
 
   it("rejects deploy button evidence with raw emails, IPs, and user agents", async () => {
@@ -1010,6 +1060,22 @@ async function writeEvidence(name: string, value: unknown): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), `cf-auth-${name}-`));
   const path = join(dir, "evidence.json");
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`);
+  return path;
+}
+
+async function writeSmokeEndpointSource(
+  name: string,
+  endpoints: string[],
+): Promise<string> {
+  const dir = await mkdtemp(join(tmpdir(), `cf-auth-${name}-`));
+  const path = join(dir, "smoke.mjs");
+  const fetches = endpoints
+    .map((endpoint) => `await fetch(\`\${origin}${endpoint}\`);`)
+    .join("\n");
+  await writeFile(
+    path,
+    `const origin = "https://auth.acme.test";\n${fetches}\n`,
+  );
   return path;
 }
 

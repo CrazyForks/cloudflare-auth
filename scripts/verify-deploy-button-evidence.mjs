@@ -10,6 +10,7 @@ import {
   isFutureIsoDateString,
   isIsoDateString,
 } from "./evidence-validation.mjs";
+import { requiredAuthSmokeEndpoints } from "./smoke-endpoints.mjs";
 
 const evidencePath =
   process.env.CF_AUTH_DEPLOY_BUTTON_EVIDENCE_PATH ??
@@ -40,7 +41,21 @@ try {
   failures.push(`${evidencePath}: must be valid JSON`);
 }
 
-if (evidence) validateEvidence(evidence, text);
+let requiredSmokeEndpoints = [];
+if (evidence) {
+  try {
+    requiredSmokeEndpoints = await requiredAuthSmokeEndpoints(
+      process.env.CF_AUTH_SMOKE_ENDPOINTS_SOURCE || undefined,
+    );
+  } catch (error) {
+    failures.push(
+      `${evidencePath}: could not derive smoke endpoints: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+  validateEvidence(evidence, text);
+}
 
 if (failures.length > 0) {
   console.error(failures.join("\n"));
@@ -94,12 +109,7 @@ function validateEvidence(value, rawText) {
   const smokedEndpoints = Array.isArray(value.smokedEndpoints)
     ? value.smokedEndpoints
     : [];
-  for (const endpoint of [
-    "/auth/signup",
-    "/auth/login",
-    "/auth/logout",
-    "/auth/user",
-  ]) {
+  for (const endpoint of requiredSmokeEndpoints) {
     if (!smokedEndpoints.includes(endpoint)) {
       failures.push(
         `${evidencePath}: smokedEndpoints must include ${endpoint}`,

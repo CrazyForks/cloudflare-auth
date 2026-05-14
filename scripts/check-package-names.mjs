@@ -2,27 +2,12 @@ import { spawnSync } from "node:child_process";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 
-type PackageInfo = {
-  name: string;
-  version: string;
-};
-
-type OwnershipEvidence = {
-  registry?: unknown;
-  registryVersion?: unknown;
-  version?: unknown;
-  ownershipConfirmed?: unknown;
-  publisherTwoFactorEnabled?: unknown;
-  provenancePublish?: unknown;
-  publishableAfterOwnershipConfirmed?: unknown;
-};
-
 const evidencePath =
   process.env.CF_AUTH_PACKAGE_OWNERSHIP_PATH ?? "docs/package-ownership.json";
 const registry = "https://registry.npmjs.org/";
 const packages = await publishablePackages();
 const reservedPackages = await privateReservedPackages();
-const failures: string[] = [];
+const failures = [];
 
 const { packageEvidenceByName, reservedEvidenceByName } =
   await readOwnershipEvidence();
@@ -47,7 +32,7 @@ for (const pkg of packages) {
     "ownershipConfirmed",
     "publisherTwoFactorEnabled",
     "provenancePublish",
-  ] as const) {
+  ]) {
     if (evidence[field] !== true) {
       failures.push(`${evidencePath}: ${pkg.name} ${field} must be true`);
     }
@@ -91,12 +76,12 @@ for (const pkg of packages) {
   if (nameLookup.kind === "found") {
     const value = parseJson(nameLookup.stdout, `${pkg.name}: npm view result`);
     const registryName =
-      typeof value === "object" && value !== null && "name" in value
-        ? (value as { name?: unknown }).name
+      value && typeof value === "object" && "name" in value
+        ? value.name
         : undefined;
     const registryVersion =
-      typeof value === "object" && value !== null && "version" in value
-        ? (value as { version?: unknown }).version
+      value && typeof value === "object" && "version" in value
+        ? value.version
         : undefined;
     if (registryName !== pkg.name) {
       failures.push(
@@ -137,12 +122,12 @@ for (const pkg of reservedPackages) {
   if (nameLookup.kind === "found") {
     const value = parseJson(nameLookup.stdout, `${pkg.name}: npm view result`);
     const registryName =
-      typeof value === "object" && value !== null && "name" in value
-        ? (value as { name?: unknown }).name
+      value && typeof value === "object" && "name" in value
+        ? value.name
         : undefined;
     const registryVersion =
-      typeof value === "object" && value !== null && "version" in value
-        ? (value as { version?: unknown }).version
+      value && typeof value === "object" && "version" in value
+        ? value.version
         : undefined;
     if (registryName !== pkg.name) {
       failures.push(
@@ -186,40 +171,31 @@ async function readOwnershipEvidence() {
     fail();
   }
 
-  const parsed = parseJson(text, evidencePath) as {
-    packages?: unknown;
-    reservedPackages?: unknown;
-  };
+  const parsed = parseJson(text, evidencePath);
   const packageEvidence = Array.isArray(parsed.packages) ? parsed.packages : [];
   const reservedEvidence = Array.isArray(parsed.reservedPackages)
     ? parsed.reservedPackages
     : [];
-  const packageEvidenceByName = new Map<string, OwnershipEvidence>();
+  const packageEvidenceByName = new Map();
   for (const item of packageEvidence) {
     if (
       item &&
       typeof item === "object" &&
       "name" in item &&
-      typeof (item as { name?: unknown }).name === "string"
+      typeof item.name === "string"
     ) {
-      packageEvidenceByName.set(
-        (item as { name: string }).name,
-        item as OwnershipEvidence,
-      );
+      packageEvidenceByName.set(item.name, item);
     }
   }
-  const reservedEvidenceByName = new Map<string, OwnershipEvidence>();
+  const reservedEvidenceByName = new Map();
   for (const item of reservedEvidence) {
     if (
       item &&
       typeof item === "object" &&
       "name" in item &&
-      typeof (item as { name?: unknown }).name === "string"
+      typeof item.name === "string"
     ) {
-      reservedEvidenceByName.set(
-        (item as { name: string }).name,
-        item as OwnershipEvidence,
-      );
+      reservedEvidenceByName.set(item.name, item);
     }
   }
   return { packageEvidenceByName, reservedEvidenceByName };
@@ -227,12 +203,12 @@ async function readOwnershipEvidence() {
 
 async function publishablePackages() {
   const entries = await readdir("packages", { withFileTypes: true });
-  const output: PackageInfo[] = [];
+  const output = [];
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
     const pkg = JSON.parse(
       await readFile(join("packages", entry.name, "package.json"), "utf8"),
-    ) as { name?: unknown; version?: unknown; private?: unknown };
+    );
     if (!pkg.private) {
       output.push({
         name: String(pkg.name),
@@ -245,12 +221,12 @@ async function publishablePackages() {
 
 async function privateReservedPackages() {
   const entries = await readdir("packages", { withFileTypes: true });
-  const output: PackageInfo[] = [];
+  const output = [];
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
     const pkg = JSON.parse(
       await readFile(join("packages", entry.name, "package.json"), "utf8"),
-    ) as { name?: unknown; version?: unknown; private?: unknown };
+    );
     if (
       pkg.private === true &&
       (pkg.name === "cf-auth" || pkg.name === "create-cloudflare-auth")
@@ -264,23 +240,22 @@ async function privateReservedPackages() {
   return output.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-function npmView(args: string[]) {
+function npmView(args) {
   const result = spawnSync("npm", ["view", ...args, "--json"], {
     encoding: "utf8",
   });
   const output = `${result.stdout}\n${result.stderr}`.trim();
-  if (result.status === 0)
-    return { kind: "found" as const, stdout: result.stdout };
+  if (result.status === 0) return { kind: "found", stdout: result.stdout };
   if (/\bE404\b|404 Not Found|is not in this registry/u.test(output)) {
-    return { kind: "not-found" as const };
+    return { kind: "not-found" };
   }
   return {
-    kind: "error" as const,
+    kind: "error",
     message: output || "npm view failed",
   };
 }
 
-function parseJson(value: string, label: string) {
+function parseJson(value, label) {
   try {
     return JSON.parse(value);
   } catch {
@@ -289,7 +264,7 @@ function parseJson(value: string, label: string) {
   }
 }
 
-function fail(): never {
+function fail() {
   console.error(failures.join("\n"));
   process.exit(1);
 }

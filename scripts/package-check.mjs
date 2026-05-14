@@ -168,11 +168,19 @@ function packArtifact(dir, name) {
   }
   try {
     const pack = JSON.parse(result.stdout);
+    if (!isJsonObject(pack)) {
+      failures.push(`${name}: pnpm pack JSON output must be an object`);
+      return null;
+    }
     if (pack.name !== name) {
       failures.push(`${name}: packed artifact name was ${pack.name}`);
     }
     if (typeof pack.filename !== "string" || pack.filename.length === 0) {
       failures.push(`${name}: pnpm pack did not report a tarball filename`);
+    }
+    if (!Array.isArray(pack.files)) {
+      failures.push(`${name}: pnpm pack JSON output must include files array`);
+      return null;
     }
     return pack;
   } catch {

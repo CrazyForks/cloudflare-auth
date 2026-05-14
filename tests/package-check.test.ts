@@ -272,6 +272,15 @@ describe("package checks", () => {
     );
   });
 
+  it("rejects non-object pnpm pack JSON output", async () => {
+    const root = await packageCheckFixture();
+    await writeFakePackTools(root, { packOutput: "null\n" });
+    const result = runPackageCheck(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("pnpm pack JSON output must be an object");
+  });
+
   it("rejects publishing reserved package shims without ownership evidence", async () => {
     const root = await packageCheckFixture();
     await updatePackageJson(root, "packages/cf-auth-shim/package.json", {
@@ -456,7 +465,10 @@ async function writeOwnershipEvidence(root: string, packageNames: string[]) {
   );
 }
 
-async function writeFakePackTools(root: string) {
+async function writeFakePackTools(
+  root: string,
+  options: { packOutput?: string } = {},
+) {
   const binDir = join(root, "bin");
   await mkdir(binDir, { recursive: true });
   const pnpmPath = join(binDir, "pnpm");
@@ -465,6 +477,11 @@ async function writeFakePackTools(root: string) {
     `#!/usr/bin/env node
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
+const forcedOutput = ${JSON.stringify(options.packOutput ?? "")};
+if (forcedOutput) {
+  process.stdout.write(forcedOutput);
+  process.exit(0);
+}
 const args = process.argv.slice(2);
 const dir = args[args.indexOf("--dir") + 1];
 const destination = args[args.indexOf("--pack-destination") + 1];

@@ -95,6 +95,8 @@ function validateEvidence(value, rawText) {
       "cf-auth migrate --local",
       `${path}.commands`,
     );
+    requireCommandContains(setup.commands, "pnpm install", `${path}.commands`);
+    requireCommandContains(setup.commands, "npm run dev", `${path}.commands`);
     requireCommandContains(
       setup.commands,
       "@cf-auth/cli@alpha",
@@ -125,9 +127,9 @@ function validateEvidence(value, rawText) {
         failures.push(`${evidencePath}: ${path}.${field} must be true`);
       }
     }
-    requireCommandContains(
+    requireCommandIncludesAll(
       deploy.commands,
-      "cf-auth doctor --env production",
+      ["cf-auth doctor", "--report", "--env production"],
       `${path}.commands`,
     );
     requireCommandContains(
@@ -196,6 +198,23 @@ function requireCommandContains(commands, expected, path) {
     )
   ) {
     failures.push(`${evidencePath}: ${path} must include ${expected}`);
+  }
+}
+
+function requireCommandIncludesAll(commands, expectedParts, path) {
+  const commandList = Array.isArray(commands) ? commands : [];
+  if (
+    !commandList.some(
+      (command) =>
+        typeof command === "string" &&
+        expectedParts.every((part) => command.includes(part)),
+    )
+  ) {
+    failures.push(
+      `${evidencePath}: ${path} must include a command containing ${expectedParts.join(
+        ", ",
+      )}`,
+    );
   }
 }
 

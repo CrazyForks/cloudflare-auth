@@ -27,7 +27,8 @@ describe("release evidence verifiers", () => {
     });
 
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain("cf-auth doctor --env production");
+    expect(result.stderr).toContain("cf-auth doctor");
+    expect(result.stderr).toContain("--report");
     expect(result.stderr).toContain(
       "cf-auth migrate --remote --env production",
     );
@@ -63,6 +64,8 @@ describe("release evidence verifiers", () => {
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("cf-auth init");
     expect(result.stderr).toContain("cf-auth migrate --local");
+    expect(result.stderr).toContain("pnpm install");
+    expect(result.stderr).toContain("npm run dev");
   });
 
   it("rejects alpha evidence without alpha package channel proof", async () => {
@@ -263,7 +266,7 @@ function validAlphaEvidence() {
       user: `alpha-user-${index + 1}`,
       completedAt: "2026-05-14T00:00:00.000Z",
       commands: [
-        "npx --package @cf-auth/cli@alpha cf-auth doctor --env production",
+        "npx --package @cf-auth/cli@alpha cf-auth doctor --report --env production",
         "npx --package @cf-auth/cli@alpha cf-auth migrate --remote --env production",
         "npx --package @cf-auth/cli@alpha cf-auth deploy --env production",
       ],

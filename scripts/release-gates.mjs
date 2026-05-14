@@ -84,6 +84,8 @@ await requireText(
   "docs/alpha-evidence.example.json",
   "cf-auth migrate --local",
 );
+await requireText("docs/alpha-evidence.example.json", "pnpm install");
+await requireText("docs/alpha-evidence.example.json", "npm run dev");
 await requireText(
   "docs/alpha-evidence.example.json",
   '"doctorReportSchemaValid"',

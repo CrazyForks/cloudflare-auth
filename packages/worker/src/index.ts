@@ -3529,7 +3529,7 @@ function html(
   headers.set("Referrer-Policy", "no-referrer");
   headers.set(
     "Content-Security-Policy",
-    `default-src 'none'; style-src 'unsafe-inline'; form-action 'self'${options.allowInlineScript ? "; script-src 'unsafe-inline'" : ""}`,
+    `default-src 'none'; base-uri 'none'; frame-ancestors 'none'; style-src 'unsafe-inline'; form-action 'self'${options.allowInlineScript ? "; script-src 'unsafe-inline'" : ""}`,
   );
   return new Response(`<!doctype html><meta charset="utf-8">${markup}`, {
     headers,

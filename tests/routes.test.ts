@@ -532,6 +532,12 @@ describe("auth HTTP runtime", () => {
       "default-src 'none'",
     );
     expect(noD1Get?.headers.get("Content-Security-Policy")).toContain(
+      "base-uri 'none'",
+    );
+    expect(noD1Get?.headers.get("Content-Security-Policy")).toContain(
+      "frame-ancestors 'none'",
+    );
+    expect(noD1Get?.headers.get("Content-Security-Policy")).toContain(
       "script-src 'unsafe-inline'",
     );
     await expect(noD1Get?.text()).resolves.toContain("history.replaceState");

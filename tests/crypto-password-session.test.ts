@@ -238,6 +238,10 @@ describe("crypto, passwords, tokens, and sessions", () => {
       sameSite: "Lax",
     });
     expect(serializeSessionCookie(dev, "raw", 60)).not.toContain("__Host-");
+    const devClear = serializeClearSessionCookie(dev);
+    expect(devClear).toContain("cfauth-session=");
+    expect(devClear).toContain("Max-Age=0");
+    expect(devClear).not.toContain("Secure");
 
     const prod = resolveSessionCookie({
       mode: "production",
@@ -259,6 +263,11 @@ describe("crypto, passwords, tokens, and sessions", () => {
       secure: true,
       domain: ".example.com",
     });
+    const crossClear = serializeClearSessionCookie(cross);
+    expect(crossClear).toContain("__Secure-cfauth-session=");
+    expect(crossClear).toContain("Max-Age=0");
+    expect(crossClear).toContain("Secure");
+    expect(crossClear).toContain("Domain=.example.com");
   });
 
   it("rejects unsafe session cookie names and domains", () => {

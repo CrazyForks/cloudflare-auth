@@ -626,6 +626,7 @@ async function writeDeployTemplateFixtures(root: string) {
       typescript: "6.0.3",
       vitest: "4.1.6",
       wrangler: "4.90.1",
+      workersCompatibilityDate: "2026-05-14",
       workersCompatibilityDateFloor: "2024-09-23",
     }),
   );

@@ -97,12 +97,9 @@ function checkPackageJson(pkg) {
 }
 
 function checkWrangler(config) {
-  if (
-    typeof config.compatibility_date !== "string" ||
-    config.compatibility_date < versionMatrix.workersCompatibilityDateFloor
-  ) {
+  if (config.compatibility_date !== versionMatrix.workersCompatibilityDate) {
     failures.push(
-      `wrangler.jsonc: compatibility_date must be at least ${versionMatrix.workersCompatibilityDateFloor}`,
+      `wrangler.jsonc: compatibility_date must be ${versionMatrix.workersCompatibilityDate}`,
     );
   }
   if (!config.compatibility_flags?.includes("nodejs_compat")) {

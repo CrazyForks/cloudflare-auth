@@ -152,12 +152,9 @@ function verifyProjectToolchain(dir, pkg) {
 }
 
 function verifyWranglerToolchain(dir, wrangler) {
-  if (
-    typeof wrangler.compatibility_date !== "string" ||
-    wrangler.compatibility_date < versionMatrix.workersCompatibilityDateFloor
-  ) {
+  if (wrangler.compatibility_date !== versionMatrix.workersCompatibilityDate) {
     failures.push(
-      `${dir}: compatibility_date must be at least ${versionMatrix.workersCompatibilityDateFloor}`,
+      `${dir}: compatibility_date must be ${versionMatrix.workersCompatibilityDate}`,
     );
   }
   if (!wrangler.compatibility_flags?.includes("nodejs_compat")) {

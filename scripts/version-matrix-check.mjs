@@ -34,7 +34,64 @@ if (pkg.engines?.node !== matrix.node)
 if (pkg.engines?.pnpm !== ">=11 <12")
   failures.push("pnpm engine must be >=11 <12");
 
+await requireMatch(
+  "docs/toolchain.md",
+  new RegExp(
+    `\\|\\s*Workers compatibility date\\s*\\|\\s*\`${escapeRegex(
+      matrix.workersCompatibilityDate,
+    )}\``,
+  ),
+  `Workers compatibility date ${matrix.workersCompatibilityDate}`,
+);
+await requireMatch(
+  "docs/toolchain.md",
+  new RegExp(
+    `\\|\\s*Workers compatibility date floor\\s*\\|\\s*\`${escapeRegex(
+      matrix.workersCompatibilityDateFloor,
+    )}\``,
+  ),
+  `Workers compatibility date floor ${matrix.workersCompatibilityDateFloor}`,
+);
+await requireText(
+  "vitest.workers.config.ts",
+  `compatibilityDate: "${matrix.workersCompatibilityDate}"`,
+);
+await requireText(
+  "packages/cli/src/password-benchmark.ts",
+  `const benchmarkCompatibilityDate = "${matrix.workersCompatibilityDate}"`,
+);
+await requireText(
+  "packages/cli/src/index.ts",
+  `"compatibility_date": "${matrix.workersCompatibilityDate}"`,
+);
+await requireText(
+  "scripts/export-deploy-template.mjs",
+  `compatibility_date: "${matrix.workersCompatibilityDate}"`,
+);
+await requireText(
+  "scripts/smoke-production-cloudflare.mjs",
+  `compatibility_date: "${matrix.workersCompatibilityDate}"`,
+);
+
 if (failures.length) {
   console.error(failures.join("\n"));
   process.exit(1);
+}
+
+async function requireText(path, needle) {
+  const text = await readFile(path, "utf8");
+  if (!text.includes(needle)) {
+    failures.push(`${path}: missing ${needle}`);
+  }
+}
+
+async function requireMatch(path, pattern, label) {
+  const text = await readFile(path, "utf8");
+  if (!pattern.test(text)) {
+    failures.push(`${path}: missing ${label}`);
+  }
+}
+
+function escapeRegex(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

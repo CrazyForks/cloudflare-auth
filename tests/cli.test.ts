@@ -666,6 +666,50 @@ export default defineAuthConfig({
     );
   });
 
+  it("doctor does not require AUTH_EMAIL for custom production email adapters", async () => {
+    const cwd = await tempDir();
+    await writeWrangler(cwd);
+    const text = await readFile(join(cwd, "wrangler.jsonc"), "utf8");
+    const config = JSON.parse(text) as {
+      env: { production: { send_email?: unknown } };
+    };
+    delete config.env.production.send_email;
+    await writeFile(join(cwd, "wrangler.jsonc"), JSON.stringify(config));
+    await writeAuthSource(
+      cwd,
+      `import { byEnvironment, defineAuthConfig, terminalEmail } from "@cf-auth/worker";
+
+const customEmail = {
+  kind: "custom",
+  async sendMagicLink() {},
+  async sendEmailVerification() {},
+  async sendPasswordReset() {}
+};
+
+export default defineAuthConfig({
+  appName: "My App",
+  basePath: "/auth",
+  email: byEnvironment({
+    development: terminalEmail({ outbox: true }),
+    preview: customEmail,
+    production: customEmail
+  })
+});
+`,
+    );
+    const output: string[] = [];
+    const code = await runCli(["doctor", "--env", "production"], {
+      cwd,
+      stdout: (line) => output.push(line),
+      runCommand: remoteSecretRunner(),
+    });
+
+    expect(code).toBe(0);
+    expect(output.join("\n")).toContain(
+      "Cloudflare Email binding not required by inspected auth config",
+    );
+  });
+
   it("doctor reports required Turnstile secrets", async () => {
     const cwd = await tempDir();
     await writeWrangler(cwd);

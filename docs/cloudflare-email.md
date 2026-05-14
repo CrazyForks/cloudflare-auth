@@ -8,7 +8,10 @@ Generated binding name:
 AUTH_EMAIL
 ```
 
-If the binding is missing, `cf-auth doctor --env production` reports the missing binding and suggests the exact Wrangler config change. Local development does not require Cloudflare Email; it uses terminal email by default.
+If the inspected production config uses `cloudflareEmail(...)` and the binding
+is missing, `cf-auth doctor --env production` reports the missing binding and
+suggests the exact Wrangler config change. Local development does not require
+Cloudflare Email; it uses terminal email by default.
 
 ## Production Constraints
 

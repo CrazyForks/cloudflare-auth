@@ -419,9 +419,9 @@ async function commandDoctor(
     );
   }
   if (remoteTarget) {
-    const email = selected?.send_email?.find(
-      (item) => item.name === "AUTH_EMAIL",
-    );
+    const email = sourceUsesCloudflareEmail(authSource)
+      ? selected?.send_email?.find((item) => item.name === "AUTH_EMAIL")
+      : "not-required";
     if (!email) {
       addCheck({
         id: "email_binding",
@@ -433,7 +433,10 @@ async function commandDoctor(
       addCheck({
         id: "email_binding",
         status: "pass",
-        message: "Cloudflare Email binding AUTH_EMAIL configured",
+        message:
+          email === "not-required"
+            ? "Cloudflare Email binding not required by inspected auth config"
+            : "Cloudflare Email binding AUTH_EMAIL configured",
       });
     }
     const secretCheck = checkRemoteSecret(envName, cwd, runner);
@@ -1129,6 +1132,7 @@ interface AuthSourceInspection {
   hasDoubleAuthPrefix: boolean;
   usesTerminalEmail: boolean;
   usesDevOutbox: boolean;
+  usesCloudflareEmail: boolean;
   turnstileRequiresSecret: boolean;
   passwordHashProfile: PasswordHashProfileName;
   passwordHashConcurrency: number;
@@ -1202,6 +1206,7 @@ async function inspectAuthSource(cwd: string): Promise<AuthSourceInspection> {
       routeSource.includes("`/auth/auth"),
     usesTerminalEmail: /\bterminalEmail\s*\(/u.test(remoteEmailText),
     usesDevOutbox: /\boutbox\s*:\s*true\b/u.test(remoteEmailText),
+    usesCloudflareEmail: /\bcloudflareEmail\s*\(/u.test(remoteEmailText),
     turnstileRequiresSecret: Boolean(
       turnstileText &&
       /\bmode\s*:\s*["']required["']/u.test(turnstileText) &&
@@ -1277,6 +1282,10 @@ async function inspectAuthSource(cwd: string): Promise<AuthSourceInspection> {
       ).dynamic.map(() => "allowedPreviewOrigins"),
     ],
   };
+}
+
+function sourceUsesCloudflareEmail(source: AuthSourceInspection): boolean {
+  return !source.configFound || source.usesCloudflareEmail;
 }
 
 function checkAuthSource(

@@ -471,6 +471,38 @@ describe("release evidence verifiers", () => {
     }
   });
 
+  it("rejects bearer tokens and alternate API token names in release evidence", async () => {
+    const betaEvidence = validBetaEvidence();
+    (betaEvidence as Record<string, unknown>).headers = {
+      authorization: `Bearer ${"A".repeat(32)}`,
+    };
+    const betaPath = await writeEvidence("beta-bearer-token", betaEvidence);
+    const betaResult = runScript("scripts/verify-beta-evidence.mjs", {
+      CF_AUTH_REQUIRE_BETA_EVIDENCE: "1",
+      CF_AUTH_BETA_EVIDENCE_PATH: betaPath,
+    });
+
+    const deployButtonEvidence = validDeployButtonEvidence();
+    (deployButtonEvidence as Record<string, unknown>).notes =
+      `cf_api_token=${"B".repeat(32)}`;
+    const deployButtonPath = await writeEvidence(
+      "deploy-button-api-token",
+      deployButtonEvidence,
+    );
+    const deployButtonResult = runScript(
+      "scripts/verify-deploy-button-evidence.mjs",
+      {
+        CF_AUTH_REQUIRE_DEPLOY_BUTTON_EVIDENCE: "1",
+        CF_AUTH_DEPLOY_BUTTON_EVIDENCE_PATH: deployButtonPath,
+      },
+    );
+
+    expect(betaResult.status).toBe(1);
+    expect(betaResult.stderr).toContain("must not include raw secrets");
+    expect(deployButtonResult.status).toBe(1);
+    expect(deployButtonResult.stderr).toContain("must not include raw secrets");
+  });
+
   it("requires forced release evidence files to exist", async () => {
     const dir = await mkdtemp(join(tmpdir(), "cf-auth-missing-evidence-"));
     const cases = [

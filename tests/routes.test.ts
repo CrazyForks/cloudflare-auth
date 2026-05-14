@@ -641,9 +641,20 @@ describe("auth HTTP runtime", () => {
 
   it("rejects verification and reset confirmation for disabled users", async () => {
     const { authFetch, email, db } = await setup();
-    await signup(authFetch, "disabled-reset@example.com");
+    const signupResponse = await signup(
+      authFetch,
+      "disabled-reset@example.com",
+    );
+    const cookie = signupResponse.headers.get("Set-Cookie") ?? "";
     const verify =
       email.messages.find((item) => item.type === "verify")?.token ?? "";
+    await authFetch("/auth/magic-link/request", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "disabled-reset@example.com" }),
+    });
+    const magic =
+      email.messages.find((item) => item.type === "magic")?.token ?? "";
     await authFetch("/auth/password/reset/request", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -659,6 +670,34 @@ describe("auth HTTP runtime", () => {
       .prepare("UPDATE users SET disabled_at = ? WHERE normalized_email = ?")
       .bind(Date.now(), "disabled-reset@example.com")
       .run();
+
+    const userResponse = await authFetch("/auth/user", {
+      headers: { Cookie: cookie },
+    });
+    await expect(userResponse.json()).resolves.toEqual({ user: null });
+
+    const loginResponse = await authFetch("/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        identifier: "disabled-reset@example.com",
+        password: "correct horse battery staple",
+      }),
+    });
+    expect(loginResponse.status).toBe(403);
+    await expect(loginResponse.json()).resolves.toMatchObject({
+      error: { code: "account_disabled" },
+    });
+
+    const magicResponse = await authFetch("/auth/magic-link/consume", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: magic }),
+    });
+    expect(magicResponse.status).toBe(400);
+    await expect(magicResponse.json()).resolves.toMatchObject({
+      error: { code: "invalid_token" },
+    });
 
     const verifyResponse = await authFetch("/auth/email/verify/consume", {
       method: "POST",

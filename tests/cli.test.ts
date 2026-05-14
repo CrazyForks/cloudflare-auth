@@ -1165,6 +1165,8 @@ export default app;
     await writeWrangler(cwd);
     const userCalls: Array<{ args: string[]; sql: string }> = [];
     const userOutput: string[] = [];
+    const tokenHash = `hmac-sha256$v=1$kid=k1$purpose=session$hash=${"B".repeat(43)}`;
+    const passwordHash = `scrypt$v=1$n=16384$r=8$p=1$keylen=32$maxmem=67108864$salt=${"C".repeat(22)}$hash=${"D".repeat(43)}`;
     const disableCode = await runCli(
       ["users", "disable", "person@example.com", "--local"],
       {
@@ -1174,7 +1176,7 @@ export default app;
           userCalls.push({ args, sql: args.at(-1) ?? "" });
           return {
             status: 0,
-            stdout: `disabled token=cfauth.magic.k1.${"A".repeat(43)} person@example.com 203.0.113.10 __Host-cfauth-session=raw-cookie`,
+            stdout: `disabled token=cfauth.magic.k1.${"A".repeat(43)} token_hash=${tokenHash} passwordHash=${passwordHash} leaked ${tokenHash} ${passwordHash} person@example.com 203.0.113.10 __Host-cfauth-session=raw-cookie`,
             stderr: "",
           };
         },
@@ -1199,6 +1201,10 @@ export default app;
     expect(userOutput.join("\n")).not.toContain("203.0.113.10");
     expect(userOutput.join("\n")).not.toContain("raw-cookie");
     expect(userOutput.join("\n")).not.toContain("cfauth.magic");
+    expect(userOutput.join("\n")).not.toContain(tokenHash);
+    expect(userOutput.join("\n")).not.toContain(passwordHash);
+    expect(userOutput.join("\n")).not.toContain("hmac-sha256");
+    expect(userOutput.join("\n")).not.toContain("scrypt$v=1");
     expect(userOutput.join("\n")).toContain("[REDACTED_EMAIL]");
 
     const sessionCalls: Array<{ args: string[]; sql: string }> = [];

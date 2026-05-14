@@ -352,23 +352,39 @@ describe("security hardening helpers", () => {
 
   it("redacts token URLs, passwords, emails, and authorization material", () => {
     const rawToken = `cfauth.reset.k1.${"D".repeat(43)}`;
+    const tokenHash = `hmac-sha256$v=1$kid=k1$purpose=session$hash=${"E".repeat(43)}`;
+    const passwordHash = `scrypt$v=1$n=16384$r=8$p=1$keylen=32$maxmem=67108864$salt=${"F".repeat(22)}$hash=${"G".repeat(43)}`;
+    const payload = JSON.stringify({
+      url: `https://example.com/auth/password/reset?token=${rawToken}`,
+      password: "correct horse battery staple",
+      passwordHash,
+      email: "person@example.com",
+      raw_token: rawToken,
+      token_hash: tokenHash,
+      sessionToken: rawToken,
+      tokenType: "password_reset",
+      authorization: "Bearer sk-test-secret",
+    });
+    const redactedJson = redactLogValue(payload);
     const redacted = redactLogValue(
-      JSON.stringify({
-        url: `https://example.com/auth/password/reset?token=${rawToken}`,
-        password: "correct horse battery staple",
-        email: "person@example.com",
-        tokenType: "password_reset",
-        authorization: "Bearer sk-test-secret",
-      }),
+      `${payload} leaked ${tokenHash} ${passwordHash}`,
     );
 
     expect(redacted).toContain('"password":"[REDACTED]"');
+    expect(redacted).toContain('"passwordHash":"[REDACTED]"');
+    expect(redacted).toContain('"raw_token":"[REDACTED]"');
+    expect(redacted).toContain('"token_hash":"[REDACTED]"');
+    expect(redacted).toContain('"sessionToken":"[REDACTED]"');
     expect(redacted).toContain('"authorization":"[REDACTED]"');
     expect(redacted).toContain('"tokenType":"password_reset"');
-    expect(() => JSON.parse(redacted)).not.toThrow();
+    expect(() => JSON.parse(redactedJson)).not.toThrow();
     expect(redacted).not.toContain(rawToken);
+    expect(redacted).not.toContain(tokenHash);
+    expect(redacted).not.toContain(passwordHash);
     expect(redacted).not.toContain("correct horse battery staple");
     expect(redacted).not.toContain("person@example.com");
     expect(redacted).toContain("[REDACTED_EMAIL]");
+    expect(redacted).toContain("[REDACTED_TOKEN_HASH]");
+    expect(redacted).toContain("[REDACTED_PASSWORD_HASH]");
   });
 });

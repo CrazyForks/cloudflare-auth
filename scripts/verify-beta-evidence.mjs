@@ -186,7 +186,7 @@ function containsSensitiveEvidence(text) {
   return (
     /\bAUTH_SECRET\s*=/u.test(text) ||
     /\b(?:CLOUDFLARE_API_TOKEN|NODE_AUTH_TOKEN|NPM_TOKEN)\b/u.test(text) ||
-    /\bcfauth\.(?:session|magic|verify|reset)\.[A-Za-z0-9_-]{1,32}\.[A-Za-z0-9_-]{20,}/u.test(
+    /\bcfauth\.(?:ses|magic|verify|reset)\.[A-Za-z0-9_-]{1,32}\.[A-Za-z0-9_-]{20,}/u.test(
       text,
     ) ||
     /\b(?:__Host-|__Secure-)?cfauth-session=/u.test(text) ||

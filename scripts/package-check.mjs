@@ -129,6 +129,7 @@ for (const dir of packageDirs) {
 }
 
 await verifyPackageNamingDocs();
+await verifyReadmeAndNonGoals();
 await verifyDocsManifest();
 await verifyToolchainDocs();
 await verifyRootScripts();
@@ -287,6 +288,50 @@ async function verifyDocsManifest() {
       await access(file);
     } catch {
       failures.push(`${file}: required documentation file is missing`);
+    }
+  }
+}
+
+async function verifyReadmeAndNonGoals() {
+  const readme = await readFile("README.md", "utf8");
+  const firstParagraph =
+    readme
+      .split(/\n\s*\n/u)
+      .find((block) => !block.startsWith("#"))
+      ?.trim() ?? "";
+  const summaryWordCount = firstParagraph.split(/\s+/u).filter(Boolean).length;
+  if (summaryWordCount === 0 || summaryWordCount > 150) {
+    failures.push("README.md: project summary must be 150 words or fewer");
+  }
+  for (const needle of [
+    "not affiliated with, endorsed by, or sponsored by Cloudflare",
+    "npx --package @cf-auth/cli@latest cf-auth init",
+    "pnpm install",
+    "cf-auth migrate --local",
+    "docs/non-goals.md",
+  ]) {
+    if (!readme.includes(needle)) {
+      failures.push(`README.md: missing Stage 0 text ${needle}`);
+    }
+  }
+
+  const nonGoals = await readFile("docs/non-goals.md", "utf8");
+  for (const item of [
+    "OAuth/social login",
+    "SAML/enterprise SSO",
+    "passkeys",
+    "MFA",
+    "organizations/teams",
+    "role/permission framework",
+    "hosted dashboard",
+    "hosted auth service",
+    "billing integration",
+    "admin impersonation",
+    "multi-project control plane",
+    "password peppering",
+  ]) {
+    if (!nonGoals.includes(item)) {
+      failures.push(`docs/non-goals.md: missing v1 exclusion ${item}`);
     }
   }
 }

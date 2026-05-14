@@ -257,18 +257,51 @@ describe("CLI MVP", () => {
     const cwd = await tempDir();
     await writeWrangler(cwd);
     const local: string[] = [];
+    const localCalls: string[] = [];
     await runCli(["migrate", "--status", "--local"], {
       cwd,
       stdout: (line) => local.push(line),
+      runCommand: (command, args) => {
+        localCalls.push([command, ...args].join(" "));
+        return { status: 0, stdout: "local migrations\n", stderr: "" };
+      },
     });
-    expect(local[0]).toBe("wrangler d1 migrations list app-auth-dev --local");
+    expect(localCalls).toEqual([
+      "wrangler d1 migrations list app-auth-dev --local",
+    ]);
+    expect(local.join("\n")).toContain(
+      "wrangler d1 migrations list app-auth-dev --local",
+    );
+    expect(local.join("\n")).toContain("local migrations");
 
     const remote: string[] = [];
+    const remoteCalls: string[] = [];
     await runCli(["migrate", "--remote", "--env", "production"], {
       cwd,
       stdout: (line) => remote.push(line),
+      runCommand: (command, args) => {
+        remoteCalls.push([command, ...args].join(" "));
+        if (args[0] === "d1" && args[1] === "execute") {
+          return { status: 0, stdout: migrationStateJson(), stderr: "" };
+        }
+        return { status: 0, stdout: "remote migrated\n", stderr: "" };
+      },
     });
-    expect(remote[0]).toBe(
+    expect(remoteCalls).toEqual([
+      "wrangler d1 migrations apply app-auth --remote --env production",
+      `wrangler d1 execute app-auth --remote --env production --json --command ${migrationStateSql()}`,
+    ]);
+    expect(remote.join("\n")).toContain(
+      "wrangler d1 migrations apply app-auth --remote --env production",
+    );
+    expect(remote.join("\n")).toContain("D1 migrations are applied remotely");
+
+    const dryRun: string[] = [];
+    await runCli(["migrate", "--dry-run", "--remote", "--env", "production"], {
+      cwd,
+      stdout: (line) => dryRun.push(line),
+    });
+    expect(dryRun[0]).toBe(
       "wrangler d1 migrations apply app-auth --remote --env production",
     );
 

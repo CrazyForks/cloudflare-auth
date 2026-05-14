@@ -26,10 +26,11 @@ npx --package @cf-auth/cli@latest cf-auth migrate --local
 npx --package @cf-auth/cli@latest cf-auth migrate --status --local
 npx --package @cf-auth/cli@latest cf-auth migrate --remote --env production
 npx --package @cf-auth/cli@latest cf-auth migrate --status --remote --env production
+npx --package @cf-auth/cli@latest cf-auth migrate --dry-run --remote --env production
 ```
 
 Remote migrations require `--env` when the Wrangler config has named
-environments.
+environments. `--dry-run` prints the exact Wrangler command without running it.
 
 ## Doctor And Deploy
 

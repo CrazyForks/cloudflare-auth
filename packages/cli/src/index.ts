@@ -118,7 +118,7 @@ export async function runCli(
         await commandInit(parsed, cwd, out);
         return 0;
       case "migrate":
-        out(await commandMigrate(parsed, cwd));
+        out(await commandMigrate(parsed, cwd, io.runCommand ?? runCommand));
         return 0;
       case "doctor": {
         const result = await commandDoctor(
@@ -246,9 +246,38 @@ async function commandInit(
 async function commandMigrate(
   parsed: ParsedArgs,
   cwd: string,
+  runner: CommandRunner,
 ): Promise<string> {
   const command = await buildMigrateCommand(parsed, cwd);
-  return displayCommand(command.command, command.args);
+  if (parsed.flags["dry-run"])
+    return displayCommand(command.command, command.args);
+  const lines = [runCheckedCommand(command, cwd, runner)];
+  if (!parsed.flags.status) {
+    const target = targetMode(parsed);
+    const envName = parsed.flags.env as string | undefined;
+    const config = await readWrangler(cwd);
+    const database = selectD1(config, envName);
+    const localMigrationVersions = await readLocalMigrationVersions(cwd);
+    if (localMigrationVersions.length > 0) {
+      const check = checkD1MigrationState({
+        cwd,
+        runner,
+        databaseName: database.database_name,
+        envName,
+        remote: target.remote,
+        localMigrationVersions,
+      });
+      if (check.status !== "pass") {
+        throw new Error(
+          [check.message, check.fix ? `Fix: ${check.fix}` : ""]
+            .filter(Boolean)
+            .join("\n"),
+        );
+      }
+      lines.push(check.message);
+    }
+  }
+  return lines.join("\n");
 }
 
 async function buildMigrateCommand(

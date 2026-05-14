@@ -4,6 +4,7 @@ import {
   getAuthSessionFromRequest,
   type AuthConfig,
   type MinimalAuthConfig,
+  type PublicAuthUser,
 } from "@cf-auth/worker";
 import { Hono, type Context, type MiddlewareHandler } from "hono";
 
@@ -29,8 +30,8 @@ export function createAuthRoutes(
   return app;
 }
 
-export function getAuthUser(c: Context): UserRow | null {
-  return (c.get(authUserKey) as UserRow | null | undefined) ?? null;
+export function getAuthUser(c: Context): PublicAuthUser | null {
+  return (c.get(authUserKey) as PublicAuthUser | null | undefined) ?? null;
 }
 
 export function optionalUser(
@@ -44,7 +45,7 @@ export function optionalUser(
       c.env,
       executionContext(c),
     );
-    c.set(authUserKey, session?.user ?? null);
+    c.set(authUserKey, session ? publicAuthUser(session.user) : null);
     await next();
   };
 }
@@ -65,7 +66,7 @@ export function requireUser(
         { error: { code: "unauthorized", message: "Authentication required" } },
         401,
       );
-    c.set(authUserKey, session.user);
+    c.set(authUserKey, publicAuthUser(session.user));
     await next();
   };
 }
@@ -97,8 +98,18 @@ export function requireVerifiedUser(
         403,
       );
     }
-    c.set(authUserKey, session.user);
+    c.set(authUserKey, publicAuthUser(session.user));
     await next();
+  };
+}
+
+function publicAuthUser(user: UserRow): PublicAuthUser {
+  return {
+    id: user.id,
+    email: user.email,
+    username: user.username,
+    emailVerified: user.email_verified_at !== null,
+    createdAt: user.created_at,
   };
 }
 

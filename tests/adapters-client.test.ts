@@ -6,7 +6,14 @@ import {
   applyD1Migrations,
   createSqliteD1Database,
 } from "@cf-auth/testing";
-import { defineAuthConfig } from "@cf-auth/worker";
+import {
+  createAuthHandler,
+  defineAuthConfig,
+  getSession as getWorkerSession,
+  getUser as getWorkerUser,
+  requireUser as requireWorkerUser,
+  requireVerifiedUser as requireWorkerVerifiedUser,
+} from "@cf-auth/worker";
 import { createAuthRoutes, getAuthUser, requireUser } from "@cf-auth/hono";
 import { Hono } from "hono";
 import { describe, expect, it } from "vitest";
@@ -59,8 +66,71 @@ describe("Hono adapter and browser client", () => {
       { headers: { Cookie: cookie } },
       env,
     );
-    await expect(authorized.json()).resolves.toMatchObject({
+    const authorizedBody = (await authorized.json()) as {
+      user: Record<string, unknown>;
+    };
+    expect(authorizedBody).toMatchObject({
       user: { email: "hono@example.com" },
+    });
+    expect(authorizedBody.user).not.toHaveProperty("password_hash");
+    expect(authorizedBody.user).not.toHaveProperty("normalized_email");
+  });
+
+  it("exposes plain Worker helpers for current and verified users", async () => {
+    const { db, config, env } = await fixture();
+    const ctx = { waitUntil() {} } as unknown as ExecutionContext;
+    const handler = createAuthHandler(config);
+    const signup = await handler.fetch(
+      new Request(`${origin}/auth/signup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Origin: origin },
+        body: JSON.stringify({
+          email: "worker@example.com",
+          password: "correct horse battery staple",
+        }),
+      }),
+      env,
+      ctx,
+    );
+    expect(signup?.status).toBe(200);
+    const cookie = signup?.headers.get("Set-Cookie") ?? "";
+    const request = new Request(`${origin}/api/me`, {
+      headers: { Cookie: cookie },
+    });
+
+    const session = await getWorkerSession(request, env, ctx, config);
+    expect(session?.user.email).toBe("worker@example.com");
+
+    const user = await getWorkerUser(request, env, ctx, config);
+    expect(user).toMatchObject({
+      email: "worker@example.com",
+      emailVerified: false,
+    });
+    expect(user).not.toHaveProperty("password_hash");
+
+    const required = await requireWorkerUser(request, env, ctx, config);
+    expect(required).toMatchObject({ email: "worker@example.com" });
+
+    const unverified = await requireWorkerVerifiedUser(
+      request,
+      env,
+      ctx,
+      config,
+    );
+    expect(unverified).toBeInstanceOf(Response);
+    expect((unverified as Response).status).toBe(403);
+
+    await db
+      .prepare(
+        "UPDATE users SET email_verified_at = ?, updated_at = ? WHERE normalized_email = ?",
+      )
+      .bind(Date.now(), Date.now(), "worker@example.com")
+      .run();
+
+    const verified = await requireWorkerVerifiedUser(request, env, ctx, config);
+    expect(verified).toMatchObject({
+      email: "worker@example.com",
+      emailVerified: true,
     });
   });
 

@@ -58,6 +58,18 @@ export interface MinimalAuthConfig {
   email?: unknown;
 }
 
+export type AuthHelperConfig =
+  | AuthConfig
+  | (MinimalAuthConfig & Partial<AuthConfig>);
+
+export interface PublicAuthUser {
+  id: string;
+  email: string;
+  username: string | null;
+  emailVerified: boolean;
+  createdAt: number;
+}
+
 type D1RunMeta = { changes?: number; last_row_id?: number };
 type D1RunResult = { success?: boolean; meta?: D1RunMeta };
 
@@ -1659,18 +1671,113 @@ export function createAuthHandler(
 }
 
 export async function getAuthSessionFromRequest(
-  configInput: AuthConfig | (MinimalAuthConfig & Partial<AuthConfig>),
+  configInput: AuthHelperConfig,
   request: Request,
   envInput?: unknown,
   ctxInput?: ExecutionContext,
 ): Promise<SessionWithUserRow | null> {
+  const runtime = resolveHelperRuntime(
+    configInput,
+    request,
+    envInput,
+    ctxInput,
+  );
+  return lookupSession(request, runtime);
+}
+
+export async function getSession(
+  request: Request,
+  envInput: unknown,
+  ctxInput: ExecutionContext | undefined,
+  configInput: AuthHelperConfig,
+): Promise<SessionWithUserRow | null> {
+  const runtime = resolveHelperRuntime(
+    configInput,
+    request,
+    envInput,
+    ctxInput,
+  );
+  return lookupSession(request, runtime);
+}
+
+export async function getUser(
+  request: Request,
+  envInput: unknown,
+  ctxInput: ExecutionContext | undefined,
+  configInput: AuthHelperConfig,
+): Promise<PublicAuthUser | null> {
+  const runtime = resolveHelperRuntime(
+    configInput,
+    request,
+    envInput,
+    ctxInput,
+  );
+  const session = await lookupSession(request, runtime);
+  if (!session) return null;
+  if (
+    runtime.config.session.requireVerifiedEmail &&
+    session.user.email_verified_at === null
+  ) {
+    return null;
+  }
+  return publicUser(session.user);
+}
+
+export async function requireUser(
+  request: Request,
+  envInput: unknown,
+  ctxInput: ExecutionContext | undefined,
+  configInput: AuthHelperConfig,
+): Promise<PublicAuthUser | Response> {
+  const runtime = resolveHelperRuntime(
+    configInput,
+    request,
+    envInput,
+    ctxInput,
+  );
+  const session = await lookupSession(request, runtime);
+  if (!session)
+    return errorResponse("Authentication required", 401, "unauthorized");
+  return publicUser(session.user);
+}
+
+export async function requireVerifiedUser(
+  request: Request,
+  envInput: unknown,
+  ctxInput: ExecutionContext | undefined,
+  configInput: AuthHelperConfig,
+): Promise<PublicAuthUser | Response> {
+  const runtime = resolveHelperRuntime(
+    configInput,
+    request,
+    envInput,
+    ctxInput,
+  );
+  const session = await lookupSession(request, runtime);
+  if (!session)
+    return errorResponse("Authentication required", 401, "unauthorized");
+  if (session.user.email_verified_at === null) {
+    return errorResponse(
+      "Email verification required",
+      403,
+      "email_verification_required",
+    );
+  }
+  return publicUser(session.user);
+}
+
+function resolveHelperRuntime(
+  configInput: AuthHelperConfig,
+  request: Request,
+  envInput?: unknown,
+  ctxInput?: ExecutionContext,
+): RuntimeContext {
   const config =
     "runtime" in configInput
       ? (configInput as AuthConfig)
       : defineAuthConfig(configInput);
   const ctx = ctxInput ?? ({ waitUntil() {} } as unknown as ExecutionContext);
-  const runtime = resolveRuntime(config, request, envInput, ctx);
-  return getSession(request, runtime);
+  return resolveRuntime(config, request, envInput, ctx);
 }
 
 async function handleSignup(
@@ -1866,7 +1973,7 @@ async function handleLogout(
   request: Request,
   runtime: RuntimeContext,
 ): Promise<Response> {
-  const session = await getSession(request, runtime);
+  const session = await lookupSession(request, runtime);
   if (session) {
     await runtime.repos.sessions.revokeSession(session.id, Date.now());
     queueAuthEvent(runtime, request, "session_revoked", {
@@ -1883,7 +1990,7 @@ async function handleUser(
   request: Request,
   runtime: RuntimeContext,
 ): Promise<Response> {
-  const session = await getSession(request, runtime);
+  const session = await lookupSession(request, runtime);
   if (!session) return json({ user: null });
   if (
     runtime.config.session.requireVerifiedEmail &&
@@ -2690,7 +2797,7 @@ function consumeResponse(
   return mode === "json" ? json(payload) : redirect(payload.redirectTo);
 }
 
-async function getSession(
+async function lookupSession(
   request: Request,
   runtime: RuntimeContext,
 ): Promise<SessionWithUserRow | null> {
@@ -3073,7 +3180,7 @@ function handlePreflight(request: Request, runtime: RuntimeContext): Response {
   return new Response(null, { status: 204, headers });
 }
 
-function publicUser(user: UserRow) {
+function publicUser(user: UserRow): PublicAuthUser {
   return {
     id: user.id,
     email: user.email,

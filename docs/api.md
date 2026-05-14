@@ -84,21 +84,49 @@ await auth.resetPassword({ token, password });
 
 The client sends `credentials: "include"` by default and throws `AuthClientError` with `code`, `message`, and `status`.
 
+## Server Helpers
+
+Plain Worker helpers accept `(request, env, ctx, config)`.
+
+```ts
+import { getUser, requireVerifiedUser } from "@cf-auth/worker";
+
+const user = await getUser(request, env, ctx, authConfig);
+const verifiedUser = await requireVerifiedUser(request, env, ctx, authConfig);
+if (verifiedUser instanceof Response) return verifiedUser;
+```
+
+`getUser()` returns the public user object or `null`. `requireUser()` returns a
+public user object or a `401` JSON `Response`; `requireVerifiedUser()` also
+returns a `403 email_verification_required` response for unverified users.
+`getSession()` and `getAuthSessionFromRequest()` are server-only helpers that
+return the full session and database user row, including internal fields.
+
+Hono routes use the adapter middleware:
+
+```ts
+import { getAuthUser, requireUser } from "@cf-auth/hono";
+
+app.get("/api/me", requireUser(), (c) => c.json({ user: getAuthUser(c) }));
+```
+
+`getAuthUser(c)` returns the same public user object shape as `getUser()`.
+
 ## Package Entrypoints
 
 Every package exposes a single root export map entry, `"."`. Subpath imports are
 not part of the v1 public API.
 
-| Entrypoint                  | Primary public surface                                                                                                                                                                                                                                                                      |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `cf-auth`                   | Unscoped CLI shim package with the `cf-auth` binary. The root export exposes `cfAuthPackageName` and re-exports `cliPackageName`.                                                                                                                                                           |
-| `@cf-auth/cli`              | CLI implementation package with the `cf-auth` binary. The root export exposes `runCli(args, io)`, `cliPackageName`, and `CliIO`. Command behavior is documented in [CLI Reference](cli.md).                                                                                                 |
-| `create-cloudflare-auth`    | Create-package binary `create-cloudflare-auth`. The root export exposes `createCloudflareAuthPackageName` and re-exports `cliPackageName`.                                                                                                                                                  |
-| `@cf-auth/core`             | Core row and repository contracts, normalization helpers, redirect validation, raw-token generation and parsing, HMAC token hashing, key-ring parsing, password hash profiles and envelopes, cookie serialization, derived rate-limit keys, and derived auth-event hashes.                  |
-| `@cf-auth/worker`           | `defineAuthConfig`, `createAuthHandler`, `getAuthSessionFromRequest`, `createD1Repositories`, `terminalEmail`, `byEnvironment`, `verifyTurnstileToken`, `cloudflareRateLimitPrefilter`, `redactLogValue`, config types, email adapter types, Turnstile types, and runtime package metadata. |
-| `@cf-auth/hono`             | `createAuthRoutes`, `optionalUser`, `requireUser`, `requireVerifiedUser`, `getAuthUser`, and `honoPackageName`.                                                                                                                                                                             |
-| `@cf-auth/client`           | `createAuthClient`, `AuthClientError`, `AuthClientOptions`, `PublicAuthUser`, and `clientPackageName`.                                                                                                                                                                                      |
-| `@cf-auth/email-cloudflare` | `cloudflareEmail`, `defaultMagicLinkTemplate`, `defaultEmailVerificationTemplate`, `defaultPasswordResetTemplate`, Cloudflare Email binding/template option types, and `emailCloudflarePackageName`.                                                                                        |
-| `@cf-auth/testing`          | `createSqliteD1Database`, `applyD1Migrations`, `createMockEmailAdapter`, `MockAuthEmail`, and `testingPackageName`.                                                                                                                                                                         |
+| Entrypoint                  | Primary public surface                                                                                                                                                                                                                                                                                                                                     |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cf-auth`                   | Unscoped CLI shim package with the `cf-auth` binary. The root export exposes `cfAuthPackageName` and re-exports `cliPackageName`.                                                                                                                                                                                                                          |
+| `@cf-auth/cli`              | CLI implementation package with the `cf-auth` binary. The root export exposes `runCli(args, io)`, `cliPackageName`, and `CliIO`. Command behavior is documented in [CLI Reference](cli.md).                                                                                                                                                                |
+| `create-cloudflare-auth`    | Create-package binary `create-cloudflare-auth`. The root export exposes `createCloudflareAuthPackageName` and re-exports `cliPackageName`.                                                                                                                                                                                                                 |
+| `@cf-auth/core`             | Core row and repository contracts, normalization helpers, redirect validation, raw-token generation and parsing, HMAC token hashing, key-ring parsing, password hash profiles and envelopes, cookie serialization, derived rate-limit keys, and derived auth-event hashes.                                                                                 |
+| `@cf-auth/worker`           | `defineAuthConfig`, `createAuthHandler`, `getSession`, `getUser`, `requireUser`, `requireVerifiedUser`, `getAuthSessionFromRequest`, `createD1Repositories`, `terminalEmail`, `byEnvironment`, `verifyTurnstileToken`, `cloudflareRateLimitPrefilter`, `redactLogValue`, config types, email adapter types, Turnstile types, and runtime package metadata. |
+| `@cf-auth/hono`             | `createAuthRoutes`, `optionalUser`, `requireUser`, `requireVerifiedUser`, `getAuthUser`, and `honoPackageName`.                                                                                                                                                                                                                                            |
+| `@cf-auth/client`           | `createAuthClient`, `AuthClientError`, `AuthClientOptions`, `PublicAuthUser`, and `clientPackageName`.                                                                                                                                                                                                                                                     |
+| `@cf-auth/email-cloudflare` | `cloudflareEmail`, `defaultMagicLinkTemplate`, `defaultEmailVerificationTemplate`, `defaultPasswordResetTemplate`, Cloudflare Email binding/template option types, and `emailCloudflarePackageName`.                                                                                                                                                       |
+| `@cf-auth/testing`          | `createSqliteD1Database`, `applyD1Migrations`, `createMockEmailAdapter`, `MockAuthEmail`, and `testingPackageName`.                                                                                                                                                                                                                                        |
 
 The reviewed release surface is summarized in [Public API Report](api-report.md).

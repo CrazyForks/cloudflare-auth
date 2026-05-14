@@ -256,6 +256,10 @@ async function packageNameFixture(
 const args = process.argv.slice(2);
 const query = args[1] || "";
 if (args[0] !== "view") process.exit(2);
+if (!args.includes("--loglevel") || args[args.indexOf("--loglevel") + 1] !== "silent") {
+  console.error("missing silent loglevel");
+  process.exit(2);
+}
 if (query === "@cf-auth/cli" && ${JSON.stringify(options.cliRegistryOutput !== undefined)}) {
   console.log(${JSON.stringify(options.cliRegistryOutput ?? "")});
   process.exit(0);

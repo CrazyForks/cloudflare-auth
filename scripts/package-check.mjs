@@ -401,6 +401,30 @@ async function verifyReleaseControls() {
     }
   }
 
+  const productionSmokeWorkflow = await readFile(
+    ".github/workflows/cloudflare-production-smoke.yml",
+    "utf8",
+  );
+  for (const needle of [
+    "workflow_dispatch:",
+    "package_tag:",
+    "pnpm smoke:cloudflare-production",
+    'CF_AUTH_PRODUCTION_SMOKE: "1"',
+    "CF_AUTH_PRODUCTION_SMOKE_PACKAGE_TAG",
+    "CF_AUTH_PRODUCTION_SMOKE_WORKER_NAME",
+    "CF_AUTH_PRODUCTION_SMOKE_DATABASE_NAME",
+    "CF_AUTH_PRODUCTION_SMOKE_DATABASE_ID",
+    "CF_AUTH_PRODUCTION_SMOKE_ORIGIN",
+    "CLOUDFLARE_ACCOUNT_ID",
+    "CLOUDFLARE_API_TOKEN",
+  ]) {
+    if (!productionSmokeWorkflow.includes(needle)) {
+      failures.push(
+        `.github/workflows/cloudflare-production-smoke.yml: missing ${needle}`,
+      );
+    }
+  }
+
   const changesets = JSON.parse(
     await readFile(".changeset/config.json", "utf8"),
   );

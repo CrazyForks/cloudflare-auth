@@ -696,8 +696,32 @@ describe("release evidence verifiers", () => {
   });
 
   it("accepts package ownership evidence with private shim reservations", async () => {
+    const cwd = await packageOwnershipFixture({
+      publishCfAuthShim: false,
+      staleCfAuthReservation: false,
+      publishCreatePackage: false,
+      staleCreateReservation: false,
+    });
+    const result = runScript(
+      "scripts/verify-package-ownership.mjs",
+      {
+        CF_AUTH_REQUIRE_PACKAGE_OWNERSHIP: "1",
+        CF_AUTH_PACKAGE_OWNERSHIP_PATH: join(
+          cwd,
+          "docs",
+          "package-ownership.json",
+        ),
+      },
+      cwd,
+    );
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("package ownership evidence verified");
+  });
+
+  it("rejects package ownership evidence for placeholder package versions", async () => {
     const path = await writeEvidence(
-      "package-ownership",
+      "package-ownership-placeholder",
       validPackageEvidence(),
     );
     const result = runScript("scripts/verify-package-ownership.mjs", {
@@ -705,8 +729,8 @@ describe("release evidence verifiers", () => {
       CF_AUTH_PACKAGE_OWNERSHIP_PATH: path,
     });
 
-    expect(result.status).toBe(0);
-    expect(result.stdout).toContain("package ownership evidence verified");
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("placeholder version 0.0.0");
   });
 
   it("rejects private shim package names in publishable ownership evidence", async () => {

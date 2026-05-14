@@ -77,6 +77,11 @@ function validateEvidence(value, rawText) {
       byName.set(item.name, item);
     }
     requireString(item.version, `${path}.version`);
+    if (item.version === "0.0.0") {
+      failures.push(
+        `${evidencePath}: ${path}.version must not be placeholder version 0.0.0 before publishing`,
+      );
+    }
     requireString(item.registry, `${path}.registry`);
     if (item.registry !== "https://registry.npmjs.org/") {
       failures.push(`${evidencePath}: ${path}.registry must be npmjs.org`);
@@ -93,6 +98,11 @@ function validateEvidence(value, rawText) {
   }
 
   for (const pkg of packages) {
+    if (pkg.version === "0.0.0") {
+      failures.push(
+        `${pkg.name}: package ownership evidence cannot target placeholder version 0.0.0`,
+      );
+    }
     const item = byName.get(pkg.name);
     if (!item) {
       failures.push(

@@ -1171,6 +1171,46 @@ describe("auth HTTP runtime", () => {
     expect(configEvent?.ip_hash).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(configEvent?.user_agent_hash).toMatch(/^[A-Za-z0-9_-]{43}$/);
 
+    const turnstileConfig = await setup({
+      turnstile: {
+        mode: "required",
+        endpoints: ["magic_link_request"],
+      },
+    });
+    const missingTurnstileSecret = await turnstileConfig.authFetch(
+      "/auth/magic-link/request",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "CF-Ray": "ray-turnstile-config",
+        },
+        body: JSON.stringify({
+          email: "turnstile-config@example.com",
+          turnstileToken: "client-token",
+        }),
+      },
+    );
+    expect(missingTurnstileSecret.status).toBe(500);
+    await expect(missingTurnstileSecret.json()).resolves.toMatchObject({
+      error: { code: "config_error" },
+      requestId: "ray-turnstile-config",
+    });
+    const turnstileConfigEvent = await turnstileConfig.db
+      .prepare(
+        "SELECT event_type, request_id, metadata_json FROM auth_events ORDER BY created_at DESC LIMIT 1",
+      )
+      .first<{
+        event_type: string;
+        request_id: string | null;
+        metadata_json: string;
+      }>();
+    expect(turnstileConfigEvent).toMatchObject({
+      event_type: "config_error",
+      request_id: "ray-turnstile-config",
+      metadata_json: JSON.stringify({ reason: "config_error" }),
+    });
+
     const allowedPreflight = await handler.fetch(
       new Request(`${origin}/auth/signup`, {
         method: "OPTIONS",

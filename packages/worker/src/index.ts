@@ -1859,13 +1859,30 @@ async function dispatchAuthRequest(
       error instanceof AuthRepositoryError ||
       error instanceof z.ZodError
     ) {
+      if (error instanceof AuthCryptoError && error.code === "config_error") {
+        writeRuntimeConfigFailureEvent({
+          repos: runtime.repos,
+          keyRing: runtime.keyRing,
+          request,
+          requestId: runtime.requestId,
+          ctx: runtime.ctx,
+          logger: runtime.logger,
+          error,
+        });
+      }
       const code =
         error instanceof z.ZodError
           ? "validation_failed"
           : error.code === "hash_queue_timeout"
             ? "rate_limited"
             : error.code;
-      return errorResponse(error, 400, code);
+      return errorResponse(
+        error,
+        error instanceof AuthCryptoError && error.code === "config_error"
+          ? 500
+          : 400,
+        code,
+      );
     }
     return errorResponse(error, 500, "server_error");
   }

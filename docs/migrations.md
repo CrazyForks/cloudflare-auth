@@ -46,6 +46,9 @@ export default {
 ```
 
 Keep `auth_events` according to your product's audit-retention policy. If you do purge it, use `created_at` and a documented retention window rather than deleting all rows.
+If you pass custom retention windows or `now` to `cleanCfAuth`, use
+non-negative integer millisecond values; invalid cleanup inputs are rejected
+before any delete statements run.
 
 The CLI cleanup wrapper applies the default v1 retention windows:
 

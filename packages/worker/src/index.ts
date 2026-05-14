@@ -1102,6 +1102,9 @@ export async function cleanCfAuth(
     }
   }
   const now = input.now ?? Date.now();
+  if (!Number.isInteger(now) || now < 0) {
+    throw new AuthCryptoError("invalid cleanup now", "invalid_cleanup_now");
+  }
   const sessionCutoff = now - retention.closedSessionMs;
   const tokenCutoff = now - retention.closedVerificationTokenMs;
   const rateLimitCutoff = now - retention.expiredRateLimitMs;

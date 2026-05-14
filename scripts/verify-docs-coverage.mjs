@@ -150,6 +150,10 @@ for (const symbol of [
   requireText("docs/api.md", docs.api, symbol);
 }
 
+for (const text of ["Default retention windows", "non-negative integer"]) {
+  requireText("docs/api.md", docs.api, text);
+}
+
 for (const command of [
   "cf-auth migrate --local",
   "cf-auth migrate --remote --env production",
@@ -159,7 +163,7 @@ for (const command of [
   requireText("docs/migrations.md", docs.migrations, command);
 }
 
-for (const text of ["cleanCfAuth", "ctx.waitUntil"]) {
+for (const text of ["cleanCfAuth", "ctx.waitUntil", "non-negative integer"]) {
   requireText("docs/migrations.md", docs.migrations, text);
 }
 

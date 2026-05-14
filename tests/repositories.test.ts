@@ -549,6 +549,15 @@ describe("D1 migrations and repositories", () => {
         retention: { authEventMs: -1 },
       }),
     ).rejects.toThrow("invalid cleanup retention authEventMs");
+    for (const invalidNow of [-1, 1.5, Number.POSITIVE_INFINITY]) {
+      await expect(
+        cleanCfAuth({
+          env: { AUTH_DB: db },
+          config: { appName: "Cleanup Test", basePath: "/auth" },
+          now: invalidNow,
+        }),
+      ).rejects.toThrow("invalid cleanup now");
+    }
   });
 
   it("isolates D1 rate limits by action and opaque derived key", async () => {

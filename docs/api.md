@@ -106,6 +106,23 @@ can still distinguish an unverified session from a missing session.
 `getAuthSessionFromRequest()` is the lower-level raw session helper used by
 adapters.
 
+## Scheduled Cleanup Helper
+
+`cleanCfAuth({ env, config, now?, retention? })` deletes expired or closed auth
+rows through the configured D1 binding and returns the number of changed rows:
+
+```ts
+import { cleanCfAuth } from "@cf-auth/worker";
+
+const result = await cleanCfAuth({ env, config: authConfig });
+```
+
+Default retention windows match `cf-auth clean`: seven days for expired or
+revoked sessions, seven days for expired, used, or revoked verification tokens,
+one day for expired rate-limit rows, and 90 days for auth events. Custom
+retention values and a custom `now` timestamp must be non-negative integer
+millisecond values; invalid values are rejected before any delete statements run.
+
 Hono routes use the adapter middleware:
 
 ```ts

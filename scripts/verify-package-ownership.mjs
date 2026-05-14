@@ -9,6 +9,7 @@ import {
 import {
   isFutureIsoDateString,
   isIsoDateString,
+  isJsonObject,
 } from "./evidence-validation.mjs";
 
 const evidencePath =
@@ -36,13 +37,21 @@ if (!(await exists(evidencePath))) {
 const failures = [];
 const text = await readFile(evidencePath, "utf8");
 let evidence;
+let parsedEvidence = false;
 try {
   evidence = JSON.parse(text);
+  parsedEvidence = true;
 } catch {
   failures.push(`${evidencePath}: must be valid JSON`);
 }
 
-if (evidence) validateEvidence(evidence, text);
+if (parsedEvidence) {
+  if (isJsonObject(evidence)) {
+    validateEvidence(evidence, text);
+  } else {
+    failures.push(`${evidencePath}: top-level JSON value must be an object`);
+  }
+}
 
 if (failures.length > 0) {
   console.error(failures.join("\n"));

@@ -9,6 +9,7 @@ import {
 import {
   isFutureIsoDateString,
   isIsoDateString,
+  isJsonObject,
 } from "./evidence-validation.mjs";
 import { requiredAuthSmokeEndpoints } from "./smoke-endpoints.mjs";
 
@@ -35,26 +36,32 @@ if (!(await exists(evidencePath))) {
 const failures = [];
 const text = await readFile(evidencePath, "utf8");
 let evidence;
+let parsedEvidence = false;
 try {
   evidence = JSON.parse(text);
+  parsedEvidence = true;
 } catch {
   failures.push(`${evidencePath}: must be valid JSON`);
 }
 
 let requiredSmokeEndpoints = [];
-if (evidence) {
-  try {
-    requiredSmokeEndpoints = await requiredAuthSmokeEndpoints(
-      process.env.CF_AUTH_SMOKE_ENDPOINTS_SOURCE || undefined,
-    );
-  } catch (error) {
-    failures.push(
-      `${evidencePath}: could not derive smoke endpoints: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
-    );
+if (parsedEvidence) {
+  if (isJsonObject(evidence)) {
+    try {
+      requiredSmokeEndpoints = await requiredAuthSmokeEndpoints(
+        process.env.CF_AUTH_SMOKE_ENDPOINTS_SOURCE || undefined,
+      );
+    } catch (error) {
+      failures.push(
+        `${evidencePath}: could not derive smoke endpoints: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+    validateEvidence(evidence, text);
+  } else {
+    failures.push(`${evidencePath}: top-level JSON value must be an object`);
   }
-  validateEvidence(evidence, text);
 }
 
 if (failures.length > 0) {

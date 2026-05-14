@@ -188,6 +188,52 @@ describe("release evidence verifiers", () => {
     }
   });
 
+  it("rejects evidence files whose top-level JSON is not an object", async () => {
+    const cases = [
+      {
+        name: "alpha",
+        script: "scripts/verify-alpha-evidence.mjs",
+        requireEnv: "CF_AUTH_REQUIRE_ALPHA_EVIDENCE",
+        pathEnv: "CF_AUTH_ALPHA_EVIDENCE_PATH",
+      },
+      {
+        name: "beta",
+        script: "scripts/verify-beta-evidence.mjs",
+        requireEnv: "CF_AUTH_REQUIRE_BETA_EVIDENCE",
+        pathEnv: "CF_AUTH_BETA_EVIDENCE_PATH",
+      },
+      {
+        name: "deploy-button",
+        script: "scripts/verify-deploy-button-evidence.mjs",
+        requireEnv: "CF_AUTH_REQUIRE_DEPLOY_BUTTON_EVIDENCE",
+        pathEnv: "CF_AUTH_DEPLOY_BUTTON_EVIDENCE_PATH",
+      },
+      {
+        name: "package-ownership",
+        script: "scripts/verify-package-ownership.mjs",
+        requireEnv: "CF_AUTH_REQUIRE_PACKAGE_OWNERSHIP",
+        pathEnv: "CF_AUTH_PACKAGE_OWNERSHIP_PATH",
+      },
+      {
+        name: "security-tracker",
+        script: "scripts/verify-security-release-tracker.mjs",
+        requireEnv: "CF_AUTH_REQUIRE_SECURITY_TRACKER",
+        pathEnv: "CF_AUTH_SECURITY_TRACKER_PATH",
+      },
+    ];
+
+    for (const item of cases) {
+      const path = await writeEvidence(`${item.name}-non-object`, null);
+      const result = runScript(item.script, {
+        [item.requireEnv]: "1",
+        [item.pathEnv]: path,
+      });
+
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain("top-level JSON value must be an object");
+    }
+  });
+
   it("rejects impossible ISO evidence dates", async () => {
     const evidence = validAlphaEvidence();
     evidence.localSetups[0]!.completedAt = "2026-02-31T00:00:00.000Z";

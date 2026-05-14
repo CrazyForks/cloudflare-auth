@@ -61,3 +61,7 @@ export function isFutureIsoDateString(
 ) {
   return isIsoDateString(value) && Date.parse(value) > nowMs + clockSkewMs;
 }
+
+export function isJsonObject(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}

@@ -155,12 +155,42 @@ async function verifyPackageNamingDocs() {
   const fallback = "npx --package @cf-auth/cli@latest cf-auth init";
   for (const file of ["README.md", "docs/quickstart.md"]) {
     const text = await readFile(file, "utf8");
-    if (
-      (text.includes("npm create cloudflare-auth@latest") ||
-        text.includes("npx cf-auth@latest")) &&
-      !text.includes(fallback)
-    ) {
-      failures.push(`${file}: public package commands must document fallback`);
+    if (!text.includes(fallback)) {
+      failures.push(
+        `${file}: public package commands must use scoped fallback`,
+      );
     }
   }
+
+  const docs = await listMarkdownFiles("docs");
+  const publicCommandFiles = ["README.md", ...docs].filter(
+    (file) => file !== "docs/decisions/package-naming.md",
+  );
+  for (const file of publicCommandFiles) {
+    const text = await readFile(file, "utf8");
+    if (/\bnpx\s+cf-auth(?:@[\w.-]+)?\b/.test(text)) {
+      failures.push(
+        `${file}: npx cf-auth commands are blocked until package ownership is confirmed`,
+      );
+    }
+    if (/\bnpm\s+create\s+cloudflare-auth(?:@[\w.-]+)?\b/.test(text)) {
+      failures.push(
+        `${file}: npm create cloudflare-auth commands are blocked until package ownership is confirmed`,
+      );
+    }
+  }
+}
+
+async function listMarkdownFiles(dir) {
+  const entries = await readdir(dir, { withFileTypes: true });
+  const files = [];
+  for (const entry of entries) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...(await listMarkdownFiles(path)));
+    } else if (entry.isFile() && entry.name.endsWith(".md")) {
+      files.push(path);
+    }
+  }
+  return files.sort();
 }

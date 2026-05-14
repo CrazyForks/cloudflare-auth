@@ -217,7 +217,9 @@ async function commandInit(
     );
     out("app.route(authConfig.basePath, createAuthRoutes(authConfig));");
   }
-  out("Next: pnpm install && npx cf-auth migrate --local && npm run dev");
+  out(
+    "Next: pnpm install && npx --package @cf-auth/cli@latest cf-auth migrate --local && npm run dev",
+  );
 }
 
 async function commandMigrate(
@@ -288,7 +290,7 @@ async function commandDoctor(
       id: "wrangler_config",
       status: "fail",
       message: "Wrangler config missing",
-      fix: "npx cf-auth@latest init --repair",
+      fix: "npx --package @cf-auth/cli@latest cf-auth init --repair",
     });
     return {
       ok: false,
@@ -317,7 +319,7 @@ async function commandDoctor(
       id: "d1_binding",
       status: "fail",
       message: "D1 binding AUTH_DB is missing",
-      fix: "npx cf-auth@latest init --repair or add d1_databases binding AUTH_DB",
+      fix: "npx --package @cf-auth/cli@latest cf-auth init --repair or add d1_databases binding AUTH_DB",
     });
   } else if (d1.database_id?.startsWith("REPLACE_")) {
     addCheck({
@@ -339,7 +341,7 @@ async function commandDoctor(
       id: "migration_files",
       status: "fail",
       message: "Local migration files are missing",
-      fix: "npx cf-auth@latest init --repair",
+      fix: "npx --package @cf-auth/cli@latest cf-auth init --repair",
     });
   } else {
     addCheck({
@@ -705,8 +707,8 @@ function migrationStateSql(): string {
 
 function migrationFix(remote: boolean, envName: string | undefined): string {
   return remote
-    ? `npx cf-auth@latest migrate --remote${envName ? ` --env ${envName}` : ""}`
-    : "npx cf-auth@latest migrate --local";
+    ? `npx --package @cf-auth/cli@latest cf-auth migrate --remote${envName ? ` --env ${envName}` : ""}`
+    : "npx --package @cf-auth/cli@latest cf-auth migrate --local";
 }
 
 function parseD1MigrationState(
@@ -890,9 +892,9 @@ function checkRemoteSecret(
     missingMessage: "AUTH_SECRET is missing remotely",
     unavailableMessage: "Remote AUTH_SECRET could not be verified",
     passMessage: "Remote AUTH_SECRET configured",
-    fix: "npx cf-auth@latest rotate-secret --apply --env production",
+    fix: "npx --package @cf-auth/cli@latest cf-auth rotate-secret --apply --env production",
     unavailableFix:
-      "run wrangler login, then npx cf-auth@latest rotate-secret --apply --env production",
+      "run wrangler login, then npx --package @cf-auth/cli@latest cf-auth rotate-secret --apply --env production",
   });
 }
 
@@ -1036,7 +1038,7 @@ async function checkLocalSecrets(cwd: string): Promise<DoctorCheck[]> {
         id: "local_secret",
         status: "fail",
         message: "Local AUTH_SECRET is missing",
-        fix: "npx cf-auth@latest rotate-secret --print > .dev.vars",
+        fix: "npx --package @cf-auth/cli@latest cf-auth rotate-secret --print > .dev.vars",
       },
     ];
   }
@@ -1048,7 +1050,7 @@ async function checkLocalSecrets(cwd: string): Promise<DoctorCheck[]> {
         id: "local_secret",
         status: "fail",
         message: "Local AUTH_SECRET is missing",
-        fix: "npx cf-auth@latest rotate-secret --print >> .dev.vars",
+        fix: "npx --package @cf-auth/cli@latest cf-auth rotate-secret --print >> .dev.vars",
       },
     ];
   }
@@ -1060,7 +1062,7 @@ async function checkLocalSecrets(cwd: string): Promise<DoctorCheck[]> {
         id: "local_secret",
         status: "fail",
         message: "Local AUTH_SECRET or AUTH_SECRET_PREVIOUS is invalid",
-        fix: "regenerate secrets with npx cf-auth@latest rotate-secret --print",
+        fix: "regenerate secrets with npx --package @cf-auth/cli@latest cf-auth rotate-secret --print",
       },
     ];
   }

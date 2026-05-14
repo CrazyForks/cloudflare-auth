@@ -3,35 +3,35 @@
 Production deploys should use a named environment.
 
 ```bash
-npx cf-auth@latest doctor --env production
-npx cf-auth@latest migrate --remote --env production
-npx cf-auth@latest deploy --env production
+npx --package @cf-auth/cli@latest cf-auth doctor --env production
+npx --package @cf-auth/cli@latest cf-auth migrate --remote --env production
+npx --package @cf-auth/cli@latest cf-auth deploy --env production
 ```
 
 To preview the exact checks and Wrangler deploy command without changing
 Cloudflare state:
 
 ```bash
-npx cf-auth@latest deploy --dry-run --env production
+npx --package @cf-auth/cli@latest cf-auth deploy --dry-run --env production
 ```
 
 To apply remote migrations immediately before deployment:
 
 ```bash
-npx cf-auth@latest deploy --migrate --env production
+npx --package @cf-auth/cli@latest cf-auth deploy --migrate --env production
 ```
 
 For support and release records, emit the redaction-safe report:
 
 ```bash
-npx cf-auth@latest doctor --report --env production
-npx cf-auth@latest doctor --report --env production --output auth-doctor-report.json
+npx --package @cf-auth/cli@latest cf-auth doctor --report --env production
+npx --package @cf-auth/cli@latest cf-auth doctor --report --env production --output auth-doctor-report.json
 ```
 
 Required placeholders:
 
 - `AUTH_PUBLIC_ORIGIN`: exact production origin, for example `https://example.com`
-- `AUTH_SECRET`: generated with `cf-auth rotate-secret --print` and stored as a Worker secret
+- `AUTH_SECRET`: generated with `npx --package @cf-auth/cli@latest cf-auth rotate-secret --print` and stored as a Worker secret
 - `TURNSTILE_SECRET_KEY`: stored as a Worker secret when `turnstile.mode` is `required` and no custom verifier is configured
 - `AUTH_DB.database_id`: production D1 database ID
 - `AUTH_EMAIL`: Cloudflare Email binding when using Cloudflare Email
@@ -49,7 +49,7 @@ exists.
 It also runs the configured password hashing profile benchmark locally and
 labels production results as local estimates.
 
-`cf-auth rotate-secret --apply --env production` generates a new `AUTH_SECRET`
+`npx --package @cf-auth/cli@latest cf-auth rotate-secret --apply --env production` generates a new `AUTH_SECRET`
 and sends it to Wrangler over stdin. It prints the Wrangler operation result,
 not the generated secret. Provide `--previous-from-env NAME` or
 `--previous-from-stdin` when rotating without invalidating existing sessions and

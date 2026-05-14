@@ -4,7 +4,7 @@
 
 1. Read the release notes for migration files and config changes.
 2. Back up the production D1 database.
-3. Run `npx cf-auth@latest doctor --report --env production` and keep the redacted report with the release record.
+3. Run `npx --package @cf-auth/cli@latest cf-auth doctor --report --env production` and keep the redacted report with the release record.
 4. Apply migrations in a preview environment before production.
 
 ## Schema Migrations
@@ -12,8 +12,8 @@
 Migrations are append-only and tracked in `auth_schema_migrations`. A production upgrade should run:
 
 ```bash
-npx cf-auth@latest migrate --status --remote --env production
-npx cf-auth@latest migrate --remote --env production
+npx --package @cf-auth/cli@latest cf-auth migrate --status --remote --env production
+npx --package @cf-auth/cli@latest cf-auth migrate --remote --env production
 ```
 
 Upgrade tests for 1.0 must prove every beta schema version migrates to the 1.0 schema while preserving:

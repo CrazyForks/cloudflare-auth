@@ -7,20 +7,10 @@ Private alpha validates that a developer can start from a clean directory, compl
 Run from an empty working directory:
 
 ```bash
-npm create cloudflare-auth@alpha my-app
-cd my-app
-pnpm install
-npx cf-auth@alpha migrate --local
-npm run dev
-```
-
-Fallback while the unscoped packages are unpublished:
-
-```bash
 npx --package @cf-auth/cli@alpha cf-auth init my-app --template hono-basic
 cd my-app
 pnpm install
-npx cf-auth migrate --local
+npx --package @cf-auth/cli@alpha cf-auth migrate --local
 npm run dev
 ```
 
@@ -39,9 +29,9 @@ Record setup time from the first scaffold command until the first successful sig
 Run from the generated app:
 
 ```bash
-npx cf-auth@alpha doctor --report --env production
-npx cf-auth@alpha migrate --remote --env production
-npx cf-auth@alpha deploy --env production
+npx --package @cf-auth/cli@alpha cf-auth doctor --report --env production
+npx --package @cf-auth/cli@alpha cf-auth migrate --remote --env production
+npx --package @cf-auth/cli@alpha cf-auth deploy --env production
 ```
 
 Attach the `doctor --report` JSON to alpha feedback. The report schema is checked in at `schemas/doctor-report.schema.json`; reports omit raw secrets, tokens, cookies, emails, IPs, and user agents.

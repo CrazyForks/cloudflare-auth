@@ -3,14 +3,6 @@
 Run:
 
 ```bash
-npx cf-auth@latest init
-pnpm install
-npx cf-auth@latest migrate --local
-```
-
-Fallback before `cf-auth` publication:
-
-```bash
 npx --package @cf-auth/cli@latest cf-auth init
 pnpm install
 npx --package @cf-auth/cli@latest cf-auth migrate --local

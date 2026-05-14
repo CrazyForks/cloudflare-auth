@@ -916,7 +916,7 @@ export default app;
       "D1 migration 0002 has not been applied remotely",
     );
     expect(errors.join("\n")).toContain(
-      "npx cf-auth@latest migrate --remote --env production",
+      "npx --package @cf-auth/cli@latest cf-auth migrate --remote --env production",
     );
   });
 

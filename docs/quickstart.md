@@ -1,16 +1,6 @@
 # Quickstart
 
 ```bash
-npm create cloudflare-auth@latest my-app
-cd my-app
-pnpm install
-npx cf-auth@latest migrate --local
-npm run dev
-```
-
-Before the unscoped packages are published, use:
-
-```bash
 npx --package @cf-auth/cli@latest cf-auth init my-app --template hono-basic
 cd my-app
 pnpm install

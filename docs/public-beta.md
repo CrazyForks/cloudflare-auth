@@ -9,9 +9,9 @@ Public beta starts only after private-alpha evidence is recorded and the package
 - one opt-in Cloudflare account fixture passes the production path:
 
 ```bash
-npx cf-auth@beta doctor --env production
-npx cf-auth@beta migrate --remote --env production
-npx cf-auth@beta deploy --env production
+npx --package @cf-auth/cli@beta cf-auth doctor --env production
+npx --package @cf-auth/cli@beta cf-auth migrate --remote --env production
+npx --package @cf-auth/cli@beta cf-auth deploy --env production
 ```
 
 - the template repository is public and contains no workspace-only dependency references
@@ -20,7 +20,7 @@ npx cf-auth@beta deploy --env production
 
 ## Package Name Gate
 
-Do not publish public beta docs that say `npx cf-auth` or `npm create cloudflare-auth` until the unscoped package names are controlled by maintainers. Use the scoped fallback from `docs/decisions/package-naming.md` until then.
+Do not publish public beta docs that use unscoped package commands until those package names are controlled by maintainers. Use the scoped fallback from `docs/decisions/package-naming.md` until then.
 
 ## Template Repository
 
@@ -29,7 +29,7 @@ The beta template repository must be generated from `templates/hono-basic` and t
 ```bash
 pnpm install
 pnpm build
-npx cf-auth migrate --local
+npx --package @cf-auth/cli@beta cf-auth migrate --local
 npm run dev
 ```
 

@@ -5,13 +5,13 @@ Migrations are append-only SQL files in `migrations/`.
 Run locally:
 
 ```bash
-npx cf-auth@latest migrate --local
+npx --package @cf-auth/cli@latest cf-auth migrate --local
 ```
 
 Run remotely:
 
 ```bash
-npx cf-auth@latest migrate --remote --env production
+npx --package @cf-auth/cli@latest cf-auth migrate --remote --env production
 ```
 
 Every migration updates `auth_schema_migrations` and `auth_meta.schema_version`. Future table rewrites that need temporary foreign-key deferral must use `PRAGMA defer_foreign_keys = on`.
@@ -38,6 +38,6 @@ Keep `auth_events` according to your product's audit-retention policy. If you do
 The CLI cleanup wrapper applies the default v1 retention windows:
 
 ```bash
-npx cf-auth@latest clean --dry-run --remote --env production
-npx cf-auth@latest clean --remote --env production
+npx --package @cf-auth/cli@latest cf-auth clean --dry-run --remote --env production
+npx --package @cf-auth/cli@latest cf-auth clean --remote --env production
 ```

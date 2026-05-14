@@ -1,6 +1,7 @@
 {
   "name": "cf-auth",
   "version": "0.0.0",
+  "private": true,
   "description": "Thin unscoped Cloudflare Auth CLI shim.",
   "license": "Apache-2.0",
   "type": "module",

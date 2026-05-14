@@ -6,9 +6,9 @@ This report is the reviewed v1 public surface. Any breaking change requires an u
 
 ## Packages
 
-- `cf-auth`: CLI shim exposing the `cf-auth` binary.
+- `cf-auth`: reserved private CLI shim exposing the `cf-auth` binary; published only after unscoped npm ownership is confirmed.
 - `@cf-auth/cli`: `runCli(args, io)`.
-- `create-cloudflare-auth`: delegates to the CLI init flow.
+- `create-cloudflare-auth`: reserved private create-package entrypoint; published only after npm ownership is confirmed.
 - `@cf-auth/core`: crypto, password, token, cookie, validation, and repository contracts, including session cookie name/domain validators.
 - `@cf-auth/worker`: `defineAuthConfig`, `createAuthHandler`, `getSession`, `getUser`, `requireUser`, `requireVerifiedUser`, `getAuthSessionFromRequest`, D1 repositories, email adapter types, `terminalEmail`, `byEnvironment`, Turnstile verifier, rate-limit prefilter, and log redactor.
 - `@cf-auth/hono`: `createAuthRoutes`, `getAuthUser`, `optionalUser`, `requireUser`, and `requireVerifiedUser`.

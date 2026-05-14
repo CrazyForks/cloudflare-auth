@@ -4,9 +4,7 @@
   "commit": false,
   "fixed": [
     [
-      "cf-auth",
       "@cf-auth/cli",
-      "create-cloudflare-auth",
       "@cf-auth/core",
       "@cf-auth/worker",
       "@cf-auth/hono",

@@ -5,13 +5,24 @@ import { basename, join } from "node:path";
 const rootPackage = JSON.parse(await readFile("package.json", "utf8"));
 const rootLicense = await readFile("LICENSE", "utf8");
 const expectedPackages = new Map([
-  ["cf-auth-shim", { name: "cf-auth", bin: "cf-auth" }],
+  [
+    "cf-auth-shim",
+    {
+      name: "cf-auth",
+      bin: "cf-auth",
+      privateUntilOwnershipConfirmed: true,
+    },
+  ],
   ["cli", { name: "@cf-auth/cli", bin: "cf-auth" }],
   ["client", { name: "@cf-auth/client" }],
   ["core", { name: "@cf-auth/core" }],
   [
     "create-cloudflare-auth",
-    { name: "create-cloudflare-auth", bin: "create-cloudflare-auth" },
+    {
+      name: "create-cloudflare-auth",
+      bin: "create-cloudflare-auth",
+      privateUntilOwnershipConfirmed: true,
+    },
   ],
   ["email-cloudflare", { name: "@cf-auth/email-cloudflare" }],
   ["hono", { name: "@cf-auth/hono" }],
@@ -55,8 +66,15 @@ for (const dir of packageDirs) {
   if (!pkg.types) failures.push(`${pkg.name}: missing types field`);
   if (!pkg.files?.includes("dist"))
     failures.push(`${pkg.name}: package files must include dist`);
-  if (pkg.private)
+  if (expected?.privateUntilOwnershipConfirmed) {
+    if (pkg.private !== true) {
+      failures.push(
+        `${pkg.name}: package must remain private until npm ownership is confirmed`,
+      );
+    }
+  } else if (pkg.private) {
     failures.push(`${pkg.name}: publishable packages must not be private`);
+  }
   if (pkg.engines?.node !== ">=22.12.0")
     failures.push(`${pkg.name}: node engine mismatch`);
   if (expected?.bin && !pkg.bin?.[expected.bin]) {
@@ -293,6 +311,7 @@ async function verifyReleaseControls() {
     failures.push(".changeset/config.json: access must be public");
   }
   const expectedPackageNames = [...expectedPackages.values()]
+    .filter((pkg) => !pkg.privateUntilOwnershipConfirmed)
     .map(({ name }) => name)
     .sort();
   const fixedGroups = Array.isArray(changesets.fixed) ? changesets.fixed : [];

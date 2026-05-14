@@ -45,6 +45,9 @@ npx --package @cf-auth/cli@latest cf-auth init my-app --template hono-basic
 ```
 
 The command `npm create cloudflare-auth@latest my-app` may appear in public quickstarts only after the unscoped create package is controlled by maintainers.
+Until then, the `cf-auth` shim and `create-cloudflare-auth` workspace packages
+must remain private implementation entrypoints that are built and tested
+locally but skipped by release publication.
 
 ## Release Controls
 

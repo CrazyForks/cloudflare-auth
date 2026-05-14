@@ -34,7 +34,7 @@
 - `pnpm check:package-names` passes before publishing prerelease or stable packages
 - release workflow `package_names_confirmed` gate set only after package names are verified
 - Changesets version/changelog output reviewed before publishing
-- Changesets fixed package group keeps every `cf-auth` package on one release version
+- Changesets fixed package group keeps every publishable `@cf-auth/*` package on one release version
 - local clean-directory quickstart passes
 - private-alpha evidence verifier passes before public beta
 - Deploy to Cloudflare button evidence verifier passes before public beta

@@ -58,23 +58,19 @@
       "ownershipConfirmed": false,
       "publisherTwoFactorEnabled": false,
       "provenancePublish": false
-    },
+    }
+  ],
+  "reservedPackages": [
     {
       "name": "cf-auth",
       "registry": "https://registry.npmjs.org/",
       "registryVersion": "1.0.2",
-      "version": "0.0.0",
-      "ownershipConfirmed": false,
-      "publisherTwoFactorEnabled": false,
-      "provenancePublish": false
+      "publishableAfterOwnershipConfirmed": true
     },
     {
       "name": "create-cloudflare-auth",
       "registry": "https://registry.npmjs.org/",
-      "version": "0.0.0",
-      "ownershipConfirmed": false,
-      "publisherTwoFactorEnabled": false,
-      "provenancePublish": false
+      "publishableAfterOwnershipConfirmed": true
     }
   ]
 }

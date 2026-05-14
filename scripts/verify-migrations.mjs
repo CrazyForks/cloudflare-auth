@@ -9,6 +9,20 @@ for (const file of files) {
   const sql = await readFile(`migrations/${file}`, "utf8");
   if (/\bBEGIN\b|\bCOMMIT\b/i.test(sql))
     failures.push(`${file}: migrations must not include BEGIN/COMMIT`);
+  if (/\bPRAGMA\s+foreign_keys\s*=\s*off\b/i.test(sql)) {
+    failures.push(
+      `${file}: migrations must not disable foreign key enforcement`,
+    );
+  }
+  if (
+    file !== "0001_initial.sql" &&
+    containsTableRewrite(sql) &&
+    !/\bPRAGMA\s+defer_foreign_keys\s*=\s*on\b/i.test(sql)
+  ) {
+    failures.push(
+      `${file}: table rewrite migrations must use PRAGMA defer_foreign_keys = on`,
+    );
+  }
   const version = file.slice(0, 4);
   if (!sql.includes("auth_schema_migrations"))
     failures.push(`${file}: missing auth_schema_migrations update`);
@@ -26,4 +40,11 @@ if (!files.includes("0002_indexes.sql"))
 if (failures.length) {
   console.error(failures.join("\n"));
   process.exit(1);
+}
+
+function containsTableRewrite(sql) {
+  return (
+    /\bDROP\s+TABLE\b/i.test(sql) ||
+    /\bALTER\s+TABLE\b[^;]+\bRENAME\s+TO\b/i.test(sql)
+  );
 }

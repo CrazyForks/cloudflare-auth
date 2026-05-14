@@ -53,6 +53,22 @@ describe("package checks", () => {
     );
   });
 
+  it("rejects placeholder package ownership example versions", async () => {
+    const root = await packageCheckFixture();
+    await replaceFixtureText(
+      root,
+      "docs/package-ownership.example.json",
+      '"version": "0.1.0-beta.0"',
+      '"version": "0.0.0"',
+    );
+    const result = runPackageCheck(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "docs/package-ownership.example.json: package examples must use non-placeholder target versions",
+    );
+  });
+
   it("requires release gates before package publication", async () => {
     const root = await packageCheckFixture();
     await replaceFixtureText(

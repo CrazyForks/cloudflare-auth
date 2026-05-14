@@ -310,6 +310,11 @@ async function verifyPackageNamingDocs() {
       "docs/package-ownership.example.json: missing reservedPackages for private unowned package shims",
     );
   }
+  if (ownershipExample.includes('"version": "0.0.0"')) {
+    failures.push(
+      "docs/package-ownership.example.json: package examples must use non-placeholder target versions",
+    );
+  }
   for (const reservedName of ["cf-auth", "create-cloudflare-auth"]) {
     if (!ownershipExample.includes(`"name": "${reservedName}"`)) {
       failures.push(

@@ -67,6 +67,10 @@ CF_AUTH_REQUIRE_PACKAGE_OWNERSHIP=1 pnpm verify:package-ownership
 pnpm check:package-names
 ```
 
+The `version` values in `docs/package-ownership.json` must match the target
+package versions in `packages/*/package.json`. The verifier rejects placeholder
+`0.0.0` package versions.
+
 For an already-published npm name, include `registryVersion` with the current
 registry version at review time. The registry check fails if that value is stale
 or if the target package version already exists.

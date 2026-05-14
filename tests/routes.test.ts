@@ -1253,13 +1253,58 @@ describe("auth HTTP runtime", () => {
       metadata_json: JSON.stringify({ reason: "config_error" }),
     });
 
-    const allowedPreflight = await handler.fetch(
+    const noOriginPreflight = await handler.fetch(
+      new Request(`${origin}/auth/signup`, {
+        method: "OPTIONS",
+      }),
+      env,
+      { waitUntil() {} } as unknown as ExecutionContext,
+    );
+    expect(noOriginPreflight?.status).toBe(204);
+    expect(
+      noOriginPreflight?.headers.get("Access-Control-Allow-Origin"),
+    ).toBeNull();
+    expect(
+      noOriginPreflight?.headers.get("Access-Control-Allow-Credentials"),
+    ).toBeNull();
+
+    const defaultSameOriginPreflight = await handler.fetch(
       new Request(`${origin}/auth/signup`, {
         method: "OPTIONS",
         headers: { Origin: origin },
       }),
       env,
       { waitUntil() {} } as unknown as ExecutionContext,
+    );
+    expect(defaultSameOriginPreflight?.status).toBe(403);
+    expect(
+      defaultSameOriginPreflight?.headers.get("Access-Control-Allow-Origin"),
+    ).toBeNull();
+
+    const defaultSameOriginGet = await handler.fetch(
+      new Request(`${origin}/auth/user`, {
+        headers: { Origin: origin },
+      }),
+      env,
+      { waitUntil() {} } as unknown as ExecutionContext,
+    );
+    expect(
+      defaultSameOriginGet?.headers.get("Access-Control-Allow-Origin"),
+    ).toBeNull();
+
+    const explicitCorsPolicy = await setup({
+      security: {
+        allowedRequestOrigins: [origin],
+        allowedPreviewRequestOrigins: [],
+      },
+    });
+    const allowedPreflight = await explicitCorsPolicy.handler.fetch(
+      new Request(`${origin}/auth/signup`, {
+        method: "OPTIONS",
+        headers: { Origin: origin },
+      }),
+      explicitCorsPolicy.env,
+      explicitCorsPolicy.ctx,
     );
     expect(allowedPreflight?.status).toBe(204);
     expect(allowedPreflight?.headers.get("Access-Control-Allow-Origin")).toBe(
@@ -1279,13 +1324,13 @@ describe("auth HTTP runtime", () => {
     ).toBe("true");
     expect(allowedPreflight?.headers.get("Vary")).toBe("Origin");
 
-    const disallowedPreflight = await handler.fetch(
+    const disallowedPreflight = await explicitCorsPolicy.handler.fetch(
       new Request(`${origin}/auth/signup`, {
         method: "OPTIONS",
         headers: { Origin: "https://evil.example" },
       }),
-      env,
-      { waitUntil() {} } as unknown as ExecutionContext,
+      explicitCorsPolicy.env,
+      explicitCorsPolicy.ctx,
     );
     expect(disallowedPreflight?.status).toBe(403);
     expect(

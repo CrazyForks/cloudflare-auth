@@ -60,6 +60,11 @@ Security, hashing, and bot checks:
 | `turnstile.endpoints`                           | `[]`               | Endpoint names that require or accept Turnstile.    |
 | `turnstile.verify`                              | built-in verifier  | Optional custom verifier.                           |
 
+Same-origin unsafe browser requests pass origin validation after host
+validation. Credentialed CORS response headers are emitted only for origins
+listed in `security.allowedRequestOrigins` or, in preview mode,
+`security.allowedPreviewRequestOrigins`.
+
 Signup and login:
 
 | Key                                            | Default | Notes                                                                                      |

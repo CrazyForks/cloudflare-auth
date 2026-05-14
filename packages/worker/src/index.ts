@@ -3521,11 +3521,10 @@ function handlePreflight(request: Request, runtime: RuntimeContext): Response {
   if (!origin)
     return new Response(null, { status: 204, headers: securityHeaders() });
   const allowed =
-    origin === runtime.requestOrigin ||
-    ((runtime.mode === "preview"
+    (runtime.mode === "preview"
       ? runtime.config.security.allowedPreviewRequestOrigins.includes(origin)
       : runtime.config.security.allowedRequestOrigins.includes(origin)) &&
-      isSupportedCredentialedRequestOrigin(origin, runtime));
+    isSupportedCredentialedRequestOrigin(origin, runtime);
   if (!allowed)
     return new Response(null, { status: 403, headers: securityHeaders() });
   const headers = securityHeaders();
@@ -3611,7 +3610,6 @@ function allowedCorsOrigin(
 ): string | null {
   const origin = request.headers.get("Origin");
   if (!origin) return null;
-  if (origin === runtime.requestOrigin) return origin;
   const allowed =
     runtime.mode === "preview"
       ? runtime.config.security.allowedPreviewRequestOrigins

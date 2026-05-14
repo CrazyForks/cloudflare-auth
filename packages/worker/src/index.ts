@@ -1348,14 +1348,18 @@ export function defineAuthConfig(config: AuthConfigInput): AuthConfig {
       "invalid_password_hash_concurrency",
     );
   }
+  const runtime = {
+    mode: "from-env",
+    publicOrigin: "from-env",
+    trustedHosts: ["localhost:8787", "127.0.0.1:8787"],
+    ...config.runtime,
+  } satisfies AuthConfig["runtime"];
   const resolved: AuthConfig = {
     appName: config.appName,
     basePath,
     runtime: {
-      mode: "from-env",
-      publicOrigin: "from-env",
-      trustedHosts: ["localhost:8787", "127.0.0.1:8787"],
-      ...config.runtime,
+      ...runtime,
+      trustedHosts: normalizeTrustedHosts(runtime.trustedHosts),
     },
     database: { binding: "AUTH_DB", ...config.database },
     session: {
@@ -1448,6 +1452,51 @@ function assertRuntimeOptions(config: AuthConfig): void {
       "invalid_public_origin",
     );
   }
+}
+
+function normalizeTrustedHosts(values: string[]): string[] {
+  if (!Array.isArray(values)) {
+    throw new AuthCryptoError(
+      "runtime trustedHosts must be an array",
+      "invalid_trusted_host",
+    );
+  }
+  return values.map((value) => {
+    if (typeof value !== "string") {
+      throw new AuthCryptoError(
+        "runtime trustedHosts entry is invalid",
+        "invalid_trusted_host",
+      );
+    }
+    const normalized = normalizeTrustedHost(value);
+    if (!normalized) {
+      throw new AuthCryptoError(
+        "runtime trustedHosts entry is invalid",
+        "invalid_trusted_host",
+      );
+    }
+    return normalized;
+  });
+}
+
+function normalizeTrustedHost(value: string): string | null {
+  if (
+    value.length === 0 ||
+    value.trim() !== value ||
+    value.endsWith(":") ||
+    value.includes("*") ||
+    /[\s/?#@]/u.test(value)
+  ) {
+    return null;
+  }
+  let url: URL;
+  try {
+    url = new URL(`https://${value}`);
+  } catch {
+    return null;
+  }
+  if (!url.hostname || url.hostname.endsWith(".")) return null;
+  return url.host;
 }
 
 function assertAuthConfigOrigins(config: AuthConfig): void {

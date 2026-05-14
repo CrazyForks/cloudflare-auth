@@ -116,6 +116,38 @@ describe("auth HTTP runtime", () => {
         },
       }),
     ).toThrow(AuthCryptoError);
+    for (const trustedHost of [
+      "*.example.com",
+      "https://example.com",
+      "example.com/path",
+      "example.com?debug=true",
+      "example.com#fragment",
+      "example.com.",
+      "bad host.example",
+    ]) {
+      expect(() =>
+        defineAuthConfig({
+          appName: "Bad Trusted Host",
+          basePath: "/auth",
+          runtime: {
+            mode: "production",
+            publicOrigin: "https://example.com",
+            trustedHosts: [trustedHost],
+          },
+        }),
+      ).toThrow(AuthCryptoError);
+    }
+    expect(
+      defineAuthConfig({
+        appName: "Canonical Trusted Hosts",
+        basePath: "/auth",
+        runtime: {
+          mode: "production",
+          publicOrigin: "https://example.com",
+          trustedHosts: ["EXAMPLE.com:443", "api.EXAMPLE.com:8443"],
+        },
+      }).runtime.trustedHosts,
+    ).toEqual(["example.com", "api.example.com:8443"]);
     expect(() =>
       defineAuthConfig({
         appName: "Bad Cookie",

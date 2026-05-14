@@ -109,6 +109,11 @@ Request and redirect origin allowlists must contain exact origins only. Paths,
 queries, fragments, wildcards, credentials, and trailing slash variants are
 rejected during config validation.
 
+`runtime.trustedHosts` entries are exact `host` or `host:port` values. Schemes,
+paths, queries, fragments, credentials, wildcards, whitespace, and trailing-dot
+hosts are rejected; accepted entries are normalized to lowercase host matching
+with default HTTPS port normalization.
+
 Session cookie names must be valid HTTP token names. `session.domain` is only
 for explicit cross-subdomain cookies and must look like `.example.com`; plain
 hostnames, wildcards, IP addresses, paths, schemes, and trailing-dot domains

@@ -753,6 +753,7 @@ async function releaseGateFixture(options: ReleaseGateFixtureOptions) {
       [
         "Deploy to Cloudflare button is a public-beta gate",
         "CF_AUTH_REQUIRE_DEPLOY_BUTTON_EVIDENCE=1 pnpm verify:deploy-button-evidence",
+        "Cloudflare Email Service binding is configured for `AUTH_EMAIL`",
       ],
     ],
     [

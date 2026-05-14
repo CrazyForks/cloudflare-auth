@@ -138,6 +138,10 @@ await requireText(
   "CF_AUTH_REQUIRE_DEPLOY_BUTTON_EVIDENCE=1 pnpm verify:deploy-button-evidence",
 );
 await requireText(
+  "docs/deploy-to-cloudflare.md",
+  "Cloudflare Email Service binding is configured for `AUTH_EMAIL`",
+);
+await requireText(
   "docs/public-beta.md",
   "CF_AUTH_REQUIRE_BETA_EVIDENCE=1 pnpm verify:beta-evidence",
 );

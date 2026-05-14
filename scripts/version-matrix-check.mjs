@@ -64,6 +64,10 @@ await requireText(
   "packages/cli/src/index.ts",
   `"compatibility_date": "${matrix.workersCompatibilityDate}"`,
 );
+await requireText(
+  "packages/cli/src/index.ts",
+  `"$schema": "./node_modules/wrangler/config-schema.json"`,
+);
 await requireText("packages/cli/src/index.ts", `"observability": {`);
 await requireText(
   "scripts/export-deploy-template.mjs",
@@ -71,12 +75,20 @@ await requireText(
 );
 await requireText("scripts/export-deploy-template.mjs", "observability: {");
 await requireText(
+  "scripts/export-deploy-template.mjs",
+  '$schema: "./node_modules/wrangler/config-schema.json"',
+);
+await requireText(
   "scripts/smoke-production-cloudflare.mjs",
   `compatibility_date: "${matrix.workersCompatibilityDate}"`,
 );
 await requireText(
   "scripts/smoke-production-cloudflare.mjs",
   "observability: {",
+);
+await requireText(
+  "scripts/smoke-production-cloudflare.mjs",
+  '$schema: "./node_modules/wrangler/config-schema.json"',
 );
 
 if (failures.length) {

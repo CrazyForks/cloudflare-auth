@@ -2585,6 +2585,7 @@ function targetMode(parsed: ParsedArgs): { local: boolean; remote: boolean } {
 }
 
 interface WranglerConfig {
+  $schema?: string;
   name?: string;
   account_id?: string;
   observability?: {
@@ -2657,6 +2658,7 @@ async function repairWranglerConfig(
   const config = JSON.parse(stripJsonComments(text)) as WranglerConfig;
   let changed = false;
 
+  changed = ensureWranglerSchema(config) || changed;
   changed =
     ensureVars(config, {
       AUTH_ENV: "development",
@@ -2699,6 +2701,12 @@ async function repairWranglerConfig(
 
   if (changed) await writeFile(path, JSON.stringify(config, null, 2) + "\n");
   return changed;
+}
+
+function ensureWranglerSchema(config: WranglerConfig): boolean {
+  if (config.$schema) return false;
+  config.$schema = "./node_modules/wrangler/config-schema.json";
+  return true;
 }
 
 function ensureObservability(config: WranglerConfig): boolean {
@@ -2958,6 +2966,7 @@ function tsconfigTemplate(): string {
 
 function wranglerTemplate(): string {
   return `{
+  "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "my-app-dev",
   "main": "src/index.ts",
   "compatibility_date": "2026-05-14",

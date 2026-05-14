@@ -669,6 +669,7 @@ await writeFile(dir + "/package.json", JSON.stringify({
   }
 }, null, 2));
 await writeFile(dir + "/wrangler.jsonc", JSON.stringify({
+  $schema: "./node_modules/wrangler/config-schema.json",
   compatibility_date: "2026-05-14",
   compatibility_flags: ["nodejs_compat"],
   observability: { enabled: true, head_sampling_rate: 1 },

@@ -80,6 +80,7 @@ describe("CLI MVP", () => {
     expect(source).toContain('import authConfig from "./auth.config.js"');
     expect(source).toContain("app.route(authConfig.basePath");
     const wrangler = await readFile(join(app, "wrangler.jsonc"), "utf8");
+    expect(wrangler).toContain('"$schema"');
     expect(wrangler).toContain('"database_id": "local-development"');
     expect(wrangler).toContain('"observability"');
     expect(wrangler).toContain('"head_sampling_rate": 1');
@@ -244,6 +245,7 @@ describe("CLI MVP", () => {
     const wrangler = JSON.parse(
       await readFile(join(app, "wrangler.jsonc"), "utf8"),
     ) as {
+      $schema?: string;
       vars: Record<string, string>;
       observability?: { enabled?: boolean; head_sampling_rate?: number };
       d1_databases: Array<{ binding: string; database_id: string }>;
@@ -255,6 +257,7 @@ describe("CLI MVP", () => {
         };
       };
     };
+    expect(wrangler.$schema).toBe("./node_modules/wrangler/config-schema.json");
     expect(wrangler.vars.AUTH_ENV).toBe("development");
     expect(wrangler.observability).toEqual({
       enabled: true,

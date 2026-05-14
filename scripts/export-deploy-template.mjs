@@ -104,6 +104,7 @@ async function writePackageJson(dir) {
 
 async function writeWranglerJson(dir) {
   const wrangler = {
+    $schema: "./node_modules/wrangler/config-schema.json",
     name: templateName,
     main: "src/index.ts",
     compatibility_date: "2026-05-14",

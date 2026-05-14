@@ -97,6 +97,9 @@ function checkPackageJson(pkg) {
 }
 
 function checkWrangler(config) {
+  if (config.$schema !== "./node_modules/wrangler/config-schema.json") {
+    failures.push("wrangler.jsonc: must reference Wrangler schema");
+  }
   if (config.compatibility_date !== versionMatrix.workersCompatibilityDate) {
     failures.push(
       `wrangler.jsonc: compatibility_date must be ${versionMatrix.workersCompatibilityDate}`,

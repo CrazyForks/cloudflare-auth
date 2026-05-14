@@ -152,6 +152,9 @@ function verifyProjectToolchain(dir, pkg) {
 }
 
 function verifyWranglerToolchain(dir, wrangler) {
+  if (wrangler.$schema !== "./node_modules/wrangler/config-schema.json") {
+    failures.push(`${dir}: wrangler.jsonc must reference Wrangler schema`);
+  }
   if (wrangler.compatibility_date !== versionMatrix.workersCompatibilityDate) {
     failures.push(
       `${dir}: compatibility_date must be ${versionMatrix.workersCompatibilityDate}`,

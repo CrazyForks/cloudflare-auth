@@ -176,6 +176,7 @@ async function rewriteWorkspaceDependencies(packageDir, specs) {
 
 async function writeSmokeWranglerConfig(appDir, input) {
   const wrangler = {
+    $schema: "./node_modules/wrangler/config-schema.json",
     name: input.workerName,
     main: "src/index.ts",
     account_id: input.accountId,

@@ -1,4 +1,5 @@
 {
+  "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "cf-auth-example-react-vite-worker",
   "main": "src/index.ts",
   "compatibility_date": "2026-05-14",

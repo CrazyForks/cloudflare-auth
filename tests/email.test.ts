@@ -194,6 +194,7 @@ describe("email adapters and templates", () => {
       AUTH_ENV: "development",
       AUTH_PUBLIC_ORIGIN: "http://localhost:8787",
     };
+    const deferred = testExecutionContext();
 
     const signup = await handler.fetch(
       new Request("http://localhost:8787/auth/signup", {
@@ -208,8 +209,9 @@ describe("email adapters and templates", () => {
         }),
       }),
       env,
-      { waitUntil() {} } as unknown as ExecutionContext,
+      deferred.ctx,
     );
+    await deferred.flush();
     expect(signup?.status).toBe(200);
 
     const request = await handler.fetch(
@@ -222,8 +224,9 @@ describe("email adapters and templates", () => {
         body: JSON.stringify({ email: "person@example.com" }),
       }),
       env,
-      { waitUntil() {} } as unknown as ExecutionContext,
+      deferred.ctx,
     );
+    await deferred.flush();
     expect(request?.status).toBe(200);
     await expect(request?.json()).resolves.toEqual({ ok: true });
     const event = await db
@@ -245,6 +248,25 @@ function sampleEmail() {
     url: `https://example.com/auth/magic-link/verify?token=${token}`,
     redirectTo: "/dashboard",
     expiresAt: Date.now() + 1_000,
+  };
+}
+
+function testExecutionContext(): {
+  ctx: ExecutionContext;
+  flush: () => Promise<void>;
+} {
+  const deferred: Promise<unknown>[] = [];
+  return {
+    ctx: {
+      waitUntil(promise: Promise<unknown>) {
+        deferred.push(Promise.resolve(promise));
+      },
+    } as unknown as ExecutionContext,
+    async flush() {
+      while (deferred.length > 0) {
+        await Promise.all(deferred.splice(0));
+      }
+    },
   };
 }
 

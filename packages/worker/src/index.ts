@@ -1296,26 +1296,32 @@ async function handleMagicLinkRequest(
   const user =
     await runtime.repos.users.findUserByNormalizedEmail(normalizedEmail);
   if (user && user.disabled_at === null) {
-    await createAndSendToken(
+    scheduleAuthTask(
       runtime,
-      "magic",
-      "magic_link",
-      user.email,
-      user.id,
-      null,
-      redirectTo,
-      runtime.config.magicLink.expiresInMinutes * 60 * 1000,
+      createAndSendToken(
+        runtime,
+        "magic",
+        "magic_link",
+        user.email,
+        user.id,
+        null,
+        redirectTo,
+        runtime.config.magicLink.expiresInMinutes * 60 * 1000,
+      ),
     );
   } else if (runtime.config.magicLink.allowSignups) {
-    await createAndSendToken(
+    scheduleAuthTask(
       runtime,
-      "magic",
-      "magic_link",
-      normalizedEmail,
-      null,
-      normalizedEmail,
-      redirectTo,
-      runtime.config.magicLink.expiresInMinutes * 60 * 1000,
+      createAndSendToken(
+        runtime,
+        "magic",
+        "magic_link",
+        normalizedEmail,
+        null,
+        normalizedEmail,
+        redirectTo,
+        runtime.config.magicLink.expiresInMinutes * 60 * 1000,
+      ),
     );
   }
   return json({ ok: true });
@@ -1411,7 +1417,7 @@ async function handleEmailVerifyRequest(
   const user =
     await runtime.repos.users.findUserByNormalizedEmail(normalizedEmail);
   if (user && user.disabled_at === null && user.email_verified_at === null) {
-    await sendVerificationEmail(user, runtime, redirectTo);
+    scheduleAuthTask(runtime, sendVerificationEmail(user, runtime, redirectTo));
   }
   return json({ ok: true });
 }
@@ -1501,15 +1507,18 @@ async function handlePasswordResetRequest(
   const user =
     await runtime.repos.users.findUserByNormalizedEmail(normalizedEmail);
   if (user && user.disabled_at === null) {
-    await createAndSendToken(
+    scheduleAuthTask(
       runtime,
-      "reset",
-      "password_reset",
-      user.email,
-      user.id,
-      null,
-      redirectTo,
-      runtime.config.passwordReset.expiresInMinutes * 60 * 1000,
+      createAndSendToken(
+        runtime,
+        "reset",
+        "password_reset",
+        user.email,
+        user.id,
+        null,
+        redirectTo,
+        runtime.config.passwordReset.expiresInMinutes * 60 * 1000,
+      ),
     );
   }
   return json({ ok: true });
@@ -1725,6 +1734,22 @@ async function recordEmailSendFailure(
       errorName: eventError instanceof Error ? eventError.name : "UnknownError",
     });
   }
+}
+
+function scheduleAuthTask(runtime: RuntimeContext, task: Promise<void>): void {
+  runtime.ctx.waitUntil(
+    task.catch((error) => {
+      runtime.logger.error("deferred_auth_task_failed", {
+        errorName: error instanceof Error ? error.name : "UnknownError",
+        errorCode:
+          error instanceof AuthCryptoError
+            ? error.code
+            : error instanceof AuthRepositoryError
+              ? error.code
+              : "unknown",
+      });
+    }),
+  );
 }
 
 function tokenPage(

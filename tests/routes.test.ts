@@ -57,6 +57,17 @@ async function setup(overrides: Partial<AuthConfig> = {}) {
     AUTH_ENV: "development",
     AUTH_PUBLIC_ORIGIN: origin,
   };
+  const deferred: Promise<unknown>[] = [];
+  const ctx = {
+    waitUntil(promise: Promise<unknown>) {
+      deferred.push(Promise.resolve(promise));
+    },
+  } as unknown as ExecutionContext;
+  async function flushDeferred() {
+    while (deferred.length > 0) {
+      await Promise.all(deferred.splice(0));
+    }
+  }
   async function authFetch(path: string, init: RequestInit = {}) {
     const headers = new Headers(init.headers);
     if (init.method && init.method !== "GET" && !headers.has("Origin"))
@@ -64,12 +75,13 @@ async function setup(overrides: Partial<AuthConfig> = {}) {
     const response = await handler.fetch(
       new Request(`${origin}${path}`, { ...init, headers }),
       env,
-      { waitUntil() {} } as unknown as ExecutionContext,
+      ctx,
     );
+    await flushDeferred();
     if (!response) throw new Error(`No auth response for ${path}`);
     return response;
   }
-  return { db, email, config, handler, env, authFetch };
+  return { db, email, config, handler, env, authFetch, ctx, flushDeferred };
 }
 
 describe("auth HTTP runtime", () => {

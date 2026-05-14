@@ -212,6 +212,32 @@ describe("release evidence verifiers", () => {
     expect(result.stderr).toContain("templateRepositoryUrl");
   });
 
+  it("rejects deploy button evidence with raw emails and IP addresses", async () => {
+    const emailEvidence = validDeployButtonEvidence();
+    (emailEvidence as Record<string, unknown>).notes =
+      "verified by person@example.com";
+    const emailPath = await writeEvidence("deploy-button-email", emailEvidence);
+    const emailResult = runScript("scripts/verify-deploy-button-evidence.mjs", {
+      CF_AUTH_REQUIRE_DEPLOY_BUTTON_EVIDENCE: "1",
+      CF_AUTH_DEPLOY_BUTTON_EVIDENCE_PATH: emailPath,
+    });
+
+    const ipEvidence = validDeployButtonEvidence();
+    (ipEvidence as Record<string, unknown>).notes = "smoked from [2001:db8::1]";
+    const ipPath = await writeEvidence("deploy-button-ipv6", ipEvidence);
+    const ipResult = runScript("scripts/verify-deploy-button-evidence.mjs", {
+      CF_AUTH_REQUIRE_DEPLOY_BUTTON_EVIDENCE: "1",
+      CF_AUTH_DEPLOY_BUTTON_EVIDENCE_PATH: ipPath,
+    });
+
+    expect(emailResult.status).toBe(1);
+    expect(emailResult.stderr).toContain("must not include raw secrets");
+    expect(emailResult.stderr).toContain("emails");
+    expect(ipResult.status).toBe(1);
+    expect(ipResult.stderr).toContain("must not include raw secrets");
+    expect(ipResult.stderr).toContain("IPs");
+  });
+
   it("requires deploy button evidence for stable package versions", async () => {
     const cwd = await packageVersionFixture("1.0.0");
     const result = runScript(

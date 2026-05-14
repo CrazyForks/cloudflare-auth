@@ -1,4 +1,5 @@
 import { access, readdir, readFile } from "node:fs/promises";
+import { isIP } from "node:net";
 import { join } from "node:path";
 
 const evidencePath =
@@ -104,7 +105,7 @@ function validateEvidence(value, rawText) {
 
   if (containsSensitiveEvidence(rawText)) {
     failures.push(
-      `${evidencePath}: must not include raw secrets, tokens, cookies, or Cloudflare API tokens`,
+      `${evidencePath}: must not include raw secrets, tokens, cookies, emails, IPs, or Cloudflare API tokens`,
     );
   }
   if (containsPlaceholderEvidence(rawText)) {
@@ -192,8 +193,24 @@ function containsSensitiveEvidence(text) {
     /\bcfauth\.(?:ses|magic|verify|reset)\.[A-Za-z0-9_-]{1,32}\.[A-Za-z0-9_-]{20,}/u.test(
       text,
     ) ||
-    /\b(?:__Host-|__Secure-)?cfauth-session=/u.test(text)
+    /\b(?:__Host-|__Secure-)?cfauth-session=/u.test(text) ||
+    /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/iu.test(text) ||
+    containsIpLiteral(text)
   );
+}
+
+function containsIpLiteral(text) {
+  if (/\b(?:\d{1,3}\.){3}\d{1,3}\b/u.test(text)) return true;
+  const candidates =
+    text.match(/\[?(?:[A-Fa-f0-9]{0,4}:){2,}[A-Fa-f0-9:.%]+\]?/gu) ?? [];
+  return candidates.some((candidate) => {
+    const unwrapped =
+      candidate.startsWith("[") && candidate.endsWith("]")
+        ? candidate.slice(1, -1)
+        : candidate;
+    const withoutZone = unwrapped.split("%", 1)[0] ?? unwrapped;
+    return isIP(withoutZone) === 6;
+  });
 }
 
 function containsPlaceholderEvidence(text) {

@@ -18,6 +18,7 @@ import {
 import {
   createAuthRoutes,
   getAuthUser,
+  optionalUser,
   requireUser,
   requireVerifiedUser,
 } from "@cf-auth/hono";
@@ -88,6 +89,40 @@ describe("Hono adapter and browser client", () => {
     });
     expect(authorizedBody.user).not.toHaveProperty("password_hash");
     expect(authorizedBody.user).not.toHaveProperty("normalized_email");
+  });
+
+  it("supports optional Hono user middleware", async () => {
+    const { config, env } = await fixture();
+    const app = new Hono();
+    app.route(config.basePath, createAuthRoutes(config));
+    app.get("/api/optional", optionalUser(), (c) =>
+      c.json({ user: getAuthUser(c) }),
+    );
+
+    const anonymous = await app.request(`${origin}/api/optional`, {}, env);
+    await expect(anonymous.json()).resolves.toEqual({ user: null });
+
+    const signup = await app.request(
+      `${origin}/auth/signup`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Origin: origin },
+        body: JSON.stringify({
+          email: "optional@example.com",
+          password: "correct horse battery staple",
+        }),
+      },
+      env,
+    );
+    const cookie = signup.headers.get("Set-Cookie") ?? "";
+    const authenticated = await app.request(
+      `${origin}/api/optional`,
+      { headers: { Cookie: cookie } },
+      env,
+    );
+    await expect(authenticated.json()).resolves.toMatchObject({
+      user: { email: "optional@example.com" },
+    });
   });
 
   it("exposes plain Worker helpers for current and verified users", async () => {

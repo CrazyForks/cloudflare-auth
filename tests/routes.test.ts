@@ -788,7 +788,7 @@ describe("auth HTTP runtime", () => {
     const { authFetch, email } = await setup();
     const signup = await authFetch("/auth/signup", {
       method: "POST",
-      headers: { "Content-Type": "application/json; charset=utf-8" },
+      headers: { "Content-Type": "Application/JSON; Charset=utf-8" },
       body: JSON.stringify({
         email: "typed@example.com",
         password: "correct horse battery staple",
@@ -798,7 +798,7 @@ describe("auth HTTP runtime", () => {
 
     await authFetch("/auth/magic-link/request", {
       method: "POST",
-      headers: { "Content-Type": "application/json; charset=utf-8" },
+      headers: { "Content-Type": "Application/JSON; Charset=utf-8" },
       body: JSON.stringify({
         email: "typed@example.com",
         redirectTo: "/typed",
@@ -810,7 +810,7 @@ describe("auth HTTP runtime", () => {
     const consume = await authFetch("/auth/magic-link/consume", {
       method: "POST",
       headers: {
-        "Content-Type": "application/x-www-form-urlencoded; charset=utf-8",
+        "Content-Type": "Application/X-WWW-Form-Urlencoded; Charset=utf-8",
       },
       body: new URLSearchParams({ token }),
     });

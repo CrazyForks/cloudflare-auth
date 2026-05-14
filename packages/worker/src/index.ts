@@ -2856,7 +2856,7 @@ async function parseBody(
   runtime: RuntimeContext,
   mode: "json" | "json-or-form",
 ): Promise<Record<string, unknown>> {
-  const contentType = request.headers.get("Content-Type") ?? "";
+  const contentType = (request.headers.get("Content-Type") ?? "").toLowerCase();
   const length = Number(request.headers.get("Content-Length") ?? "0");
   if (length > runtime.config.request.maxBodyBytes)
     throw new AuthCryptoError("Request body too large", "body_too_large");
@@ -3315,7 +3315,7 @@ function stripBasePath(pathname: string, basePath: string): string | null {
 }
 
 function contentMode(request: Request): "json" | "form" {
-  const type = request.headers.get("Content-Type") ?? "";
+  const type = (request.headers.get("Content-Type") ?? "").toLowerCase();
   return type.startsWith("application/x-www-form-urlencoded") ? "form" : "json";
 }
 

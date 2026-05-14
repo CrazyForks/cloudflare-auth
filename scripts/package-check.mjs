@@ -223,6 +223,25 @@ async function verifyPackageNamingDocs() {
       );
     }
   }
+
+  const deployment = await readFile("docs/deployment.md", "utf8");
+  for (const needle of [
+    "`AUTH_PUBLIC_ORIGIN`: exact production origin",
+    "`AUTH_SECRET`: generated with",
+    "`TURNSTILE_SECRET_KEY`: stored as a Worker secret",
+    "`AUTH_DB.database_id`: production D1 database ID",
+    "`AUTH_EMAIL`: Cloudflare Email binding",
+    "`CLOUDFLARE_ACCOUNT_ID`: Cloudflare account ID",
+    "`CLOUDFLARE_API_TOKEN`: Cloudflare API token",
+    "`CF_AUTH_PRODUCTION_SMOKE_DATABASE_ID`: D1 database ID",
+    "`CF_AUTH_PRODUCTION_SMOKE_DATABASE_NAME`: D1 database name",
+    "`CF_AUTH_PRODUCTION_SMOKE_WORKER_NAME`: Worker name",
+    "`CF_AUTH_PRODUCTION_SMOKE_ORIGIN`: exact HTTPS origin",
+  ]) {
+    if (!deployment.includes(needle)) {
+      failures.push(`docs/deployment.md: missing placeholder note ${needle}`);
+    }
+  }
 }
 
 async function verifyDocsManifest() {

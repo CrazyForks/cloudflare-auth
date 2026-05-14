@@ -79,6 +79,15 @@ CF_AUTH_PRODUCTION_SMOKE_ORIGIN=https://example.workers.dev \
 pnpm smoke:cloudflare-production
 ```
 
+Production smoke placeholders:
+
+- `CLOUDFLARE_ACCOUNT_ID`: Cloudflare account ID that owns the smoke Worker and D1 database
+- `CLOUDFLARE_API_TOKEN`: Cloudflare API token with permission to deploy the smoke Worker, list secrets, and apply D1 migrations
+- `CF_AUTH_PRODUCTION_SMOKE_DATABASE_ID`: D1 database ID for the dedicated smoke fixture
+- `CF_AUTH_PRODUCTION_SMOKE_DATABASE_NAME`: D1 database name for the dedicated smoke fixture
+- `CF_AUTH_PRODUCTION_SMOKE_WORKER_NAME`: Worker name reserved for the production smoke fixture
+- `CF_AUTH_PRODUCTION_SMOKE_ORIGIN`: exact HTTPS origin of the deployed smoke Worker, with no path or trailing slash
+
 The script creates a temporary app, runs `doctor --env production`, applies
 remote migrations, requires a clean second `doctor --env production`, deploys
 with `cf-auth deploy --env production`, and exercises deployed signup, login,

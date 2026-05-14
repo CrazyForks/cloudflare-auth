@@ -31,6 +31,7 @@
 - package names confirmed or fallback docs updated
 - npm publisher 2FA and package ownership verified before dispatching the release workflow
 - package ownership verifier passes before publishing prerelease or stable packages
+- `pnpm check:package-names` passes before publishing prerelease or stable packages
 - release workflow `package_names_confirmed` gate set only after package names are verified
 - Changesets version/changelog output reviewed before publishing
 - Changesets fixed package group keeps every `cf-auth` package on one release version

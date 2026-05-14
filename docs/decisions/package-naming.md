@@ -59,7 +59,12 @@ stable packages:
 
 ```bash
 CF_AUTH_REQUIRE_PACKAGE_OWNERSHIP=1 pnpm verify:package-ownership
+pnpm check:package-names
 ```
+
+For an already-published npm name, include `registryVersion` with the current
+registry version at review time. The registry check fails if that value is stale
+or if the target package version already exists.
 
 Do not include npm tokens, auth-token environment variables, or registry
 session data in the evidence file.

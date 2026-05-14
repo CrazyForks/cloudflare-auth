@@ -156,6 +156,15 @@ describe("auth HTTP runtime", () => {
         },
       }),
     ).toThrow(AuthCryptoError);
+    expect(() =>
+      defineAuthConfig({
+        appName: "Bad Hash Queue Timeout",
+        basePath: "/auth",
+        passwordHashing: {
+          queueTimeoutMs: 0,
+        },
+      }),
+    ).toThrow(AuthCryptoError);
     expect(
       defineAuthConfig({
         appName: "Local Request Origin",
@@ -250,6 +259,34 @@ describe("auth HTTP runtime", () => {
     });
     expect(login.status).toBe(200);
     expect(login.headers.get("Set-Cookie")).toContain("cfauth-session=");
+  });
+
+  it("returns public rate limit errors when the password hash queue times out", async () => {
+    const { authFetch } = await setup({
+      passwordHashing: {
+        profile: "development-fast",
+        maxConcurrentHashesPerIsolate: 1,
+        queueTimeoutMs: 1,
+      },
+    });
+    const responses = await Promise.all(
+      Array.from({ length: 4 }, (_, index) =>
+        authFetch("/auth/signup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: `queue-${index}@example.com`,
+            password: "correct horse battery staple",
+          }),
+        }),
+      ),
+    );
+    const limited = responses.find((response) => response.status === 429);
+    expect(limited).toBeDefined();
+    if (!limited) throw new Error("expected a rate-limited response");
+    await expect(limited.json()).resolves.toMatchObject({
+      error: { code: "rate_limited" },
+    });
   });
 
   it("uses confirmation-post magic links and does not consume on GET", async () => {

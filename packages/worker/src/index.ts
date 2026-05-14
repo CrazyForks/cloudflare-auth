@@ -58,9 +58,12 @@ export interface MinimalAuthConfig {
   email?: unknown;
 }
 
-export type AuthHelperConfig =
-  | AuthConfig
-  | (MinimalAuthConfig & Partial<AuthConfig>);
+export type AuthConfigInput = MinimalAuthConfig &
+  Omit<Partial<AuthConfig>, "passwordHashing"> & {
+    passwordHashing?: Partial<AuthConfig["passwordHashing"]>;
+  };
+
+export type AuthHelperConfig = AuthConfig | AuthConfigInput;
 
 export interface PublicAuthUser {
   id: string;
@@ -1133,6 +1136,7 @@ export interface AuthConfig extends MinimalAuthConfig {
   passwordHashing: {
     profile: "development-fast" | "workers-balanced" | "high-cost";
     maxConcurrentHashesPerIsolate: number;
+    queueTimeoutMs: number;
   };
   signup: {
     enabled: boolean;
@@ -1225,11 +1229,9 @@ const resetConfirmSchema = z.object({
   password: z.string(),
 });
 
-const hashSemaphores = new Map<number, PasswordHashSemaphore>();
+const hashSemaphores = new Map<string, PasswordHashSemaphore>();
 
-export function defineAuthConfig(
-  config: MinimalAuthConfig & Partial<AuthConfig>,
-): AuthConfig {
+export function defineAuthConfig(config: AuthConfigInput): AuthConfig {
   const basePath = config.basePath ?? "/auth";
   if (!/^\/(?!\/)(?!.*\/\/)(?!.*%2f)(?!.*%5c)[^?#]*[^/]$/iu.test(basePath)) {
     throw new AuthCryptoError("invalid auth basePath", "invalid_base_path");
@@ -1243,14 +1245,17 @@ export function defineAuthConfig(
   const passwordHashing = {
     profile: "workers-balanced",
     maxConcurrentHashesPerIsolate: 1,
+    queueTimeoutMs: 2_000,
     ...config.passwordHashing,
   } satisfies AuthConfig["passwordHashing"];
   if (
     !Number.isInteger(passwordHashing.maxConcurrentHashesPerIsolate) ||
-    passwordHashing.maxConcurrentHashesPerIsolate < 1
+    passwordHashing.maxConcurrentHashesPerIsolate < 1 ||
+    !Number.isInteger(passwordHashing.queueTimeoutMs) ||
+    passwordHashing.queueTimeoutMs < 1
   ) {
     throw new AuthCryptoError(
-      "invalid password hash concurrency",
+      "invalid password hash queue settings",
       "invalid_password_hash_concurrency",
     );
   }
@@ -1575,9 +1580,7 @@ function assertTurnstileEndpoints(endpoints: readonly string[]): void {
   }
 }
 
-export function createAuthHandler(
-  configInput: AuthConfig | (MinimalAuthConfig & Partial<AuthConfig>),
-) {
+export function createAuthHandler(configInput: AuthHelperConfig) {
   const config =
     "runtime" in configInput
       ? (configInput as AuthConfig)
@@ -1658,11 +1661,13 @@ export function createAuthHandler(
           error instanceof AuthRepositoryError ||
           error instanceof z.ZodError
         ) {
-          return errorResponse(
-            error,
-            400,
-            error instanceof z.ZodError ? "validation_failed" : error.code,
-          );
+          const code =
+            error instanceof z.ZodError
+              ? "validation_failed"
+              : error.code === "hash_queue_timeout"
+                ? "rate_limited"
+                : error.code;
+          return errorResponse(error, 400, code);
         }
         return errorResponse(error, 500, "server_error");
       }
@@ -2927,10 +2932,14 @@ function activeTokenPolicy(
 
 function passwordSemaphore(runtime: RuntimeContext): PasswordHashSemaphore {
   const max = runtime.config.passwordHashing.maxConcurrentHashesPerIsolate;
-  const key = Number.isInteger(max) && max > 0 ? max : 1;
+  const timeout = runtime.config.passwordHashing.queueTimeoutMs;
+  const safeMax = Number.isInteger(max) && max > 0 ? max : 1;
+  const safeTimeout =
+    Number.isInteger(timeout) && timeout > 0 ? timeout : 2_000;
+  const key = `${safeMax}:${safeTimeout}`;
   let semaphore = hashSemaphores.get(key);
   if (!semaphore) {
-    semaphore = new PasswordHashSemaphore(key, 2_000);
+    semaphore = new PasswordHashSemaphore(safeMax, safeTimeout);
     hashSemaphores.set(key, semaphore);
   }
   return semaphore;

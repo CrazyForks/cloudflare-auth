@@ -1181,6 +1181,7 @@ interface AuthSourceInspection {
   turnstileRequiresSecret: boolean;
   passwordHashProfile: PasswordHashProfileName;
   passwordHashConcurrency: number;
+  passwordHashQueueTimeoutMs: number;
   sessionCookieName: string | null;
   sessionSameSite: string | null;
   sessionDomain: string | null;
@@ -1265,6 +1266,10 @@ async function inspectAuthSource(cwd: string): Promise<AuthSourceInspection> {
             "maxConcurrentHashesPerIsolate",
           )
         : null) ?? 1,
+    passwordHashQueueTimeoutMs:
+      (passwordHashingText
+        ? extractNumberProperty(passwordHashingText, "queueTimeoutMs")
+        : null) ?? 2_000,
     sessionCookieName: sessionCookieName.value,
     sessionSameSite: sessionSameSite.value,
     sessionDomain: sessionDomain.value,
@@ -1564,6 +1569,7 @@ async function checkPasswordBenchmark(
     2 / Math.max(source.passwordHashConcurrency, 1),
   );
   const queueEstimateMs = queueBatches * result.p95Ms;
+  const queueTimeoutMs = Math.max(source.passwordHashQueueTimeoutMs, 1);
   const estimate = remoteTarget ? " local-estimate" : "";
   const measured = `${result.profile} p95=${result.p95Ms}ms throughput=${result.throughputHashesPerSecond}/s`;
   if (remoteTarget && source.passwordHashProfile === "development-fast") {
@@ -1582,11 +1588,11 @@ async function checkPasswordBenchmark(
       fix: "reduce passwordHashing profile or document a target Worker benchmark before production deploy",
     };
   }
-  if (queueEstimateMs > 2_000) {
+  if (queueEstimateMs > queueTimeoutMs) {
     return {
       id: "password_benchmark",
       status: "warn",
-      message: `Password hashing queue estimate is ${queueEstimateMs}ms for a two-request burst`,
+      message: `Password hashing queue estimate is ${queueEstimateMs}ms for a two-request burst; timeout=${queueTimeoutMs}ms`,
       fix: "increase maxConcurrentHashesPerIsolate only if Worker CPU and memory benchmarks support it, or reduce hash cost",
     };
   }
@@ -2658,7 +2664,8 @@ export default defineAuthConfig({
   basePath: "/auth",
   passwordHashing: {
     profile: "workers-balanced",
-    maxConcurrentHashesPerIsolate: 1
+    maxConcurrentHashesPerIsolate: 1,
+    queueTimeoutMs: 2000
   },
   email: byEnvironment({
     development: terminalEmail({ outbox: true }),

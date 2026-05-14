@@ -41,6 +41,8 @@ Defaults:
 - `session.domain` is unset unless cross-subdomain cookies are explicitly configured
 - `request.maxBodyBytes` defaults to `16384`
 - `passwordHashing.profile` defaults to `workers-balanced`
+- `passwordHashing.maxConcurrentHashesPerIsolate` defaults to `1`
+- `passwordHashing.queueTimeoutMs` defaults to `2000`
 - `turnstile.mode` defaults to `disabled`
 - `turnstile.endpoints` defaults to `[]` and unknown endpoint names are rejected
 

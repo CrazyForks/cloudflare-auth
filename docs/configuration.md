@@ -53,6 +53,7 @@ Security, hashing, and bot checks:
 | `security.allowedPreviewRequestOrigins`         | `[]`               | Preview-only request-origin allowlist.              |
 | `passwordHashing.profile`                       | `workers-balanced` | `doctor` benchmarks the configured profile locally. |
 | `passwordHashing.maxConcurrentHashesPerIsolate` | `1`                | Per-isolate semaphore limit for password hashing.   |
+| `passwordHashing.queueTimeoutMs`                | `2000`             | Maximum time a hash waits for the semaphore.        |
 | `turnstile.mode`                                | `disabled`         | `disabled`, `optional`, or `required`.              |
 | `turnstile.endpoints`                           | `[]`               | Endpoint names that require or accept Turnstile.    |
 | `turnstile.verify`                              | built-in verifier  | Optional custom verifier.                           |

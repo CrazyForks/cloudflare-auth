@@ -2977,12 +2977,10 @@ async function parseBody(
   mode: "json" | "json-or-form",
 ): Promise<Record<string, unknown>> {
   const contentType = (request.headers.get("Content-Type") ?? "").toLowerCase();
-  const length = Number(request.headers.get("Content-Length") ?? "0");
-  if (length > runtime.config.request.maxBodyBytes)
-    throw new AuthCryptoError("Request body too large", "body_too_large");
-  const text = await request.text();
-  if (Buffer.byteLength(text) > runtime.config.request.maxBodyBytes)
-    throw new AuthCryptoError("Request body too large", "body_too_large");
+  const text = await readLimitedBodyText(
+    request,
+    runtime.config.request.maxBodyBytes,
+  );
   if (contentType.startsWith("application/json")) {
     try {
       return JSON.parse(text || "{}") as Record<string, unknown>;
@@ -3000,6 +2998,38 @@ async function parseBody(
     "Unsupported content type",
     "unsupported_content_type",
   );
+}
+
+async function readLimitedBodyText(
+  request: Request,
+  maxBytes: number,
+): Promise<string> {
+  const declaredLength = Number(request.headers.get("Content-Length") ?? "0");
+  if (declaredLength > maxBytes) {
+    throw new AuthCryptoError("Request body too large", "body_too_large");
+  }
+  if (!request.body) return "";
+
+  const reader = request.body.getReader();
+  const decoder = new TextDecoder();
+  let bytes = 0;
+  let text = "";
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      bytes += value.byteLength;
+      if (bytes > maxBytes) {
+        await reader.cancel().catch(() => undefined);
+        throw new AuthCryptoError("Request body too large", "body_too_large");
+      }
+      text += decoder.decode(value, { stream: true });
+    }
+    text += decoder.decode();
+    return text;
+  } finally {
+    reader.releaseLock();
+  }
 }
 
 async function rateLimit(

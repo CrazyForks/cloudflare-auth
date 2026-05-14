@@ -883,6 +883,28 @@ describe("auth HTTP runtime", () => {
     } as RequestInit & { duplex: "half" });
     expect(oversizedStream.status).toBe(413);
 
+    let pulls = 0;
+    let canceled = false;
+    const boundedStream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulls += 1;
+        controller.enqueue(new TextEncoder().encode("abcdef"));
+        if (pulls > 5) controller.close();
+      },
+      cancel() {
+        canceled = true;
+      },
+    });
+    const earlyRejectedStream = await limited.authFetch("/auth/signup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: boundedStream as unknown as BodyInit,
+      duplex: "half",
+    } as RequestInit & { duplex: "half" });
+    expect(earlyRejectedStream.status).toBe(413);
+    expect(pulls).toBeLessThan(5);
+    expect(canceled).toBe(true);
+
     const { authFetch, handler, env } = await setup();
     const unsafe = await authFetch("/auth/magic-link/request", {
       method: "POST",

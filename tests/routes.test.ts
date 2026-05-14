@@ -14,13 +14,14 @@ import {
   createAuthHandler,
   defineAuthConfig,
   type AuthConfig,
+  type AuthConfigInput,
 } from "@cf-auth/worker";
 import { describe, expect, it } from "vitest";
 
 const origin = "http://localhost:8787";
 const authSecret = "k1.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 
-async function setup(overrides: Partial<AuthConfig> = {}) {
+async function setup(overrides: Partial<AuthConfigInput> = {}) {
   const db = createSqliteD1Database();
   await applyD1Migrations(db, [
     await readFile("migrations/0001_initial.sql", "utf8"),
@@ -162,6 +163,15 @@ describe("auth HTTP runtime", () => {
         basePath: "/auth",
         passwordHashing: {
           queueTimeoutMs: 0,
+        },
+      }),
+    ).toThrow(AuthCryptoError);
+    expect(() =>
+      defineAuthConfig({
+        appName: "Bad Enumeration Delay",
+        basePath: "/auth",
+        request: {
+          enumerationMinResponseMs: -1,
         },
       }),
     ).toThrow(AuthCryptoError);
@@ -1021,6 +1031,26 @@ describe("auth HTTP runtime", () => {
     expect(JSON.stringify(rows.results)).not.toMatch(
       /rate-raw@example\.com|raw-identifier|198\.51\.100\.77/,
     );
+  });
+
+  it("applies configured enumeration response delay to request flows", async () => {
+    const { authFetch } = await setup({
+      request: {
+        enumerationMinResponseMs: 20,
+        enumerationJitterMs: 0,
+      },
+    });
+
+    const startedAt = Date.now();
+    const response = await authFetch("/auth/password/reset/request", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "absent-delay@example.com" }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(Date.now() - startedAt).toBeGreaterThanOrEqual(15);
+    await expect(response.json()).resolves.toEqual({ ok: true });
   });
 
   it("writes redacted auth events for core auth outcomes", async () => {

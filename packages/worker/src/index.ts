@@ -59,8 +59,9 @@ export interface MinimalAuthConfig {
 }
 
 export type AuthConfigInput = MinimalAuthConfig &
-  Omit<Partial<AuthConfig>, "passwordHashing"> & {
+  Omit<Partial<AuthConfig>, "passwordHashing" | "request"> & {
     passwordHashing?: Partial<AuthConfig["passwordHashing"]>;
+    request?: Partial<AuthConfig["request"]>;
   };
 
 export type AuthHelperConfig = AuthConfig | AuthConfigInput;
@@ -1128,6 +1129,8 @@ export interface AuthConfig extends MinimalAuthConfig {
   request: {
     maxBodyBytes: number;
     requireOriginOnUnsafeMethods: boolean;
+    enumerationMinResponseMs: number;
+    enumerationJitterMs: number;
   };
   security: {
     allowedRequestOrigins: string[];
@@ -1287,6 +1290,8 @@ export function defineAuthConfig(config: AuthConfigInput): AuthConfig {
     request: {
       maxBodyBytes: 16 * 1024,
       requireOriginOnUnsafeMethods: true,
+      enumerationMinResponseMs: 0,
+      enumerationJitterMs: 0,
       ...config.request,
     },
     security: {
@@ -1421,6 +1426,17 @@ function assertRequestOptions(config: AuthConfig): void {
       "invalid request maxBodyBytes",
       "invalid_request_config",
     );
+  }
+  for (const key of [
+    "enumerationMinResponseMs",
+    "enumerationJitterMs",
+  ] as const) {
+    if (!Number.isInteger(config.request[key]) || config.request[key] < 0) {
+      throw new AuthCryptoError(
+        `invalid request ${key}`,
+        "invalid_request_config",
+      );
+    }
   }
 }
 
@@ -2024,6 +2040,7 @@ async function handleMagicLinkRequest(
 ): Promise<Response> {
   if (!runtime.config.login.magicLink)
     return errorResponse("Not found", 404, "not_found");
+  const startedAt = Date.now();
   const rawBody = await parseBody(request, runtime, "json");
   await enforceTurnstile(runtime, "magic_link_request", rawBody, request);
   const body = emailRequestSchema.parse(rawBody);
@@ -2085,6 +2102,7 @@ async function handleMagicLinkRequest(
     });
     performDummyTokenWork(runtime, "magic", "magic_link");
   }
+  await applyEnumerationResponseDelay(runtime, startedAt);
   return json({ ok: true });
 }
 
@@ -2171,6 +2189,7 @@ async function handleEmailVerifyRequest(
 ): Promise<Response> {
   if (!runtime.config.emailVerification.enabled)
     return errorResponse("Not found", 404, "not_found");
+  const startedAt = Date.now();
   const rawBody = await parseBody(request, runtime, "json");
   await enforceTurnstile(
     runtime,
@@ -2216,6 +2235,7 @@ async function handleEmailVerifyRequest(
     });
     performDummyTokenWork(runtime, "verify", "email_verification");
   }
+  await applyEnumerationResponseDelay(runtime, startedAt);
   return json({ ok: true });
 }
 
@@ -2306,6 +2326,7 @@ async function handlePasswordResetRequest(
 ): Promise<Response> {
   if (!runtime.config.passwordReset.enabled)
     return errorResponse("Not found", 404, "not_found");
+  const startedAt = Date.now();
   const rawBody = await parseBody(request, runtime, "json");
   await enforceTurnstile(runtime, "password_reset_request", rawBody, request);
   const body = emailRequestSchema.parse(rawBody);
@@ -2353,6 +2374,7 @@ async function handlePasswordResetRequest(
     });
     performDummyTokenWork(runtime, "reset", "password_reset");
   }
+  await applyEnumerationResponseDelay(runtime, startedAt);
   return json({ ok: true });
 }
 
@@ -2681,6 +2703,20 @@ function performDummyTokenWork(
 ): void {
   const token = generateRawAuthToken(rawPurpose, runtime.keyRing.current);
   hashRawAuthToken(token, runtime.keyRing, type);
+}
+
+async function applyEnumerationResponseDelay(
+  runtime: RuntimeContext,
+  startedAt: number,
+): Promise<void> {
+  const minimum = runtime.config.request.enumerationMinResponseMs;
+  const jitter = runtime.config.request.enumerationJitterMs;
+  if (minimum === 0 && jitter === 0) return;
+  const target =
+    minimum + (jitter > 0 ? Math.floor(Math.random() * (jitter + 1)) : 0);
+  const remaining = target - (Date.now() - startedAt);
+  if (remaining <= 0) return;
+  await new Promise((resolve) => setTimeout(resolve, remaining));
 }
 
 function tokenPage(

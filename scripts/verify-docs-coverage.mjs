@@ -42,6 +42,8 @@ for (const key of [
   "session.requireVerifiedEmail",
   "request.maxBodyBytes",
   "request.requireOriginOnUnsafeMethods",
+  "request.enumerationMinResponseMs",
+  "request.enumerationJitterMs",
   "security.allowedRequestOrigins",
   "security.allowedPreviewRequestOrigins",
   "passwordHashing.profile",

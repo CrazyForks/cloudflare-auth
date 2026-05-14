@@ -40,6 +40,8 @@ Defaults:
 - `session.sameSite` defaults to `lax`
 - `session.domain` is unset unless cross-subdomain cookies are explicitly configured
 - `request.maxBodyBytes` defaults to `16384`
+- `request.enumerationMinResponseMs` defaults to `0`
+- `request.enumerationJitterMs` defaults to `0`
 - `passwordHashing.profile` defaults to `workers-balanced`
 - `passwordHashing.maxConcurrentHashesPerIsolate` defaults to `1`
 - `passwordHashing.queueTimeoutMs` defaults to `2000`

@@ -44,6 +44,8 @@ Sessions and requests:
 | `session.requireVerifiedEmail`         | `false` | Hides sessions from `/auth/user`, `getUser()`, `getSession()`, and `requireUser()` until verified. |
 | `request.maxBodyBytes`                 | `16384` | Positive integer byte limit.                                                                       |
 | `request.requireOriginOnUnsafeMethods` | `true`  | Requires trusted `Origin` for browser mutations outside local development.                         |
+| `request.enumerationMinResponseMs`     | `0`     | Optional minimum response time for magic-link, email-verification, and password-reset requests.    |
+| `request.enumerationJitterMs`          | `0`     | Optional random extra delay added to the enumeration minimum.                                      |
 
 Security, hashing, and bot checks:
 
@@ -112,5 +114,6 @@ for explicit cross-subdomain cookies and must look like `.example.com`; plain
 hostnames, wildcards, IP addresses, paths, schemes, and trailing-dot domains
 are rejected.
 
-`request.maxBodyBytes` must be a positive integer. `doctor` warns when the
-configured auth request-body limit is larger than 64 KiB.
+`request.maxBodyBytes` must be a positive integer. Enumeration delay values
+must be non-negative integers. `doctor` warns when the configured auth
+request-body limit is larger than 64 KiB.

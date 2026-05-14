@@ -2587,6 +2587,10 @@ function targetMode(parsed: ParsedArgs): { local: boolean; remote: boolean } {
 interface WranglerConfig {
   name?: string;
   account_id?: string;
+  observability?: {
+    enabled?: boolean;
+    head_sampling_rate?: number;
+  };
   vars?: Record<string, string>;
   send_email?: Array<{ name: string }>;
   d1_databases?: Array<{
@@ -2661,6 +2665,7 @@ async function repairWranglerConfig(
   changed =
     ensureD1Binding(config, `${appName}-auth-dev`, "local-development", true) ||
     changed;
+  changed = ensureObservability(config) || changed;
 
   config.env ??= {};
   if (!config.env.production) {
@@ -2694,6 +2699,15 @@ async function repairWranglerConfig(
 
   if (changed) await writeFile(path, JSON.stringify(config, null, 2) + "\n");
   return changed;
+}
+
+function ensureObservability(config: WranglerConfig): boolean {
+  if (config.observability) return false;
+  config.observability = {
+    enabled: true,
+    head_sampling_rate: 1,
+  };
+  return true;
 }
 
 function ensureVars(
@@ -2948,6 +2962,10 @@ function wranglerTemplate(): string {
   "main": "src/index.ts",
   "compatibility_date": "2026-05-14",
   "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
   "vars": {
     "AUTH_ENV": "development",
     "AUTH_PUBLIC_ORIGIN": "http://localhost:8787"

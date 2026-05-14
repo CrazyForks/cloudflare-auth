@@ -105,6 +105,12 @@ function checkWrangler(config) {
   if (!config.compatibility_flags?.includes("nodejs_compat")) {
     failures.push("wrangler.jsonc: must enable nodejs_compat");
   }
+  if (config.observability?.enabled !== true) {
+    failures.push("wrangler.jsonc: must enable observability");
+  }
+  if (config.observability?.head_sampling_rate !== 1) {
+    failures.push("wrangler.jsonc: observability head_sampling_rate must be 1");
+  }
   if (config.vars?.AUTH_ENV !== "production") {
     failures.push(
       "wrangler.jsonc: deploy template must default AUTH_ENV to production",

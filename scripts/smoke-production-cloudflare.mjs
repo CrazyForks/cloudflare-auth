@@ -181,6 +181,10 @@ async function writeSmokeWranglerConfig(appDir, input) {
     account_id: input.accountId,
     compatibility_date: "2026-05-14",
     compatibility_flags: ["nodejs_compat"],
+    observability: {
+      enabled: true,
+      head_sampling_rate: 1,
+    },
     vars: {
       AUTH_ENV: "development",
       AUTH_PUBLIC_ORIGIN: "http://localhost:8787",

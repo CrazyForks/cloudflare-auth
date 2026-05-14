@@ -64,13 +64,19 @@ await requireText(
   "packages/cli/src/index.ts",
   `"compatibility_date": "${matrix.workersCompatibilityDate}"`,
 );
+await requireText("packages/cli/src/index.ts", `"observability": {`);
 await requireText(
   "scripts/export-deploy-template.mjs",
   `compatibility_date: "${matrix.workersCompatibilityDate}"`,
 );
+await requireText("scripts/export-deploy-template.mjs", "observability: {");
 await requireText(
   "scripts/smoke-production-cloudflare.mjs",
   `compatibility_date: "${matrix.workersCompatibilityDate}"`,
+);
+await requireText(
+  "scripts/smoke-production-cloudflare.mjs",
+  "observability: {",
 );
 
 if (failures.length) {

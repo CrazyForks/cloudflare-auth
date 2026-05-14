@@ -81,6 +81,8 @@ describe("CLI MVP", () => {
     expect(source).toContain("app.route(authConfig.basePath");
     const wrangler = await readFile(join(app, "wrangler.jsonc"), "utf8");
     expect(wrangler).toContain('"database_id": "local-development"');
+    expect(wrangler).toContain('"observability"');
+    expect(wrangler).toContain('"head_sampling_rate": 1');
     expect(
       await readFile(join(app, "migrations", "0001_initial.sql"), "utf8"),
     ).toBe(await readFile("migrations/0001_initial.sql", "utf8"));
@@ -243,6 +245,7 @@ describe("CLI MVP", () => {
       await readFile(join(app, "wrangler.jsonc"), "utf8"),
     ) as {
       vars: Record<string, string>;
+      observability?: { enabled?: boolean; head_sampling_rate?: number };
       d1_databases: Array<{ binding: string; database_id: string }>;
       env: {
         production: {
@@ -253,6 +256,10 @@ describe("CLI MVP", () => {
       };
     };
     expect(wrangler.vars.AUTH_ENV).toBe("development");
+    expect(wrangler.observability).toEqual({
+      enabled: true,
+      head_sampling_rate: 1,
+    });
     expect(wrangler.d1_databases[0]).toMatchObject({
       binding: "AUTH_DB",
       database_id: "local-development",

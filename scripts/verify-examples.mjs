@@ -160,6 +160,14 @@ function verifyWranglerToolchain(dir, wrangler) {
   if (!wrangler.compatibility_flags?.includes("nodejs_compat")) {
     failures.push(`${dir}: wrangler.jsonc must enable nodejs_compat`);
   }
+  if (wrangler.observability?.enabled !== true) {
+    failures.push(`${dir}: wrangler.jsonc must enable observability`);
+  }
+  if (wrangler.observability?.head_sampling_rate !== 1) {
+    failures.push(
+      `${dir}: wrangler.jsonc observability head_sampling_rate must be 1`,
+    );
+  }
 }
 
 function parseJsonc(text) {

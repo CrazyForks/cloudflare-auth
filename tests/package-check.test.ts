@@ -69,6 +69,20 @@ describe("package checks", () => {
     );
   });
 
+  it("rejects non-object package ownership examples", async () => {
+    const root = await packageCheckFixture();
+    await writeFile(
+      join(root, "docs", "package-ownership.example.json"),
+      "null\n",
+    );
+    const result = runPackageCheck(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "docs/package-ownership.example.json: top-level JSON value must be an object",
+    );
+  });
+
   it("requires release gates before package publication", async () => {
     const root = await packageCheckFixture();
     await replaceFixtureText(

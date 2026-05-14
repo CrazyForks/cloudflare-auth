@@ -326,6 +326,12 @@ async function verifyPackageNamingDocs() {
   } catch {
     failures.push("docs/package-ownership.example.json: must be valid JSON");
   }
+  if (!isJsonObject(ownershipExampleJson)) {
+    failures.push(
+      "docs/package-ownership.example.json: top-level JSON value must be an object",
+    );
+    ownershipExampleJson = {};
+  }
   for (const { name } of expectedPackages.values()) {
     if (!naming.includes(`\`${name}\``)) {
       failures.push(`docs/decisions/package-naming.md: missing ${name}`);

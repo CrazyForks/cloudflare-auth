@@ -1636,75 +1636,84 @@ export function createAuthHandler(configInput: AuthHelperConfig) {
       if (!checkOrigin(request, runtime))
         return errorResponse("Invalid origin", 403, "invalid_origin");
 
-      try {
-        if (path === "/dev/emails" && request.method === "GET")
-          return handleDevEmails(runtime);
-        if (path === "/signup" && request.method === "POST")
-          return await handleSignup(request, runtime);
-        if (path === "/login" && request.method === "POST")
-          return await handleLogin(request, runtime);
-        if (path === "/logout" && request.method === "POST")
-          return await handleLogout(request, runtime);
-        if (path === "/user" && request.method === "GET")
-          return await handleUser(request, runtime);
-        if (path === "/magic-link/request" && request.method === "POST")
-          return await handleMagicLinkRequest(request, runtime);
-        if (path === "/magic-link/verify" && request.method === "GET") {
-          if (!runtime.config.login.magicLink)
-            return errorResponse("Not found", 404, "not_found");
-          return tokenPage(
-            request,
-            runtime,
-            "magic",
-            "/magic-link/consume",
-            "Continue",
-          );
-        }
-        if (path === "/magic-link/consume" && request.method === "POST")
-          return await handleMagicLinkConsume(request, runtime);
-        if (path === "/email/verify/request" && request.method === "POST")
-          return await handleEmailVerifyRequest(request, runtime);
-        if (path === "/email/verify" && request.method === "GET") {
-          if (!runtime.config.emailVerification.enabled)
-            return errorResponse("Not found", 404, "not_found");
-          return tokenPage(
-            request,
-            runtime,
-            "verify",
-            "/email/verify/consume",
-            "Verify email",
-          );
-        }
-        if (path === "/email/verify/consume" && request.method === "POST")
-          return await handleEmailVerifyConsume(request, runtime);
-        if (path === "/password/reset/request" && request.method === "POST")
-          return await handlePasswordResetRequest(request, runtime);
-        if (path === "/password/reset" && request.method === "GET") {
-          if (!runtime.config.passwordReset.enabled)
-            return errorResponse("Not found", 404, "not_found");
-          return resetPage(request, runtime);
-        }
-        if (path === "/password/reset/confirm" && request.method === "POST")
-          return await handlePasswordResetConfirm(request, runtime);
-        return errorResponse("Not found", 404, "not_found");
-      } catch (error) {
-        if (
-          error instanceof AuthCryptoError ||
-          error instanceof AuthRepositoryError ||
-          error instanceof z.ZodError
-        ) {
-          const code =
-            error instanceof z.ZodError
-              ? "validation_failed"
-              : error.code === "hash_queue_timeout"
-                ? "rate_limited"
-                : error.code;
-          return errorResponse(error, 400, code);
-        }
-        return errorResponse(error, 500, "server_error");
-      }
+      const response = await dispatchAuthRequest(path, request, runtime);
+      return withCorsHeaders(request, runtime, response);
     },
   };
+}
+
+async function dispatchAuthRequest(
+  path: string,
+  request: Request,
+  runtime: RuntimeContext,
+): Promise<Response> {
+  try {
+    if (path === "/dev/emails" && request.method === "GET")
+      return handleDevEmails(runtime);
+    if (path === "/signup" && request.method === "POST")
+      return await handleSignup(request, runtime);
+    if (path === "/login" && request.method === "POST")
+      return await handleLogin(request, runtime);
+    if (path === "/logout" && request.method === "POST")
+      return await handleLogout(request, runtime);
+    if (path === "/user" && request.method === "GET")
+      return await handleUser(request, runtime);
+    if (path === "/magic-link/request" && request.method === "POST")
+      return await handleMagicLinkRequest(request, runtime);
+    if (path === "/magic-link/verify" && request.method === "GET") {
+      if (!runtime.config.login.magicLink)
+        return errorResponse("Not found", 404, "not_found");
+      return tokenPage(
+        request,
+        runtime,
+        "magic",
+        "/magic-link/consume",
+        "Continue",
+      );
+    }
+    if (path === "/magic-link/consume" && request.method === "POST")
+      return await handleMagicLinkConsume(request, runtime);
+    if (path === "/email/verify/request" && request.method === "POST")
+      return await handleEmailVerifyRequest(request, runtime);
+    if (path === "/email/verify" && request.method === "GET") {
+      if (!runtime.config.emailVerification.enabled)
+        return errorResponse("Not found", 404, "not_found");
+      return tokenPage(
+        request,
+        runtime,
+        "verify",
+        "/email/verify/consume",
+        "Verify email",
+      );
+    }
+    if (path === "/email/verify/consume" && request.method === "POST")
+      return await handleEmailVerifyConsume(request, runtime);
+    if (path === "/password/reset/request" && request.method === "POST")
+      return await handlePasswordResetRequest(request, runtime);
+    if (path === "/password/reset" && request.method === "GET") {
+      if (!runtime.config.passwordReset.enabled)
+        return errorResponse("Not found", 404, "not_found");
+      return resetPage(request, runtime);
+    }
+    if (path === "/password/reset/confirm" && request.method === "POST")
+      return await handlePasswordResetConfirm(request, runtime);
+    return errorResponse("Not found", 404, "not_found");
+  } catch (error) {
+    if (
+      error instanceof AuthCryptoError ||
+      error instanceof AuthRepositoryError ||
+      error instanceof z.ZodError
+    ) {
+      const code =
+        error instanceof z.ZodError
+          ? "validation_failed"
+          : error.code === "hash_queue_timeout"
+            ? "rate_limited"
+            : error.code;
+      return errorResponse(error, 400, code);
+    }
+    return errorResponse(error, 500, "server_error");
+  }
 }
 
 export async function getAuthSessionFromRequest(
@@ -3265,6 +3274,44 @@ function handlePreflight(request: Request, runtime: RuntimeContext): Response {
   headers.set("Access-Control-Max-Age", "600");
   headers.set("Vary", "Origin");
   return new Response(null, { status: 204, headers });
+}
+
+function withCorsHeaders(
+  request: Request,
+  runtime: RuntimeContext,
+  response: Response,
+): Response {
+  const origin = allowedCorsOrigin(request, runtime);
+  if (!origin) return response;
+  const headers = new Headers(response.headers);
+  headers.set("Access-Control-Allow-Origin", origin);
+  headers.set("Access-Control-Allow-Credentials", "true");
+  headers.set("Vary", appendVary(headers.get("Vary"), "Origin"));
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+function allowedCorsOrigin(
+  request: Request,
+  runtime: RuntimeContext,
+): string | null {
+  const origin = request.headers.get("Origin");
+  if (!origin) return null;
+  if (origin === runtime.requestOrigin) return origin;
+  const allowed =
+    runtime.mode === "preview"
+      ? runtime.config.security.allowedPreviewRequestOrigins
+      : runtime.config.security.allowedRequestOrigins;
+  return allowed.includes(origin) ? origin : null;
+}
+
+function appendVary(value: string | null, token: string): string {
+  if (!value) return token;
+  const tokens = value.split(",").map((item) => item.trim().toLowerCase());
+  return tokens.includes(token.toLowerCase()) ? value : `${value}, ${token}`;
 }
 
 function publicUser(user: UserRow): PublicAuthUser {

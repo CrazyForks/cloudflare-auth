@@ -307,17 +307,14 @@ describe("auth HTTP runtime", () => {
       `/auth/password/reset?token=${resetToken}`,
     );
     expect(resetPageResponse.status).toBe(404);
-    const resetConfirm = await reset.authFetch(
-      "/auth/password/reset/confirm",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          token: resetToken,
-          password: "new correct horse battery staple",
-        }),
-      },
-    );
+    const resetConfirm = await reset.authFetch("/auth/password/reset/confirm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token: resetToken,
+        password: "new correct horse battery staple",
+      }),
+    });
     expect(resetConfirm.status).toBe(404);
     const resetRequest = await reset.authFetch("/auth/password/reset/request", {
       method: "POST",
@@ -970,6 +967,40 @@ describe("auth HTTP runtime", () => {
       disallowedPreflight?.headers.get("Access-Control-Allow-Origin"),
     ).toBeNull();
 
+    const corsPolicy = await setup({
+      security: {
+        allowedRequestOrigins: ["https://app.example"],
+        allowedPreviewRequestOrigins: [],
+      },
+    });
+    const allowedCorsGet = await corsPolicy.handler.fetch(
+      new Request(`${origin}/auth/user`, {
+        headers: { Origin: "https://app.example" },
+      }),
+      corsPolicy.env,
+      corsPolicy.ctx,
+    );
+    await corsPolicy.flushDeferred();
+    expect(allowedCorsGet?.headers.get("Access-Control-Allow-Origin")).toBe(
+      "https://app.example",
+    );
+    expect(
+      allowedCorsGet?.headers.get("Access-Control-Allow-Credentials"),
+    ).toBe("true");
+    expect(allowedCorsGet?.headers.get("Vary")).toBe("Origin");
+
+    const disallowedCorsGet = await corsPolicy.handler.fetch(
+      new Request(`${origin}/auth/user`, {
+        headers: { Origin: "https://evil.example" },
+      }),
+      corsPolicy.env,
+      corsPolicy.ctx,
+    );
+    await corsPolicy.flushDeferred();
+    expect(
+      disallowedCorsGet?.headers.get("Access-Control-Allow-Origin"),
+    ).toBeNull();
+
     const previewPolicy = await setup({
       security: {
         allowedRequestOrigins: ["https://prod.example"],
@@ -1336,12 +1367,12 @@ async function authRowCounts(db: D1Database) {
     db
       .prepare("SELECT count(*) AS count FROM verification_tokens")
       .first<number>("count"),
-    db.prepare("SELECT count(*) AS count FROM rate_limits").first<number>(
-      "count",
-    ),
-    db.prepare("SELECT count(*) AS count FROM auth_events").first<number>(
-      "count",
-    ),
+    db
+      .prepare("SELECT count(*) AS count FROM rate_limits")
+      .first<number>("count"),
+    db
+      .prepare("SELECT count(*) AS count FROM auth_events")
+      .first<number>("count"),
   ]);
   return { tokens, rateLimits, events };
 }

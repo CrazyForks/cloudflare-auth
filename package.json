@@ -21,6 +21,7 @@
     "version-matrix:check": "node scripts/version-matrix-check.mjs",
     "export:deploy-template": "node scripts/export-deploy-template.mjs",
     "verify:alpha-evidence": "node scripts/verify-alpha-evidence.mjs",
+    "verify:beta-evidence": "node scripts/verify-beta-evidence.mjs",
     "verify:deploy-button-evidence": "node scripts/verify-deploy-button-evidence.mjs",
     "verify:deploy-template": "node scripts/verify-deploy-template.mjs",
     "verify:docs-coverage": "node scripts/verify-docs-coverage.mjs",

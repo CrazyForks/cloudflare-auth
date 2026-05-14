@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "reviewedAt": "2026-05-14T00:00:00.000Z",
+  "reviewedBy": "maintainer-name",
+  "publishedQuickstart": {
+    "workflowRunUrl": "https://github.com/OWNER/REPO/actions/runs/0000000000",
+    "packageTag": "beta",
+    "passed": false,
+    "noWorkspaceDependencies": false,
+    "signupLoginVerified": false
+  },
+  "manualQuickstart": {
+    "maintainer": "maintainer-name",
+    "completedAt": "2026-05-14T00:00:00.000Z",
+    "packageTag": "beta",
+    "cleanDirectory": false,
+    "documentedCommandsOnly": false,
+    "signupLoginVerified": false
+  },
+  "productionSmoke": {
+    "workflowRunUrl": "https://github.com/OWNER/REPO/actions/runs/0000000000",
+    "packageTag": "beta",
+    "origin": "https://example.com",
+    "passed": false,
+    "smokedEndpoints": []
+  },
+  "deployButton": {
+    "evidencePath": "docs/deploy-button-evidence.json",
+    "verified": false
+  }
+}

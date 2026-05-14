@@ -25,6 +25,7 @@ await requireFile(".github/ISSUE_TEMPLATE/feature-request.yml");
 await requireFile(".github/ISSUE_TEMPLATE/security-contact.md");
 await requireFile("docs/alpha-evidence.example.json");
 await requireFile("docs/alpha.md");
+await requireFile("docs/beta-evidence.example.json");
 await requireFile("docs/deploy-button-evidence.example.json");
 await requireFile("docs/deploy-to-cloudflare.md");
 await requireFile("docs/known-limitations.md");
@@ -33,6 +34,7 @@ await requireFile("docs/public-beta.md");
 await requireFile("docs/security-release-tracker.example.json");
 await requireFile("scripts/export-deploy-template.mjs");
 await requireFile("scripts/verify-alpha-evidence.mjs");
+await requireFile("scripts/verify-beta-evidence.mjs");
 await requireFile("scripts/verify-deploy-button-evidence.mjs");
 await requireFile("scripts/verify-deploy-template.mjs");
 await requireFile("scripts/verify-docs-coverage.mjs");
@@ -68,7 +70,12 @@ await requireText(
   "docs/deploy-to-cloudflare.md",
   "CF_AUTH_REQUIRE_DEPLOY_BUTTON_EVIDENCE=1 pnpm verify:deploy-button-evidence",
 );
+await requireText(
+  "docs/public-beta.md",
+  "CF_AUTH_REQUIRE_BETA_EVIDENCE=1 pnpm verify:beta-evidence",
+);
 await requireText("docs/public-beta.md", "docs/known-limitations.md");
+await requireText("docs/public-beta.md", "pnpm verify:beta-evidence");
 await requireText("docs/public-beta.md", "pnpm verify:deploy-button-evidence");
 await requireText("docs/public-beta.md", "pnpm verify:package-ownership");
 await requireText(
@@ -96,6 +103,9 @@ if (betaPackages.length > 0) {
   await requireText("docs/alpha-evidence.json", '"productionDeploys"');
 }
 if (stablePackages.length > 0) {
+  await requireFile("docs/beta-evidence.json");
+  await requireText("docs/beta-evidence.json", '"publishedQuickstart"');
+  await requireText("docs/beta-evidence.json", '"productionSmoke"');
   await requireReleaseApproval("docs/api-report.md", "Public API report");
   await requireReleaseApproval("docs/config-schema.md", "Config schema");
   await requireSecurityReviewDecision();

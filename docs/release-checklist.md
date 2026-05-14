@@ -13,6 +13,7 @@
 - `pnpm version-matrix:check`
 - `pnpm audit --audit-level high` reviewed as advisory evidence, not as the sole security gate
 - `pnpm verify:alpha-evidence`
+- `pnpm verify:beta-evidence`
 - `pnpm verify:deploy-button-evidence`
 - `pnpm verify:deploy-template`
 - `pnpm verify:docs-coverage`
@@ -54,6 +55,7 @@
 
 - public API report reviewed and release-approved
 - config schema reviewed and release-approved
+- public-beta evidence verifier passes
 - upgrade tests cover every beta schema version
 - security review decision record signed
 - security release tracker verifier passes

@@ -57,3 +57,12 @@ The template must include published package versions, not `workspace:*`
 dependencies. `pnpm verify:deploy-template` checks the generated template shape,
 including D1 binding metadata and the deploy script that applies migrations
 through the `AUTH_DB` binding.
+
+## Before 1.0
+
+Copy `docs/beta-evidence.example.json` to `docs/beta-evidence.json` and
+record redaction-safe public-beta evidence before stable 1.0:
+
+```bash
+CF_AUTH_REQUIRE_BETA_EVIDENCE=1 pnpm verify:beta-evidence
+```

@@ -193,6 +193,7 @@ async function verifyReleaseControls() {
     "pnpm package:check",
     "pnpm audit --audit-level high",
     "continue-on-error: true",
+    "pnpm verify:beta-evidence",
     "pnpm verify:package-ownership",
     "pnpm changeset publish --provenance",
   ]) {

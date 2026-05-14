@@ -93,6 +93,8 @@ await requireText(
   "docs/public-beta.md",
   ".github/workflows/cloudflare-production-smoke.yml",
 );
+await requireText("docs/beta-evidence.example.json", "/auth/logout");
+await requireText("docs/deploy-button-evidence.example.json", "/auth/logout");
 await requireText(
   ".github/workflows/wrangler-dev-smoke.yml",
   "pnpm smoke:wrangler-dev",

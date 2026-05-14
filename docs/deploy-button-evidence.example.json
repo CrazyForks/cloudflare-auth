@@ -13,5 +13,10 @@
   "authSecretConfigured": false,
   "publicOriginConfigured": false,
   "signupLoginSmokePassed": false,
-  "smokedEndpoints": []
+  "smokedEndpoints": [
+    "/auth/signup",
+    "/auth/login",
+    "/auth/logout",
+    "/auth/user"
+  ]
 }

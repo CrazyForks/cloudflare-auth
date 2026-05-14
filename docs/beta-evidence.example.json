@@ -22,7 +22,12 @@
     "packageTag": "beta",
     "origin": "https://example.com",
     "passed": false,
-    "smokedEndpoints": []
+    "smokedEndpoints": [
+      "/auth/signup",
+      "/auth/login",
+      "/auth/logout",
+      "/auth/user"
+    ]
   },
   "deployButton": {
     "evidencePath": "docs/deploy-button-evidence.json",

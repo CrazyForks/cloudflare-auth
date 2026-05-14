@@ -254,7 +254,7 @@ describe("auth HTTP runtime", () => {
   });
 
   it("rejects invalid feature flag combinations", () => {
-    const invalid = (overrides: Partial<AuthConfig>) =>
+    const invalid = (overrides: Partial<AuthConfigInput>) =>
       defineAuthConfig({
         appName: "Invalid Feature Config",
         basePath: "/auth",
@@ -280,6 +280,13 @@ describe("auth HTTP runtime", () => {
     expect(() =>
       invalid({
         signup: {
+          username: { enabled: false, required: true },
+        },
+      }),
+    ).toThrow(AuthCryptoError);
+    expect(() =>
+      invalid({
+        signup: {
           enumerationSafe: true,
           requireEmailVerificationBeforeSession: false,
           username: { enabled: true, required: false },
@@ -294,6 +301,51 @@ describe("auth HTTP runtime", () => {
         login: { requireVerifiedEmail: true } as AuthConfig["login"],
       }),
     ).toThrow(AuthCryptoError);
+  });
+
+  it("honors disabled signup usernames", async () => {
+    const { authFetch, config, db } = await setup({
+      signup: {
+        username: { enabled: false },
+      },
+    });
+    expect(config.signup.username).toEqual({
+      enabled: false,
+      required: false,
+    });
+
+    const rejected = await authFetch("/auth/signup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: "blocked-username@example.com",
+        username: "blocked",
+        password: "correct horse battery staple",
+      }),
+    });
+    expect(rejected.status).toBe(400);
+    await expect(rejected.json()).resolves.toMatchObject({
+      error: { code: "validation_failed" },
+    });
+    await expect(
+      db.prepare("SELECT count(*) AS count FROM users").first("count"),
+    ).resolves.toBe(0);
+
+    const accepted = await authFetch("/auth/signup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: "no-username@example.com",
+        password: "correct horse battery staple",
+      }),
+    });
+    expect(accepted.status).toBe(200);
+    await expect(
+      db
+        .prepare("SELECT username FROM users WHERE normalized_email = ?")
+        .bind("no-username@example.com")
+        .first("username"),
+    ).resolves.toBeNull();
   });
 
   it("returns not_found for disabled token feature pages and consumes", async () => {

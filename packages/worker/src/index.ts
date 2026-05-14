@@ -60,10 +60,15 @@ export interface MinimalAuthConfig {
   email?: unknown;
 }
 
+type SignupConfigInput = Partial<Omit<AuthConfig["signup"], "username">> & {
+  username?: Partial<AuthConfig["signup"]["username"]>;
+};
+
 export type AuthConfigInput = MinimalAuthConfig &
-  Omit<Partial<AuthConfig>, "passwordHashing" | "request"> & {
+  Omit<Partial<AuthConfig>, "passwordHashing" | "request" | "signup"> & {
     passwordHashing?: Partial<AuthConfig["passwordHashing"]>;
     request?: Partial<AuthConfig["request"]>;
+    signup?: SignupConfigInput;
   };
 
 export type AuthHelperConfig = AuthConfig | AuthConfigInput;
@@ -1387,8 +1392,8 @@ export function defineAuthConfig(config: AuthConfigInput): AuthConfig {
       enabled: true,
       requireEmailVerificationBeforeSession: false,
       enumerationSafe: false,
-      username: { enabled: true, required: false, ...config.signup?.username },
       ...config.signup,
+      username: { enabled: true, required: false, ...config.signup?.username },
     },
     login: {
       emailPassword: true,
@@ -1597,6 +1602,12 @@ function assertFeatureOptions(config: AuthConfig): void {
         "invalid_feature_config",
       );
     }
+  }
+  if (!config.signup.username.enabled && config.signup.username.required) {
+    throw new AuthCryptoError(
+      "disabled signup usernames cannot be required",
+      "invalid_feature_config",
+    );
   }
   if (config.signup.enumerationSafe) {
     if (!config.emailVerification.enabled) {
@@ -1979,6 +1990,9 @@ async function handleSignup(
   const normalizedEmail = normalizeEmail(body.email);
   const username = body.username ? body.username.trim() : null;
   const normalizedUsername = username ? normalizeUsername(username) : null;
+  if (!runtime.config.signup.username.enabled && normalizedUsername) {
+    return errorResponse("Username signup disabled", 400, "validation_failed");
+  }
   if (runtime.config.signup.username.required && !normalizedUsername)
     return errorResponse("Username required", 400, "validation_failed");
   await rateLimit(

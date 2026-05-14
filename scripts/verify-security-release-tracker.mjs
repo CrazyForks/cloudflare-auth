@@ -89,6 +89,7 @@ function validateTracker(value, rawText) {
   const advisories = Array.isArray(value.advisories) ? value.advisories : [];
   for (const [index, advisory] of advisories.entries()) {
     const path = `advisories[${index}]`;
+    if (!requireObject(advisory, path)) continue;
     requireString(advisory.id, `${path}.id`);
     requireString(advisory.severity, `${path}.severity`);
     requireString(advisory.status, `${path}.status`);
@@ -112,6 +113,14 @@ function validateTracker(value, rawText) {
       `${trackerPath}: must not include raw secrets, tokens, cookies, emails, IPs, user agents, or Cloudflare API tokens`,
     );
   }
+}
+
+function requireObject(value, path) {
+  if (!isJsonObject(value)) {
+    failures.push(`${trackerPath}: ${path} must be an object`);
+    return false;
+  }
+  return true;
 }
 
 function requireString(value, path) {

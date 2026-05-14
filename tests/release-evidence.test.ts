@@ -234,6 +234,63 @@ describe("release evidence verifiers", () => {
     }
   });
 
+  it("rejects non-object evidence array entries without crashing", async () => {
+    const alphaEvidence = validAlphaEvidence();
+    (alphaEvidence.localSetups as unknown[])[0] = null;
+    (alphaEvidence.productionDeploys as unknown[])[0] = null;
+    (alphaEvidence.failures as unknown[])[0] = null;
+    const alphaPath = await writeEvidence(
+      "alpha-non-object-array-entry",
+      alphaEvidence,
+    );
+    const alphaResult = runScript("scripts/verify-alpha-evidence.mjs", {
+      CF_AUTH_REQUIRE_ALPHA_EVIDENCE: "1",
+      CF_AUTH_ALPHA_EVIDENCE_PATH: alphaPath,
+    });
+
+    const packageEvidence = validPackageEvidence();
+    (packageEvidence.packages as unknown[])[0] = null;
+    (packageEvidence.reservedPackages as unknown[])[0] = null;
+    const packagePath = await writeEvidence(
+      "package-ownership-non-object-array-entry",
+      packageEvidence,
+    );
+    const packageResult = runScript("scripts/verify-package-ownership.mjs", {
+      CF_AUTH_REQUIRE_PACKAGE_OWNERSHIP: "1",
+      CF_AUTH_PACKAGE_OWNERSHIP_PATH: packagePath,
+    });
+
+    const securityTracker = validSecurityTracker();
+    (securityTracker.advisories as unknown[])[0] = null;
+    const securityTrackerPath = await writeEvidence(
+      "security-tracker-non-object-array-entry",
+      securityTracker,
+    );
+    const securityTrackerResult = runScript(
+      "scripts/verify-security-release-tracker.mjs",
+      {
+        CF_AUTH_REQUIRE_SECURITY_TRACKER: "1",
+        CF_AUTH_SECURITY_TRACKER_PATH: securityTrackerPath,
+      },
+    );
+
+    expect(alphaResult.status).toBe(1);
+    expect(alphaResult.stderr).toContain("localSetups[0] must be an object");
+    expect(alphaResult.stderr).toContain(
+      "productionDeploys[0] must be an object",
+    );
+    expect(alphaResult.stderr).toContain("failures[0] must be an object");
+    expect(packageResult.status).toBe(1);
+    expect(packageResult.stderr).toContain("packages[0] must be an object");
+    expect(packageResult.stderr).toContain(
+      "reservedPackages[0] must be an object",
+    );
+    expect(securityTrackerResult.status).toBe(1);
+    expect(securityTrackerResult.stderr).toContain(
+      "advisories[0] must be an object",
+    );
+  });
+
   it("rejects impossible ISO evidence dates", async () => {
     const evidence = validAlphaEvidence();
     evidence.localSetups[0]!.completedAt = "2026-02-31T00:00:00.000Z";

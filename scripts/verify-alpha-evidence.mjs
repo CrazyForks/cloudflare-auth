@@ -69,12 +69,12 @@ function validateEvidence(value, rawText) {
 
   const localSetupUsers = new Set(
     localSetups
-      .map((setup) => setup.user)
+      .map((setup) => (isJsonObject(setup) ? setup.user : null))
       .filter((user) => typeof user === "string" && user.length > 0),
   );
   const productionDeployUsers = new Set(
     productionDeploys
-      .map((deploy) => deploy.user)
+      .map((deploy) => (isJsonObject(deploy) ? deploy.user : null))
       .filter((user) => typeof user === "string" && user.length > 0),
   );
 
@@ -92,6 +92,7 @@ function validateEvidence(value, rawText) {
   const setupMinutes = [];
   for (const [index, setup] of localSetups.entries()) {
     const path = `localSetups[${index}]`;
+    if (!requireObject(setup, path)) continue;
     requireString(setup.user, `${path}.user`);
     requireDate(setup.completedAt, `${path}.completedAt`);
     if (!isPositiveNumber(setup.setupMinutes)) {
@@ -131,6 +132,7 @@ function validateEvidence(value, rawText) {
 
   for (const [index, deploy] of productionDeploys.entries()) {
     const path = `productionDeploys[${index}]`;
+    if (!requireObject(deploy, path)) continue;
     requireString(deploy.user, `${path}.user`);
     requireDate(deploy.completedAt, `${path}.completedAt`);
     for (const field of [
@@ -170,6 +172,7 @@ function validateEvidence(value, rawText) {
 
   for (const [index, item] of failuresSeen.entries()) {
     const path = `failures[${index}]`;
+    if (!requireObject(item, path)) continue;
     requireString(item.id, `${path}.id`);
     requireString(item.flow, `${path}.flow`);
     requireString(item.classification, `${path}.classification`);
@@ -177,10 +180,11 @@ function validateEvidence(value, rawText) {
   if (failuresSeen.length > 0) {
     const covered = failuresSeen.filter(
       (item) =>
-        item.doctorDiagnostic === true ||
-        (item.exactFixDocumented === true &&
-          typeof item.troubleshootingEntry === "string" &&
-          item.troubleshootingEntry.length > 0),
+        isJsonObject(item) &&
+        (item.doctorDiagnostic === true ||
+          (item.exactFixDocumented === true &&
+            typeof item.troubleshootingEntry === "string" &&
+            item.troubleshootingEntry.length > 0)),
     ).length;
     if (covered / failuresSeen.length < 0.8) {
       failures.push(
@@ -194,6 +198,14 @@ function validateEvidence(value, rawText) {
       `${evidencePath}: must not include raw secrets, tokens, cookies, emails, IPs, user agents, or Cloudflare API tokens`,
     );
   }
+}
+
+function requireObject(value, path) {
+  if (!isJsonObject(value)) {
+    failures.push(`${evidencePath}: ${path} must be an object`);
+    return false;
+  }
+  return true;
 }
 
 function requireString(value, path) {

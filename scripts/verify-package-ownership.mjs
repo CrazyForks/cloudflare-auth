@@ -71,6 +71,7 @@ function validateEvidence(value, rawText) {
   const byName = new Map();
   for (const [index, item] of packageEvidence.entries()) {
     const path = `packages[${index}]`;
+    if (!requireObject(item, path)) continue;
     requireString(item.name, `${path}.name`);
     if (typeof item.name === "string") {
       if (byName.has(item.name)) {
@@ -132,6 +133,7 @@ function validateEvidence(value, rawText) {
   const reservedByName = new Map();
   for (const [index, item] of reservedEvidence.entries()) {
     const path = `reservedPackages[${index}]`;
+    if (!requireObject(item, path)) continue;
     requireString(item.name, `${path}.name`);
     if (typeof item.name === "string") {
       if (reservedByName.has(item.name)) {
@@ -183,6 +185,14 @@ function validateEvidence(value, rawText) {
       `${evidencePath}: replace placeholder maintainer or package evidence values before release`,
     );
   }
+}
+
+function requireObject(value, path) {
+  if (!isJsonObject(value)) {
+    failures.push(`${evidencePath}: ${path} must be an object`);
+    return false;
+  }
+  return true;
 }
 
 function requireString(value, path) {

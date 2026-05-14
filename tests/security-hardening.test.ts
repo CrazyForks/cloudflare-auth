@@ -130,6 +130,55 @@ describe("security hardening helpers", () => {
     });
   });
 
+  it("enforces Turnstile before reset token lookup and password hashing", async () => {
+    const required = await setup({
+      passwordHashing: {
+        profile: "development-fast",
+        maxConcurrentHashesPerIsolate: 1,
+        queueTimeoutMs: 1,
+      },
+      turnstile: {
+        mode: "required",
+        endpoints: ["password_reset_confirm"],
+        verify: async () => true,
+      },
+    });
+    const inactiveResetToken = `cfauth.reset.k1.${"A".repeat(43)}`;
+    const responses = await Promise.all(
+      Array.from({ length: 10 }, () =>
+        required.authFetch("/auth/password/reset/confirm", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            token: inactiveResetToken,
+            password: "new correct horse battery staple",
+          }),
+        }),
+      ),
+    );
+
+    await expect(
+      Promise.all(responses.map((response) => response.json())),
+    ).resolves.toEqual(
+      Array(10).fill({
+        error: {
+          code: "turnstile_required",
+          message: "Turnstile token is required",
+        },
+      }),
+    );
+    await expect(
+      required.db
+        .prepare("SELECT count(*) AS count FROM rate_limits")
+        .first("count"),
+    ).resolves.toBe(0);
+    await expect(
+      required.db
+        .prepare("SELECT count(*) AS count FROM verification_tokens")
+        .first("count"),
+    ).resolves.toBe(0);
+  });
+
   it("posts Turnstile siteverify requests with secret, response, and remote IP", async () => {
     let postedUrl = "";
     let postedBody = "";

@@ -61,6 +61,22 @@ describe("package checks", () => {
       ".github/workflows/release.yml: pnpm changeset publish --provenance must appear after pnpm benchmark:password",
     );
   });
+
+  it("requires tests before package publication", async () => {
+    const root = await packageCheckFixture();
+    await replaceFixtureText(
+      root,
+      ".github/workflows/release.yml",
+      "      - run: pnpm typecheck",
+      "      - run: pnpm test\n      - run: pnpm typecheck",
+    );
+    const result = runPackageCheck(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      ".github/workflows/release.yml: pnpm test must appear after pnpm typecheck",
+    );
+  });
 });
 
 async function packageCheckFixture() {

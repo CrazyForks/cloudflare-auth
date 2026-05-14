@@ -66,6 +66,33 @@ process.exit(1);
     );
   });
 
+  it("rejects release versions outside the planned alpha, beta, and stable channels", async () => {
+    for (const packageVersion of ["0.1.0", "1.0.0-rc.0"]) {
+      const root = await releaseGateFixture({
+        deployButtonEvidence: true,
+        packageVersion,
+      });
+      const result = runReleaseGates(root);
+
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain(`@cf-auth/cli@${packageVersion}`);
+      expect(result.stderr).toContain("alpha, beta, or stable 1.0+");
+    }
+  });
+
+  it("accepts alpha package gates before beta evidence is required", async () => {
+    const root = await releaseGateFixture({
+      alphaEvidence: false,
+      deployButtonEvidence: false,
+      packageVersion: "0.1.0-alpha.0",
+    });
+    const result = runReleaseGates(root);
+
+    expect(result.stderr).toBe("");
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("release gates passed");
+  });
+
   it("requires stable release artifacts when packages enter 1.0", async () => {
     const root = await releaseGateFixture({
       deployButtonEvidence: true,

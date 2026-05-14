@@ -170,12 +170,24 @@ const stablePackages = packages.filter((pkg) =>
   isStableOneOrLater(pkg.version),
 );
 const betaPackages = packages.filter((pkg) => isPublicBeta(pkg.version));
+const unsupportedReleasePackages = packages.filter(
+  (pkg) =>
+    isPublishedReleaseVersion(pkg.version) &&
+    !isPrivateAlpha(pkg.version) &&
+    !isPublicBeta(pkg.version) &&
+    !isStableOneOrLater(pkg.version),
+);
 const betaOrStablePackages = packages.filter(
   (pkg) => isPublicBeta(pkg.version) || isStableOneOrLater(pkg.version),
 );
 const publishedReleasePackages = packages.filter((pkg) =>
   isPublishedReleaseVersion(pkg.version),
 );
+for (const pkg of unsupportedReleasePackages) {
+  failures.push(
+    `${pkg.name}@${pkg.version}: release versions must use alpha, beta, or stable 1.0+ channels from the implementation plan`,
+  );
+}
 if (publishedReleasePackages.length > 0) {
   await requireFile("docs/package-ownership.json");
   await requireText("docs/package-ownership.json", '"ownershipConfirmed"');
@@ -347,6 +359,11 @@ function isStableOneOrLater(version) {
 function isPublicBeta(version) {
   if (typeof version !== "string") return false;
   return /^\d+\.\d+\.\d+-beta(?:[.-].*)?$/u.test(version);
+}
+
+function isPrivateAlpha(version) {
+  if (typeof version !== "string") return false;
+  return /^\d+\.\d+\.\d+-alpha(?:[.-].*)?$/u.test(version);
 }
 
 function isPublishedReleaseVersion(version) {

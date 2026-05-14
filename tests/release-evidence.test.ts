@@ -65,6 +65,28 @@ describe("release evidence verifiers", () => {
     expect(result.stderr).toContain("cf-auth migrate --local");
   });
 
+  it("rejects alpha evidence without alpha package channel proof", async () => {
+    const evidence = validAlphaEvidence();
+    for (const setup of evidence.localSetups) {
+      setup.commands = setup.commands.map((command) =>
+        command.replace("@cf-auth/cli@alpha", "@cf-auth/cli@latest"),
+      );
+    }
+    for (const deploy of evidence.productionDeploys) {
+      deploy.commands = deploy.commands.map((command) =>
+        command.replace("@cf-auth/cli@alpha", "@cf-auth/cli@latest"),
+      );
+    }
+    const path = await writeEvidence("alpha-latest-channel", evidence);
+    const result = runScript("scripts/verify-alpha-evidence.mjs", {
+      CF_AUTH_REQUIRE_ALPHA_EVIDENCE: "1",
+      CF_AUTH_ALPHA_EVIDENCE_PATH: path,
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("@cf-auth/cli@alpha");
+  });
+
   it("accepts beta evidence for clean quickstart and opt-in production smoke", async () => {
     const path = await writeEvidence("beta", validBetaEvidence());
     const result = runScript("scripts/verify-beta-evidence.mjs", {

@@ -95,6 +95,11 @@ function validateEvidence(value, rawText) {
       "cf-auth migrate --local",
       `${path}.commands`,
     );
+    requireCommandContains(
+      setup.commands,
+      "@cf-auth/cli@alpha",
+      `${path}.commands`,
+    );
   }
 
   if (setupMinutes.length > 0 && median(setupMinutes) >= 10) {
@@ -133,6 +138,11 @@ function validateEvidence(value, rawText) {
     requireCommandContains(
       deploy.commands,
       "cf-auth deploy --env production",
+      `${path}.commands`,
+    );
+    requireCommandContains(
+      deploy.commands,
+      "@cf-auth/cli@alpha",
       `${path}.commands`,
     );
   }

@@ -1176,7 +1176,7 @@ export default app;
           userCalls.push({ args, sql: args.at(-1) ?? "" });
           return {
             status: 0,
-            stdout: `disabled token=cfauth.magic.k1.${"A".repeat(43)} token_hash=${tokenHash} passwordHash=${passwordHash} leaked ${tokenHash} ${passwordHash} person@example.com 203.0.113.10 __Host-cfauth-session=raw-cookie`,
+            stdout: `disabled token=cfauth.magic.k1.${"A".repeat(43)} token_hash=${tokenHash} passwordHash=${passwordHash} user_agent="Mozilla/5.0 Secret Browser" leaked ${tokenHash} ${passwordHash} person@example.com 203.0.113.10 __Host-cfauth-session=raw-cookie`,
             stderr: "",
           };
         },
@@ -1205,7 +1205,9 @@ export default app;
     expect(userOutput.join("\n")).not.toContain(passwordHash);
     expect(userOutput.join("\n")).not.toContain("hmac-sha256");
     expect(userOutput.join("\n")).not.toContain("scrypt$v=1");
+    expect(userOutput.join("\n")).not.toContain("Secret Browser");
     expect(userOutput.join("\n")).toContain("[REDACTED_EMAIL]");
+    expect(userOutput.join("\n")).toContain("user_agent=[REDACTED]");
 
     const sessionCalls: Array<{ args: string[]; sql: string }> = [];
     const output: string[] = [];

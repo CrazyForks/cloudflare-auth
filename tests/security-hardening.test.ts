@@ -238,7 +238,7 @@ describe("security hardening helpers", () => {
         endpoints: ["magic_link_request"],
         verify: async ({ token }) => {
           throw new Error(
-            `verifier failed token=${token} email=person@example.com remoteIp=203.0.113.9 AUTH_SECRET=k1.${secretMaterial}`,
+            `verifier failed token=${token} email=person@example.com remoteIp=203.0.113.9 userAgent="Mozilla/5.0 Secret Browser" AUTH_SECRET=k1.${secretMaterial}`,
           );
         },
       },
@@ -261,8 +261,10 @@ describe("security hardening helpers", () => {
     expect(body).not.toContain(rawToken);
     expect(body).not.toContain("person@example.com");
     expect(body).not.toContain("203.0.113.9");
+    expect(body).not.toContain("Secret Browser");
     expect(body).not.toContain(secretMaterial);
     expect(body).toContain("[REDACTED_IP]");
+    expect(body).toContain("userAgent=[REDACTED]");
   });
 
   it("short-circuits D1 rate-limit writes when a Cloudflare binding denies", async () => {
@@ -362,6 +364,7 @@ describe("security hardening helpers", () => {
       passwordHash,
       email: "person@example.com",
       remoteIp: "203.0.113.9",
+      userAgent: "Mozilla/5.0 Secret Browser",
       raw_token: rawToken,
       token_hash: tokenHash,
       sessionToken: rawToken,
@@ -378,6 +381,7 @@ describe("security hardening helpers", () => {
     expect(redacted).toContain('"raw_token":"[REDACTED]"');
     expect(redacted).toContain('"token_hash":"[REDACTED]"');
     expect(redacted).toContain('"sessionToken":"[REDACTED]"');
+    expect(redacted).toContain('"userAgent":"[REDACTED]"');
     expect(redacted).toContain('"authorization":"[REDACTED]"');
     expect(redacted).toContain('"tokenType":"password_reset"');
     expect(() => JSON.parse(redactedJson)).not.toThrow();
@@ -387,6 +391,7 @@ describe("security hardening helpers", () => {
     expect(redacted).not.toContain("correct horse battery staple");
     expect(redacted).not.toContain("person@example.com");
     expect(redacted).not.toContain("203.0.113.9");
+    expect(redacted).not.toContain("Secret Browser");
     expect(redacted).toContain("[REDACTED_EMAIL]");
     expect(redacted).toContain("[REDACTED_IP]");
     expect(redacted).toContain("[REDACTED_TOKEN_HASH]");

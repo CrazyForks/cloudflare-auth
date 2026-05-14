@@ -11,8 +11,12 @@ export const corePackageName = "@cf-auth/core";
 export function redactLogValue(value: string): string {
   return value
     .replace(
-      /("[A-Za-z0-9_-]*(?:password(?:[_-]?hash)?|secret(?:[_-]?material)?|cookie|authorization|api[_-]?key|auth[_-]?token|session[_-]?token|(?:raw[_-]?)?token(?:[_-]?hash)?)"\s*:\s*)"[^"]*"/giu,
+      /("[A-Za-z0-9_-]*(?:password(?:[_-]?hash)?|secret(?:[_-]?material)?|cookie|authorization|api[_-]?key|auth[_-]?token|session[_-]?token|(?:raw[_-]?)?token(?:[_-]?hash)?|user[_-]?agent)"\s*:\s*)"[^"]*"/giu,
       '$1"[REDACTED]"',
+    )
+    .replace(
+      /\b((?:user[_-]?agent)=)(?:"[^"]*"|'[^']*'|[^\r\n,;&]+)/giu,
+      "$1[REDACTED]",
     )
     .replace(
       /\b((?:password(?:[_-]?hash)?|secret(?:[_-]?material)?|cookie|authorization|api[_-]?key|auth[_-]?token|session[_-]?token|(?:raw[_-]?)?token(?:[_-]?hash)?|AUTH_SECRET|AUTH_SECRET_PREVIOUS)=)[^\s,;&"']+/giu,

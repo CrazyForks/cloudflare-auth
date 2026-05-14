@@ -77,6 +77,9 @@ describe("D1 migrations and repositories", () => {
     } as unknown as D1Database;
     const primaryRepos = createD1Repositories(primaryAwareDb);
 
+    await primaryRepos.users.findUserById("usr_primary");
+    await primaryRepos.users.findUserByNormalizedEmail("primary@example.com");
+    await primaryRepos.users.findUserByNormalizedUsername("primary");
     await primaryRepos.sessions.findSessionByTokenHash(sessionHash, 1);
     await primaryRepos.verificationTokens.findActiveVerificationTokenByHash(
       magicHash,
@@ -84,7 +87,13 @@ describe("D1 migrations and repositories", () => {
       1,
     );
 
-    expect(sessionModes).toEqual(["first-primary", "first-primary"]);
+    expect(sessionModes).toEqual([
+      "first-primary",
+      "first-primary",
+      "first-primary",
+      "first-primary",
+      "first-primary",
+    ]);
   });
 
   it("enforces unique normalized email and username", async () => {

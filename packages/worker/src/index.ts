@@ -239,6 +239,10 @@ function selectSessionStatement(
   return db.prepare("SELECT * FROM sessions WHERE id = ?").bind(session.id);
 }
 
+function firstPrimaryDb(db: D1Database): Pick<D1Database, "prepare"> {
+  return "withSession" in db ? db.withSession("first-primary") : db;
+}
+
 export function createD1Repositories(db: D1Database): AuthRepositories {
   const users: UserRepository = {
     async createUser(input: CreateUserInput): Promise<UserRow> {
@@ -269,19 +273,19 @@ export function createD1Repositories(db: D1Database): AuthRepositories {
       );
     },
     findUserById(id: string) {
-      return db
+      return firstPrimaryDb(db)
         .prepare("SELECT * FROM users WHERE id = ?")
         .bind(id)
         .first<UserRow>();
     },
     findUserByNormalizedEmail(normalizedEmail: string) {
-      return db
+      return firstPrimaryDb(db)
         .prepare("SELECT * FROM users WHERE normalized_email = ?")
         .bind(normalizedEmail)
         .first<UserRow>();
     },
     findUserByNormalizedUsername(normalizedUsername: string) {
-      return db
+      return firstPrimaryDb(db)
         .prepare("SELECT * FROM users WHERE normalized_username = ?")
         .bind(normalizedUsername)
         .first<UserRow>();
@@ -362,9 +366,7 @@ export function createD1Repositories(db: D1Database): AuthRepositories {
       now: number,
     ): Promise<SessionWithUserRow | null> {
       assertHmacTokenEnvelope(tokenHash);
-      const sessionDb =
-        "withSession" in db ? db.withSession("first-primary") : db;
-      const row = await sessionDb
+      const row = await firstPrimaryDb(db)
         .prepare(
           `SELECT
             sessions.*,
@@ -466,9 +468,7 @@ export function createD1Repositories(db: D1Database): AuthRepositories {
     },
     async findActiveVerificationTokenByHash(tokenHash, type, now) {
       assertHmacTokenEnvelope(tokenHash);
-      const sessionDb =
-        "withSession" in db ? db.withSession("first-primary") : db;
-      return sessionDb
+      return firstPrimaryDb(db)
         .prepare(
           `SELECT * FROM verification_tokens
            WHERE token_hash = ?

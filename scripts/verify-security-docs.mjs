@@ -39,9 +39,9 @@ for (const threat of threatRows) {
     failures.push(`docs/security-model.md: missing threat row ${threat}`);
     continue;
   }
-  if (!row.includes("(../tests/") && !row.includes("](")) {
+  if (!row.includes("(../tests/")) {
     failures.push(
-      `docs/security-model.md: ${threat} row must link to test or mitigation evidence`,
+      `docs/security-model.md: ${threat} row must link to regression test evidence`,
     );
   }
 }

@@ -779,11 +779,27 @@ export function defineAuthConfig(
       ...config.redirects,
     },
   };
+  assertRuntimeOptions(resolved);
   assertAuthConfigOrigins(resolved);
   assertSessionOptions(resolved);
   assertRequestOptions(resolved);
   assertFeatureOptions(resolved);
   return resolved;
+}
+
+function assertRuntimeOptions(config: AuthConfig): void {
+  const mode = config.runtime.mode;
+  if (
+    config.runtime.publicOrigin !== "from-env" &&
+    !(mode === "from-env"
+      ? isExactAllowedOrigin(config.runtime.publicOrigin)
+      : isExactPublicOriginForMode(config.runtime.publicOrigin, mode))
+  ) {
+    throw new AuthCryptoError(
+      "runtime publicOrigin must be an exact origin",
+      "invalid_public_origin",
+    );
+  }
 }
 
 function assertAuthConfigOrigins(config: AuthConfig): void {
@@ -2043,6 +2059,12 @@ function resolveRuntime(
     throw new AuthCryptoError("AUTH_PUBLIC_ORIGIN is missing", "config_error");
   const requestOrigin = requestUrl.origin;
   const resolvedPublicOrigin = publicOrigin ?? requestOrigin;
+  if (!isExactPublicOriginForMode(resolvedPublicOrigin, mode)) {
+    throw new AuthCryptoError(
+      "AUTH_PUBLIC_ORIGIN must be an exact origin",
+      "config_error",
+    );
+  }
   if (
     (mode === "production" || mode === "preview") &&
     requestUrl.host !== new URL(resolvedPublicOrigin).host &&
@@ -2075,6 +2097,26 @@ function resolveRuntime(
     }),
     logger: consoleLogger,
   };
+}
+
+function isExactPublicOriginForMode(
+  value: string,
+  mode: AuthRuntimeMode,
+): boolean {
+  if (value.includes("*")) return false;
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  if (value !== url.origin) return false;
+  if (url.protocol === "https:") return true;
+  return (
+    mode === "development" &&
+    url.protocol === "http:" &&
+    ["localhost", "127.0.0.1"].includes(url.hostname)
+  );
 }
 
 function checkOrigin(request: Request, runtime: RuntimeContext): boolean {

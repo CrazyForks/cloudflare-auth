@@ -106,6 +106,17 @@ describe("auth HTTP runtime", () => {
     ).toThrow(AuthCryptoError);
     expect(() =>
       defineAuthConfig({
+        appName: "Bad Runtime Origin",
+        basePath: "/auth",
+        runtime: {
+          mode: "production",
+          publicOrigin: "https://example.com/path",
+          trustedHosts: [],
+        },
+      }),
+    ).toThrow(AuthCryptoError);
+    expect(() =>
+      defineAuthConfig({
         appName: "Bad Cookie",
         basePath: "/auth",
         session: { sameSite: "none" } as unknown as AuthConfig["session"],
@@ -439,6 +450,20 @@ describe("auth HTTP runtime", () => {
       { waitUntil() {} } as unknown as ExecutionContext,
     );
     expect(prod?.status).toBe(403);
+
+    const badPublicOrigin = await handler.fetch(
+      new Request("https://example.com/auth/user"),
+      {
+        ...env,
+        AUTH_ENV: "production",
+        AUTH_PUBLIC_ORIGIN: "https://example.com/path",
+      },
+      { waitUntil() {} } as unknown as ExecutionContext,
+    );
+    expect(badPublicOrigin?.status).toBe(500);
+    await expect(badPublicOrigin?.json()).resolves.toMatchObject({
+      error: { code: "config_error" },
+    });
 
     const allowedPreflight = await handler.fetch(
       new Request(`${origin}/auth/signup`, {

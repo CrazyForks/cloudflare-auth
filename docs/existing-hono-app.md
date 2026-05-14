@@ -26,3 +26,18 @@ mount snippet. It does update `package.json` with missing Cloudflare Auth
 dependencies.
 
 Do not mount a router that defines `/auth` internally. `createAuthRoutes()` defines relative routes so the result is `/auth/signup`, not `/auth/auth/signup`.
+
+Protect app routes with the Hono helpers:
+
+```ts
+import { getAuthUser, requireUser, requireVerifiedUser } from "@cf-auth/hono";
+
+app.get("/api/me", requireUser(), (c) => c.json({ user: getAuthUser(c) }));
+
+app.post("/api/billing", requireVerifiedUser(), async (c) => {
+  const user = getAuthUser(c);
+  return c.json({ userId: user?.id });
+});
+```
+
+`getAuthUser(c)` returns the public user shape, not the raw database user row.

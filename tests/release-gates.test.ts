@@ -205,6 +205,23 @@ describe("release gates", () => {
     );
   });
 
+  it("requires runnable D1 bindings in examples and generated templates", async () => {
+    const root = await releaseGateFixture({ deployButtonEvidence: true });
+    await replaceFixtureText(
+      root,
+      "templates/hono-basic/wrangler.jsonc",
+      '"database_id": "local-development"',
+      '"database_id": "REPLACE_WITH_DATABASE_ID"',
+    );
+    const result = runReleaseGates(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("scripts/verify-examples.mjs");
+    expect(result.stderr).toContain(
+      "templates/hono-basic: AUTH_DB database_id must not be a placeholder",
+    );
+  });
+
   it("requires production password hashing in examples", async () => {
     const root = await releaseGateFixture({ deployButtonEvidence: true });
     await writeFixtureFile(
@@ -932,6 +949,9 @@ async function writeExamplesFixtures(root: string) {
               binding: "AUTH_DB",
               database_name: "auth",
               database_id: "local-development",
+              migrations_dir: dir.startsWith("examples/")
+                ? "../../migrations"
+                : "migrations",
             },
           ],
         },

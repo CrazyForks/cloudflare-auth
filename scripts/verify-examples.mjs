@@ -31,6 +31,11 @@ for (const root of ["examples", "templates"]) {
       await readFile(join(dir, "wrangler.jsonc"), "utf8"),
     );
     verifyWranglerToolchain(dir, wrangler);
+    verifyWranglerD1Binding(
+      dir,
+      wrangler,
+      root === "examples" ? "../../migrations" : "migrations",
+    );
     await verifyDevVarsExample(dir);
     await verifyAuthConfigPasswordHashing(dir);
     const rendered = renderPublishedManifest(pkg);
@@ -212,6 +217,29 @@ function verifyWranglerToolchain(dir, wrangler) {
   if (wrangler.observability?.head_sampling_rate !== 1) {
     failures.push(
       `${dir}: wrangler.jsonc observability head_sampling_rate must be 1`,
+    );
+  }
+}
+
+function verifyWranglerD1Binding(dir, wrangler, expectedMigrationsDir) {
+  const binding = Array.isArray(wrangler.d1_databases)
+    ? wrangler.d1_databases.find((item) => item?.binding === "AUTH_DB")
+    : null;
+  if (!binding) {
+    failures.push(`${dir}: wrangler.jsonc missing AUTH_DB D1 binding`);
+    return;
+  }
+  if (typeof binding.database_name !== "string" || !binding.database_name) {
+    failures.push(`${dir}: AUTH_DB database_name is required`);
+  }
+  if (typeof binding.database_id !== "string" || !binding.database_id) {
+    failures.push(`${dir}: AUTH_DB database_id is required`);
+  } else if (binding.database_id.trim().toUpperCase().startsWith("REPLACE_")) {
+    failures.push(`${dir}: AUTH_DB database_id must not be a placeholder`);
+  }
+  if (binding.migrations_dir !== expectedMigrationsDir) {
+    failures.push(
+      `${dir}: AUTH_DB migrations_dir must be ${expectedMigrationsDir}`,
     );
   }
 }

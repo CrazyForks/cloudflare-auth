@@ -1881,6 +1881,60 @@ export default app;
     expect(output.join("\n")).not.toContain("token_hash");
   });
 
+  it("rejects malformed D1 JSON for session recovery lists", async () => {
+    const cwd = await tempDir();
+    await writeWrangler(cwd);
+    const invalidErrors: string[] = [];
+    const invalidCode = await runCli(
+      [
+        "sessions",
+        "list",
+        "--user",
+        "usr_safe",
+        "--remote",
+        "--env",
+        "production",
+      ],
+      {
+        cwd,
+        stderr: (line) => invalidErrors.push(line),
+        runCommand: () => ({ status: 0, stdout: "not json", stderr: "" }),
+      },
+    );
+
+    expect(invalidCode).toBe(1);
+    expect(invalidErrors.join("\n")).toContain(
+      "D1 JSON response could not be parsed",
+    );
+
+    const shapeErrors: string[] = [];
+    const shapeCode = await runCli(
+      [
+        "sessions",
+        "list",
+        "--user",
+        "usr_safe",
+        "--remote",
+        "--env",
+        "production",
+      ],
+      {
+        cwd,
+        stderr: (line) => shapeErrors.push(line),
+        runCommand: () => ({
+          status: 0,
+          stdout: JSON.stringify([{ results: "not rows" }]),
+          stderr: "",
+        }),
+      },
+    );
+
+    expect(shapeCode).toBe(1);
+    expect(shapeErrors.join("\n")).toContain(
+      "D1 JSON response had unexpected shape",
+    );
+  });
+
   it("rejects remote recovery without an explicit named environment", async () => {
     const cwd = await tempDir();
     await writeWrangler(cwd);

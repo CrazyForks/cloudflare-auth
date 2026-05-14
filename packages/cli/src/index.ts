@@ -2792,9 +2792,25 @@ function parseD1Rows(stdout: string): Array<Record<string, unknown>> {
       for (const child of item) visit(child);
       return;
     }
-    if (!isRecord(item)) return;
-    if ("id" in item) rows.push(item);
-    for (const key of ["result", "results"]) visit(item[key]);
+    if (!isRecord(item))
+      throw new Error("D1 JSON response had unexpected shape.");
+    if ("id" in item) {
+      rows.push(item);
+      return;
+    }
+    let foundRowsProperty = false;
+    for (const key of ["result", "results"]) {
+      if (!(key in item)) continue;
+      foundRowsProperty = true;
+      const value = item[key];
+      if (!Array.isArray(value)) {
+        throw new Error("D1 JSON response had unexpected shape.");
+      }
+      visit(value);
+    }
+    if (!foundRowsProperty) {
+      throw new Error("D1 JSON response had unexpected shape.");
+    }
   };
   visit(parsed);
   return rows;

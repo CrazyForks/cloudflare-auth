@@ -53,6 +53,11 @@ function validateEvidence(value, rawText) {
       `${evidencePath}: must not include raw secrets, tokens, cookies, emails, IPs, or Cloudflare API tokens`,
     );
   }
+  if (containsPlaceholderEvidence(rawText)) {
+    failures.push(
+      `${evidencePath}: replace placeholder maintainer, workflow, and origin values before stable 1.0`,
+    );
+  }
 }
 
 function validatePublishedQuickstart(value) {
@@ -187,6 +192,15 @@ function containsSensitiveEvidence(text) {
     /\b(?:__Host-|__Secure-)?cfauth-session=/u.test(text) ||
     /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/iu.test(text) ||
     /\b(?:\d{1,3}\.){3}\d{1,3}\b/u.test(text)
+  );
+}
+
+function containsPlaceholderEvidence(text) {
+  return (
+    /\bmaintainer-name\b/u.test(text) ||
+    /\bOWNER\b|\bREPO\b/u.test(text) ||
+    /\/actions\/runs\/0+\b/u.test(text) ||
+    /https:\/\/example\.com\b/u.test(text)
   );
 }
 

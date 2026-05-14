@@ -87,6 +87,11 @@ function validateEvidence(value, rawText) {
       `${evidencePath}: must not include npm tokens or auth-token environment variables`,
     );
   }
+  if (containsPlaceholderEvidence(rawText)) {
+    failures.push(
+      `${evidencePath}: replace placeholder maintainer or package evidence values before release`,
+    );
+  }
 }
 
 function requireString(value, path) {
@@ -108,6 +113,10 @@ function containsSensitiveEvidence(text) {
     /\b_authToken\b/u.test(text) ||
     /\bnpm_[A-Za-z0-9]{20,}\b/u.test(text)
   );
+}
+
+function containsPlaceholderEvidence(text) {
+  return /\bmaintainer-name\b/u.test(text);
 }
 
 async function publishablePackages() {

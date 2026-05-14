@@ -22,14 +22,16 @@ if (!(await exists(trackerPath))) {
 }
 
 const failures = [];
+let text = "";
 let tracker;
 try {
-  tracker = JSON.parse(await readFile(trackerPath, "utf8"));
+  text = await readFile(trackerPath, "utf8");
+  tracker = JSON.parse(text);
 } catch {
   failures.push(`${trackerPath}: must be valid JSON`);
 }
 
-if (tracker) validateTracker(tracker);
+if (tracker) validateTracker(tracker, text);
 
 if (failures.length > 0) {
   console.error(failures.join("\n"));
@@ -38,7 +40,7 @@ if (failures.length > 0) {
 
 console.log(`security release tracker verified: ${trackerPath}`);
 
-function validateTracker(value) {
+function validateTracker(value, rawText) {
   if (value.schemaVersion !== 1) {
     failures.push(`${trackerPath}: schemaVersion must be 1`);
   }
@@ -69,6 +71,12 @@ function validateTracker(value) {
       );
     }
   }
+
+  if (containsPlaceholderEvidence(rawText)) {
+    failures.push(
+      `${trackerPath}: replace placeholder reviewer or advisory values before stable 1.0`,
+    );
+  }
 }
 
 function requireString(value, path) {
@@ -82,6 +90,10 @@ function requireDate(value, path) {
   if (typeof value === "string" && Number.isNaN(Date.parse(value))) {
     failures.push(`${trackerPath}: ${path} must be an ISO date string`);
   }
+}
+
+function containsPlaceholderEvidence(text) {
+  return /\bmaintainer-name\b|\bGHSA-example\b/u.test(text);
 }
 
 async function hasStablePackageVersions() {

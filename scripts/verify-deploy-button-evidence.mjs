@@ -100,6 +100,11 @@ function validateEvidence(value, rawText) {
       `${evidencePath}: must not include raw secrets, tokens, cookies, or Cloudflare API tokens`,
     );
   }
+  if (containsPlaceholderEvidence(rawText)) {
+    failures.push(
+      `${evidencePath}: replace placeholder repository and origin values before public beta`,
+    );
+  }
 }
 
 function requireString(value, path) {
@@ -150,6 +155,10 @@ function containsSensitiveEvidence(text) {
     ) ||
     /\b(?:__Host-|__Secure-)?cfauth-session=/u.test(text)
   );
+}
+
+function containsPlaceholderEvidence(text) {
+  return /\bOWNER\b|\bREPO\b|https:\/\/example\.com\b/u.test(text);
 }
 
 async function hasPublicBetaPackageVersions() {

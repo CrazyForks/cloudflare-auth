@@ -472,6 +472,7 @@ async function commandDoctor(
     );
   }
   if (remoteTarget) {
+    const localSecretNames = await readLocalSecretNames(cwd);
     const email = sourceUsesCloudflareEmail(authSource)
       ? selected?.send_email?.find((item) => item.name === "AUTH_EMAIL")
       : "not-required";
@@ -492,8 +493,29 @@ async function commandDoctor(
             : "Cloudflare Email binding AUTH_EMAIL configured",
       });
     }
-    const secretCheck = checkRemoteSecret(envName, cwd, runner);
+    const secretCheck = checkRemoteSecret(
+      envName,
+      cwd,
+      runner,
+      localSecretNames.has("AUTH_SECRET"),
+    );
     addCheck(secretCheck);
+    if (localSecretNames.has("AUTH_SECRET_PREVIOUS")) {
+      addCheck(
+        checkRemoteSecretName({
+          name: "AUTH_SECRET_PREVIOUS",
+          envName,
+          cwd,
+          runner,
+          missingMessage:
+            "AUTH_SECRET_PREVIOUS exists in .dev.vars but is missing remotely",
+          unavailableMessage:
+            "Remote AUTH_SECRET_PREVIOUS could not be verified",
+          passMessage: "Remote AUTH_SECRET_PREVIOUS configured",
+          fix: `wrangler secret put AUTH_SECRET_PREVIOUS${envName ? ` --env ${envName}` : ""}`,
+        }),
+      );
+    }
     if (authSource.turnstileRequiresSecret) {
       addCheck(
         checkRemoteSecretName({
@@ -980,13 +1002,16 @@ function checkRemoteSecret(
   envName: string | undefined,
   cwd: string,
   runner: CommandRunner,
+  localOnly: boolean,
 ): DoctorCheck {
   return checkRemoteSecretName({
     name: "AUTH_SECRET",
     envName,
     cwd,
     runner,
-    missingMessage: "AUTH_SECRET is missing remotely",
+    missingMessage: localOnly
+      ? "AUTH_SECRET exists in .dev.vars but is missing remotely"
+      : "AUTH_SECRET is missing remotely",
     unavailableMessage: "Remote AUTH_SECRET could not be verified",
     passMessage: "Remote AUTH_SECRET configured",
     fix: "npx --package @cf-auth/cli@latest cf-auth rotate-secret --apply --env production",
@@ -1016,7 +1041,7 @@ function checkRemoteSecretName(input: {
   const result = input.runner("wrangler", args, { cwd: input.cwd });
   if (result.status !== 0) {
     return {
-      id: input.name === "AUTH_SECRET" ? "remote_secret" : "turnstile_secret",
+      id: remoteSecretCheckId(input.name),
       status: "fail",
       message: input.unavailableMessage,
       fix: input.unavailableFix ?? input.fix,
@@ -1025,17 +1050,24 @@ function checkRemoteSecretName(input: {
   const names = parseSecretNames(result.stdout);
   if (!names.has(input.name)) {
     return {
-      id: input.name === "AUTH_SECRET" ? "remote_secret" : "turnstile_secret",
+      id: remoteSecretCheckId(input.name),
       status: "fail",
       message: input.missingMessage,
       fix: input.fix,
     };
   }
   return {
-    id: input.name === "AUTH_SECRET" ? "remote_secret" : "turnstile_secret",
+    id: remoteSecretCheckId(input.name),
     status: "pass",
     message: input.passMessage,
   };
+}
+
+function remoteSecretCheckId(name: string): string {
+  if (name === "AUTH_SECRET") return "remote_secret";
+  if (name === "AUTH_SECRET_PREVIOUS") return "remote_previous_secret";
+  if (name === "TURNSTILE_SECRET_KEY") return "turnstile_secret";
+  return "remote_secret";
 }
 
 function parseSecretNames(text: string): Set<string> {
@@ -1172,6 +1204,20 @@ async function checkLocalSecrets(cwd: string): Promise<DoctorCheck[]> {
         : "Local AUTH_SECRET format is valid",
     },
   ];
+}
+
+async function readLocalSecretNames(cwd: string): Promise<Set<string>> {
+  try {
+    const text = await readFile(join(cwd, ".dev.vars"), "utf8");
+    const values = parseEnvFile(text);
+    return new Set(
+      ["AUTH_SECRET", "AUTH_SECRET_PREVIOUS"].filter((name) =>
+        Boolean(values[name]),
+      ),
+    );
+  } catch {
+    return new Set();
+  }
 }
 
 async function checkLocalNamedSecret(

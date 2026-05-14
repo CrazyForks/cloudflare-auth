@@ -2,21 +2,103 @@
 
 `defineAuthConfig()` validates static shape, route paths, feature combinations, origins, redirects, and cookie options at module load. Runtime values such as D1 bindings, secrets, public origin from env, email bindings, and execution context are resolved per request.
 
-Important keys:
+Top-level keys:
 
-- `basePath`: mount path, default `/auth`
-- `runtime.mode`: `development`, `preview`, `production`, or `from-env`
-- `runtime.publicOrigin`: exact origin or `from-env`
-- `database.binding`: D1 binding name, default `AUTH_DB`
-- `session.cookieName`: `auto` or explicit cookie name
-- `session.domain`: optional leading-dot parent domain for cross-subdomain cookies
-- `security.allowedRequestOrigins`: request-origin allowlist
-- `redirects.allowedOrigins`: post-auth redirect allowlist
-- `request.maxBodyBytes`: default `16384`
-- `passwordHashing.profile`: default `workers-balanced`; `doctor` benchmarks the configured profile locally
-- `email`: use `byEnvironment(...)` to keep terminal email local and Cloudflare/custom adapters in preview and production
-- `turnstile.mode`: `disabled`, `optional`, or `required`
-- `turnstile.endpoints`: endpoint names that require or accept Turnstile
+| Key                 | Default                  | Notes                                                                                                           |
+| ------------------- | ------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| `appName`           | required                 | Used in generated email templates.                                                                              |
+| `basePath`          | `/auth`                  | Mount path; must be a safe absolute path.                                                                       |
+| `runtime`           | see below                | Runtime mode, public origin, and trusted host settings.                                                         |
+| `database`          | see below                | D1 binding settings.                                                                                            |
+| `session`           | see below                | Cookie and session policy.                                                                                      |
+| `request`           | see below                | Request size and unsafe-method origin policy.                                                                   |
+| `security`          | see below                | Browser request-origin allowlists.                                                                              |
+| `passwordHashing`   | see below                | Password profile and per-isolate concurrency.                                                                   |
+| `signup`            | see below                | Signup behavior and username policy.                                                                            |
+| `login`             | see below                | Password and magic-link login behavior.                                                                         |
+| `magicLink`         | see below                | Magic-link token policy.                                                                                        |
+| `passwordReset`     | see below                | Reset token, session, and verification policy.                                                                  |
+| `emailVerification` | see below                | Verification token and session policy.                                                                          |
+| `turnstile`         | see below                | Optional Turnstile enforcement.                                                                                 |
+| `email`             | terminal adapter locally | Use `byEnvironment(...)` to keep terminal email local and Cloudflare/custom adapters in preview and production. |
+| `redirects`         | see below                | Default redirects and redirect-origin allowlists.                                                               |
+
+Runtime and storage:
+
+| Key                    | Default                                | Notes                                                                |
+| ---------------------- | -------------------------------------- | -------------------------------------------------------------------- |
+| `runtime.mode`         | `from-env`                             | `development`, `preview`, `production`, or `from-env`.               |
+| `runtime.publicOrigin` | `from-env`                             | Exact origin or `from-env`.                                          |
+| `runtime.trustedHosts` | `["localhost:8787", "127.0.0.1:8787"]` | Extra accepted request hosts for preview/production host validation. |
+| `database.binding`     | `AUTH_DB`                              | D1 binding name.                                                     |
+
+Sessions and requests:
+
+| Key                                    | Default | Notes                                                                      |
+| -------------------------------------- | ------- | -------------------------------------------------------------------------- |
+| `session.cookieName`                   | `auto`  | Uses safe dev/production names automatically unless explicitly set.        |
+| `session.maxAgeDays`                   | `30`    | Session cookie and row lifetime.                                           |
+| `session.sameSite`                     | `lax`   | `lax` or `strict`; v1 does not support `none`.                             |
+| `session.secure`                       | `auto`  | Static value is reserved; runtime derives secure mode from origin.         |
+| `session.domain`                       | unset   | Optional leading-dot parent domain for cross-subdomain cookies.            |
+| `session.requireVerifiedEmail`         | `false` | Hides sessions from `/auth/user` until the user is verified.               |
+| `request.maxBodyBytes`                 | `16384` | Positive integer byte limit.                                               |
+| `request.requireOriginOnUnsafeMethods` | `true`  | Requires trusted `Origin` for browser mutations outside local development. |
+
+Security, hashing, and bot checks:
+
+| Key                                             | Default            | Notes                                               |
+| ----------------------------------------------- | ------------------ | --------------------------------------------------- |
+| `security.allowedRequestOrigins`                | `[]`               | Extra exact origins allowed for browser mutations.  |
+| `security.allowedPreviewRequestOrigins`         | `[]`               | Preview-only request-origin allowlist.              |
+| `passwordHashing.profile`                       | `workers-balanced` | `doctor` benchmarks the configured profile locally. |
+| `passwordHashing.maxConcurrentHashesPerIsolate` | `1`                | Per-isolate semaphore limit for password hashing.   |
+| `turnstile.mode`                                | `disabled`         | `disabled`, `optional`, or `required`.              |
+| `turnstile.endpoints`                           | `[]`               | Endpoint names that require or accept Turnstile.    |
+| `turnstile.verify`                              | built-in verifier  | Optional custom verifier.                           |
+
+Signup and login:
+
+| Key                                            | Default | Notes                                                                                      |
+| ---------------------------------------------- | ------- | ------------------------------------------------------------------------------------------ |
+| `signup.enabled`                               | `true`  | Disables `POST /auth/signup` when false.                                                   |
+| `signup.requireEmailVerificationBeforeSession` | `false` | Signup returns no session until verification.                                              |
+| `signup.enumerationSafe`                       | `false` | Generic signup response; requires email verification before session and optional username. |
+| `signup.username.enabled`                      | `true`  | Allows usernames on signup.                                                                |
+| `signup.username.required`                     | `false` | Requires username when enabled.                                                            |
+| `login.emailPassword`                          | `true`  | Enables email/password login.                                                              |
+| `login.usernamePassword`                       | `true`  | Enables username/password login.                                                           |
+| `login.magicLink`                              | `true`  | Enables magic-link request and consume routes.                                             |
+| `login.requireVerifiedEmail`                   | `false` | Blocks password login for unverified users.                                                |
+
+Email-token flows:
+
+| Key                                                | Default               | Notes                                              |
+| -------------------------------------------------- | --------------------- | -------------------------------------------------- |
+| `magicLink.allowSignups`                           | `false`               | Allows magic-link JIT signup.                      |
+| `magicLink.expiresInMinutes`                       | `15`                  | Magic-link token lifetime.                         |
+| `magicLink.activeTokenPolicy`                      | `invalidate-previous` | Also supports `allow-multiple-active`.             |
+| `passwordReset.enabled`                            | `true`                | Enables password-reset request and confirm routes. |
+| `passwordReset.expiresInMinutes`                   | `30`                  | Reset token lifetime.                              |
+| `passwordReset.revokeExistingSessions`             | `true`                | Revokes existing sessions after reset.             |
+| `passwordReset.createSessionAfterReset`            | `false`               | Creates a new session after reset when true.       |
+| `passwordReset.markEmailVerifiedOnReset`           | `true`                | Marks email verified after successful reset.       |
+| `passwordReset.activeTokenPolicy`                  | `invalidate-previous` | Also supports `allow-multiple-active`.             |
+| `emailVerification.enabled`                        | `true`                | Enables verification request and consume routes.   |
+| `emailVerification.expiresInHours`                 | `24`                  | Verification token lifetime.                       |
+| `emailVerification.createSessionAfterVerification` | `false`               | Creates a session after verification when true.    |
+| `emailVerification.activeTokenPolicy`              | `invalidate-previous` | Also supports `allow-multiple-active`.             |
+
+Redirects:
+
+| Key                                       | Default | Notes                                   |
+| ----------------------------------------- | ------- | --------------------------------------- |
+| `redirects.defaultAfterLogin`             | `/`     | Used when login redirect is absent.     |
+| `redirects.defaultAfterLogout`            | `/`     | Reserved for logout flows.              |
+| `redirects.defaultAfterEmailVerification` | `/`     | Used by verification consume flow.      |
+| `redirects.defaultAfterPasswordReset`     | `/`     | Used by reset confirm flow.             |
+| `redirects.allowedOrigins`                | `[]`    | Exact external redirect origins.        |
+| `redirects.allowedPreviewOrigins`         | `[]`    | Preview-only external redirect origins. |
 
 The stable config surface is tracked in `docs/config-schema.md`.
 

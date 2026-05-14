@@ -25,6 +25,9 @@ const threatRows = [
   "Secret rotation",
   "Permissive CORS middleware",
   "Raw PII in logs",
+  "Bot pressure",
+  "Edge floods",
+  "Operational blind spots",
 ];
 
 for (const threat of threatRows) {

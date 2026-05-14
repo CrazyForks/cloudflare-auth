@@ -427,17 +427,31 @@ describe("CLI MVP", () => {
   });
 
   it("rejects unknown generate snippets instead of aliasing them", async () => {
-    const output: string[] = [];
+    const workerOutput: string[] = [];
+    const typeOutput: string[] = [];
     const errors: string[] = [];
     const ok = await runCli(["generate", "worker-snippet"], {
-      stdout: (line) => output.push(line),
+      stdout: (line) => workerOutput.push(line),
+    });
+    const types = await runCli(["generate", "types"], {
+      stdout: (line) => typeOutput.push(line),
     });
     const bad = await runCli(["generate", "turnstile"], {
       stderr: (line) => errors.push(line),
     });
 
     expect(ok).toBe(0);
-    expect(output.join("\n")).toContain("createAuthHandler(authConfig)");
+    expect(types).toBe(0);
+    expect(workerOutput.join("\n")).toContain("createAuthHandler(authConfig)");
+    expect(workerOutput.join("\n")).toContain(
+      "if (authResponse) return authResponse;",
+    );
+    expect(typeOutput.join("\n")).toContain("AUTH_DB: D1Database");
+    expect(typeOutput.join("\n")).toContain("AUTH_SECRET_PREVIOUS?: string");
+    expect(typeOutput.join("\n")).toContain(
+      'AUTH_ENV: "development" | "preview" | "production"',
+    );
+    expect(typeOutput.join("\n")).toContain("TURNSTILE_SECRET_KEY?: string");
     expect(bad).toBe(1);
     expect(errors.join("\n")).toContain("Unsupported generator: turnstile");
   });

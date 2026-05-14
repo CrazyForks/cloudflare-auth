@@ -2286,11 +2286,24 @@ function commandGenerate(parsed: ParsedArgs): string {
   if (what === "hono")
     return "app.route(authConfig.basePath, createAuthRoutes(authConfig));";
   if (what === "types")
-    return "export interface Env { AUTH_DB: D1Database; AUTH_SECRET: string; }";
+    return [
+      "export interface Env {",
+      "  AUTH_DB: D1Database;",
+      "  AUTH_SECRET: string;",
+      "  AUTH_SECRET_PREVIOUS?: string;",
+      '  AUTH_ENV: "development" | "preview" | "production";',
+      "  AUTH_PUBLIC_ORIGIN?: string;",
+      "  TURNSTILE_SECRET_KEY?: string;",
+      "}",
+    ].join("\n");
   if (what === "react-client")
     return 'import { createAuthClient } from "@cf-auth/client";\nexport const auth = createAuthClient({ basePath: "/auth" });';
   if (what === "worker-snippet")
-    return "const authHandler = createAuthHandler(authConfig);\nconst authResponse = await authHandler.fetch(request, env, ctx);";
+    return [
+      "const authHandler = createAuthHandler(authConfig);",
+      "const authResponse = await authHandler.fetch(request, env, ctx);",
+      "if (authResponse) return authResponse;",
+    ].join("\n");
   throw new Error(
     `Unsupported generator: ${what}. Supported generators: hono, worker-snippet, react-client, types.`,
   );

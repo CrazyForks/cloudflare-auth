@@ -678,6 +678,50 @@ describe("auth HTTP runtime", () => {
     );
   });
 
+  it("counts IP-only rate limit buckets once per request", async () => {
+    const { authFetch } = await setup();
+    const inactiveResetToken = `cfauth.reset.k1.${"B".repeat(43)}`;
+    const resetBody = JSON.stringify({
+      token: inactiveResetToken,
+      password: "new correct horse battery staple",
+    });
+    const headers = {
+      "Content-Type": "application/json",
+      "CF-Connecting-IP": "203.0.113.200",
+    };
+    const allowed: Response[] = [];
+    for (let i = 0; i < 10; i += 1) {
+      allowed.push(
+        await authFetch("/auth/password/reset/confirm", {
+          method: "POST",
+          headers,
+          body: resetBody,
+        }),
+      );
+    }
+
+    expect(allowed.map((response) => response.status)).toEqual(
+      Array(10).fill(400),
+    );
+    await expect(
+      Promise.all(allowed.map((response) => response.json())),
+    ).resolves.toEqual(
+      Array(10).fill({
+        error: { code: "invalid_token", message: "Invalid token" },
+      }),
+    );
+
+    const limited = await authFetch("/auth/password/reset/confirm", {
+      method: "POST",
+      headers,
+      body: resetBody,
+    });
+    expect(limited.status).toBe(429);
+    await expect(limited.json()).resolves.toMatchObject({
+      error: { code: "rate_limited" },
+    });
+  });
+
   it("rejects unsafe redirects, oversized bodies, missing production origins, and disallowed preflights", async () => {
     const limited = await setup({
       request: { maxBodyBytes: 8, requireOriginOnUnsafeMethods: true },

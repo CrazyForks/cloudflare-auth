@@ -2916,27 +2916,30 @@ async function rateLimit(
       "rate_limited",
     );
   }
-  const first = await runtime.repos.rateLimits.hitFixedWindow({
+  const ipHit = await runtime.repos.rateLimits.hitFixedWindow({
     action,
     key: ipKey,
     windowMs,
-    limit: Math.max(limit, 10),
+    limit: subjectType === "ip" ? limit : Math.max(limit, 10),
     now: Date.now(),
   });
-  const second = await runtime.repos.rateLimits.hitFixedWindow({
-    action,
-    key,
-    windowMs,
-    limit,
-    now: Date.now(),
-  });
-  if (!first.allowed || !second.allowed) {
+  const subjectHit =
+    subjectType === "ip"
+      ? null
+      : await runtime.repos.rateLimits.hitFixedWindow({
+          action,
+          key,
+          windowMs,
+          limit,
+          now: Date.now(),
+        });
+  if (!ipHit.allowed || subjectHit?.allowed === false) {
     queueAuthEvent(runtime, request, "rate_limit_hit", {
       metadata: {
         action,
         limiter: "d1",
-        ipLimited: !first.allowed,
-        subjectLimited: !second.allowed,
+        ipLimited: !ipHit.allowed,
+        subjectLimited: subjectHit ? !subjectHit.allowed : false,
       },
     });
     throw new AuthCryptoError(

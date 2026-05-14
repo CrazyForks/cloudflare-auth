@@ -580,6 +580,52 @@ describe("auth HTTP runtime", () => {
       error: { code: "untrusted_host" },
     });
 
+    const badCookieConfig = await setup({
+      session: {
+        cookieName: "auto",
+        maxAgeDays: 30,
+        sameSite: "lax",
+        secure: "auto",
+        requireVerifiedEmail: false,
+        domain: ".example.com",
+      },
+    });
+    const badCookieResponse = await badCookieConfig.handler.fetch(
+      new Request("https://app.other.com/auth/user", {
+        headers: {
+          "CF-Connecting-IP": "203.0.113.10",
+          "User-Agent": "Config Failure Browser",
+        },
+      }),
+      {
+        ...badCookieConfig.env,
+        AUTH_ENV: "production",
+        AUTH_PUBLIC_ORIGIN: "https://app.other.com",
+      },
+      badCookieConfig.ctx,
+    );
+    await badCookieConfig.flushDeferred();
+    expect(badCookieResponse?.status).toBe(500);
+    await expect(badCookieResponse?.json()).resolves.toMatchObject({
+      error: { code: "config_error" },
+    });
+    const configEvent = await badCookieConfig.db
+      .prepare(
+        "SELECT event_type, ip_hash, user_agent_hash, metadata_json FROM auth_events ORDER BY created_at DESC LIMIT 1",
+      )
+      .first<{
+        event_type: string;
+        ip_hash: string | null;
+        user_agent_hash: string | null;
+        metadata_json: string;
+      }>();
+    expect(configEvent).toMatchObject({
+      event_type: "config_error",
+      metadata_json: JSON.stringify({ reason: "invalid_cookie_config" }),
+    });
+    expect(configEvent?.ip_hash).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(configEvent?.user_agent_hash).toMatch(/^[A-Za-z0-9_-]{43}$/);
+
     const allowedPreflight = await handler.fetch(
       new Request(`${origin}/auth/signup`, {
         method: "OPTIONS",

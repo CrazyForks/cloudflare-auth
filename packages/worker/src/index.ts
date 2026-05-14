@@ -2935,6 +2935,29 @@ function resolveRuntime(
   if (!env.AUTH_SECRET)
     throw new AuthCryptoError("AUTH_SECRET is missing", "config_error");
   const keyRing = parseAuthKeyRing(env.AUTH_SECRET, env.AUTH_SECRET_PREVIOUS);
+  const repos = createD1Repositories(db);
+  const requestId = request.headers.get("CF-Ray") ?? randomId("req_");
+  let cookie: ReturnType<typeof resolveSessionCookie>;
+  try {
+    cookie = resolveSessionCookie({
+      mode,
+      requestOrigin,
+      cookieName: config.session.cookieName,
+      sameSite: config.session.sameSite,
+      ...(config.session.domain ? { domain: config.session.domain } : {}),
+    });
+  } catch (error) {
+    writeRuntimeConfigFailureEvent({
+      repos,
+      keyRing,
+      request,
+      requestId,
+      ctx,
+      logger: consoleLogger,
+      error,
+    });
+    throw error;
+  }
   return {
     config,
     env,
@@ -2942,19 +2965,55 @@ function resolveRuntime(
     mode,
     publicOrigin: resolvedPublicOrigin,
     requestOrigin,
-    requestId: request.headers.get("CF-Ray") ?? randomId("req_"),
+    requestId,
     db,
-    repos: createD1Repositories(db),
+    repos,
     keyRing,
-    cookie: resolveSessionCookie({
-      mode,
-      requestOrigin,
-      cookieName: config.session.cookieName,
-      sameSite: config.session.sameSite,
-      ...(config.session.domain ? { domain: config.session.domain } : {}),
-    }),
+    cookie,
     logger: consoleLogger,
   };
+}
+
+function writeRuntimeConfigFailureEvent(input: {
+  repos: AuthRepositories;
+  keyRing: ReturnType<typeof parseAuthKeyRing>;
+  request: Request;
+  requestId: string;
+  ctx: ExecutionContext;
+  logger: AuthLogger;
+  error: unknown;
+}): void {
+  input.ctx.waitUntil(
+    input.repos.events
+      .writeAuthEvent({
+        id: randomId("evt_"),
+        eventType: "config_error",
+        createdAt: Date.now(),
+        ipHash: deriveEventHash({
+          keyRing: input.keyRing,
+          purpose: "event-ip-hash",
+          value: canonicalizeIp(clientIp(input.request)),
+        }),
+        userAgentHash: deriveEventHash({
+          keyRing: input.keyRing,
+          purpose: "event-user-agent-hash",
+          value: canonicalizeUserAgent(input.request.headers.get("User-Agent")),
+        }),
+        requestId: input.requestId,
+        metadataJson: JSON.stringify({
+          reason:
+            input.error instanceof AuthCryptoError
+              ? input.error.code
+              : "config_error",
+        }),
+      })
+      .catch((eventError) => {
+        input.logger.error("config_error_event_write_failed", {
+          errorName:
+            eventError instanceof Error ? eventError.name : "UnknownError",
+        });
+      }),
+  );
 }
 
 function isExactPublicOriginForMode(

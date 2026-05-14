@@ -3172,8 +3172,12 @@ export async function cloudflareRateLimitPrefilter(input: {
       }
     | undefined;
   if (!binding || typeof binding.limit !== "function") return true;
-  const result = await binding.limit({ key: input.key });
-  return result.success;
+  try {
+    const result = await binding.limit({ key: input.key });
+    return result.success !== false;
+  } catch {
+    return true;
+  }
 }
 
 function resolveRuntime(

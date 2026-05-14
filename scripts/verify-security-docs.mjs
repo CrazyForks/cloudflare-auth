@@ -67,6 +67,7 @@ for (const text of [
 for (const text of [
   "AUTH_RATE_LIMITER",
   "D1 remains authoritative",
+  "fails open to the D1 limiter",
   "Raw emails, identifiers, and IP addresses are never stored",
   "tests/routes.test.ts",
   "tests/security-hardening.test.ts",

@@ -240,6 +240,28 @@ describe("security hardening helpers", () => {
     await expect(
       cloudflareRateLimitPrefilter({ env: {}, key: "auth-key" }),
     ).resolves.toBe(true);
+    await expect(
+      cloudflareRateLimitPrefilter({
+        env: {
+          AUTH_RATE_LIMITER: {
+            limit: async () => {
+              throw new Error("transient limiter failure");
+            },
+          },
+        },
+        key: "auth-key",
+      }),
+    ).resolves.toBe(true);
+    await expect(
+      cloudflareRateLimitPrefilter({
+        env: {
+          AUTH_RATE_LIMITER: {
+            limit: async () => ({}) as { success: boolean },
+          },
+        },
+        key: "auth-key",
+      }),
+    ).resolves.toBe(true);
 
     let receivedKey = "";
     await expect(

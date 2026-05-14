@@ -21,11 +21,12 @@ for (const command of cliCommands) {
   requireText("docs/cli.md", docs.cli, `cf-auth ${command}`);
 }
 
+const cliGenerators = await cliGeneratorNames();
+for (const generator of cliGenerators) {
+  requireText("docs/cli.md", docs.cli, `cf-auth generate ${generator}`);
+}
+
 for (const command of [
-  "cf-auth generate hono",
-  "cf-auth generate worker-snippet",
-  "cf-auth generate react-client",
-  "cf-auth generate types",
   "cf-auth rotate-secret --print",
   "cf-auth rotate-secret --apply --env production",
   "cf-auth clean --local",
@@ -446,6 +447,60 @@ async function generatedEnvKeys() {
     failures.push(`${path}: no generated Env keys found for docs coverage`);
 
   return [...keys].sort();
+}
+
+async function cliGeneratorNames() {
+  const path = "packages/cli/src/index.ts";
+  let sourceText;
+  try {
+    sourceText = await readFile(path, "utf8");
+  } catch {
+    failures.push(`${path}: could not be read for CLI generator docs coverage`);
+    return [];
+  }
+
+  const sourceFile = ts.createSourceFile(
+    path,
+    sourceText,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const generators = new Set();
+  let foundGenerator = false;
+
+  function visit(node) {
+    if (
+      ts.isFunctionDeclaration(node) &&
+      node.name?.text === "commandGenerate"
+    ) {
+      foundGenerator = true;
+      ts.forEachChild(node, collectGeneratorBranches);
+      return;
+    }
+    ts.forEachChild(node, visit);
+  }
+
+  function collectGeneratorBranches(node) {
+    if (ts.isIfStatement(node)) {
+      const equality = stringEquality(node.expression);
+      if (equality?.name === "what") generators.add(equality.value);
+    }
+    ts.forEachChild(node, collectGeneratorBranches);
+  }
+
+  visit(sourceFile);
+
+  if (!foundGenerator) {
+    failures.push(
+      `${path}: missing commandGenerate for generator docs coverage`,
+    );
+  }
+  if (generators.size === 0) {
+    failures.push(`${path}: no CLI generators found in commandGenerate`);
+  }
+
+  return [...generators].sort();
 }
 
 function arrayLiteralJoinedByNewline(expression) {

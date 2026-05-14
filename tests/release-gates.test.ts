@@ -236,6 +236,23 @@ describe("release gates", () => {
     expect(result.stderr).toContain("docs/cli.md: missing cf-auth tokens");
   });
 
+  it("derives generator docs coverage from commandGenerate", async () => {
+    const root = await releaseGateFixture({ deployButtonEvidence: true });
+    await replaceFixtureText(
+      root,
+      "packages/cli/src/index.ts",
+      '  return "";',
+      ['  if (what === "svelte-client") return "";', '  return "";'].join("\n"),
+    );
+    const result = runReleaseGates(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("scripts/verify-docs-coverage.mjs");
+    expect(result.stderr).toContain(
+      "docs/cli.md: missing cf-auth generate svelte-client",
+    );
+  });
+
   it("derives environment docs coverage from generated Env types", async () => {
     const root = await releaseGateFixture({ deployButtonEvidence: true });
     await replaceFixtureText(

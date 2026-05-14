@@ -136,6 +136,17 @@ describe("auth HTTP runtime", () => {
         },
       }),
     ).toThrow(AuthCryptoError);
+    expect(() =>
+      defineAuthConfig({
+        appName: "Bad Runtime Mode",
+        basePath: "/auth",
+        runtime: {
+          mode: "staging" as unknown as AuthConfig["runtime"]["mode"],
+          publicOrigin: "https://example.com",
+          trustedHosts: [],
+        },
+      }),
+    ).toThrow(AuthCryptoError);
     for (const trustedHost of [
       "*.example.com",
       "https://example.com",
@@ -1284,6 +1295,23 @@ describe("auth HTTP runtime", () => {
     await expect(badPublicOrigin?.json()).resolves.toMatchObject({
       error: { code: "config_error" },
       requestId: "ray-public-origin",
+    });
+
+    const badRuntimeMode = await handler.fetch(
+      new Request("https://example.com/auth/user", {
+        headers: { "CF-Ray": "ray-runtime-mode" },
+      }),
+      {
+        ...env,
+        AUTH_ENV: "staging",
+        AUTH_PUBLIC_ORIGIN: "https://example.com",
+      },
+      { waitUntil() {} } as unknown as ExecutionContext,
+    );
+    expect(badRuntimeMode?.status).toBe(500);
+    await expect(badRuntimeMode?.json()).resolves.toMatchObject({
+      error: { code: "config_error" },
+      requestId: "ray-runtime-mode",
     });
 
     const untrustedHost = await handler.fetch(

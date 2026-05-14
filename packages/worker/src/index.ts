@@ -1455,6 +1455,12 @@ export function defineAuthConfig(config: AuthConfigInput): AuthConfig {
 
 function assertRuntimeOptions(config: AuthConfig): void {
   const mode = config.runtime.mode;
+  if (mode !== "from-env" && !isAuthRuntimeMode(mode)) {
+    throw new AuthCryptoError(
+      "runtime mode is invalid",
+      "invalid_runtime_mode",
+    );
+  }
   if (
     config.runtime.publicOrigin !== "from-env" &&
     !(mode === "from-env"
@@ -1466,6 +1472,12 @@ function assertRuntimeOptions(config: AuthConfig): void {
       "invalid_public_origin",
     );
   }
+}
+
+function isAuthRuntimeMode(value: unknown): value is AuthRuntimeMode {
+  return (
+    value === "development" || value === "preview" || value === "production"
+  );
 }
 
 function normalizeTrustedHosts(values: string[]): string[] {
@@ -3372,6 +3384,9 @@ function resolveRuntime(
   const mode =
     config.runtime.mode === "from-env" ? env.AUTH_ENV : config.runtime.mode;
   if (!mode) throw new AuthCryptoError("AUTH_ENV is missing", "config_error");
+  if (!isAuthRuntimeMode(mode)) {
+    throw new AuthCryptoError("AUTH_ENV is invalid", "config_error");
+  }
   const publicOrigin =
     config.runtime.publicOrigin === "from-env"
       ? env.AUTH_PUBLIC_ORIGIN

@@ -54,6 +54,16 @@ await requireText("docs/release-checklist.md", "config schema reviewed");
 await requireText("docs/release-checklist.md", "security review decision");
 await requireText("SECURITY.md", "secret scanning");
 await requireText("SECURITY.md", "advisory evidence only");
+await requireText(
+  ".github/workflows/dependency-review.yml",
+  "actions/dependency-review-action",
+);
+await requireText(".github/workflows/codeql.yml", "javascript-typescript");
+await requireText(".github/dependabot.yml", "package-ecosystem: npm");
+await requireText(
+  ".github/dependabot.yml",
+  "package-ecosystem: github-actions",
+);
 await requireText("README.md", "docs/known-limitations.md");
 await requireText(
   ".github/ISSUE_TEMPLATE/alpha-feedback.yml",

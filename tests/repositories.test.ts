@@ -49,6 +49,42 @@ describe("D1 migrations and repositories", () => {
     ]);
   });
 
+  it("uses first-primary D1 sessions for auth state lookups", async () => {
+    const sessionModes: string[] = [];
+    const statement = {
+      bind() {
+        return this;
+      },
+      async first() {
+        return null;
+      },
+    } as unknown as D1PreparedStatement;
+    const sessionDb = {
+      prepare() {
+        return statement;
+      },
+    };
+    const primaryAwareDb = {
+      prepare() {
+        return statement;
+      },
+      withSession(mode: string) {
+        sessionModes.push(mode);
+        return sessionDb;
+      },
+    } as unknown as D1Database;
+    const primaryRepos = createD1Repositories(primaryAwareDb);
+
+    await primaryRepos.sessions.findSessionByTokenHash(sessionHash, 1);
+    await primaryRepos.verificationTokens.findActiveVerificationTokenByHash(
+      magicHash,
+      "magic_link",
+      1,
+    );
+
+    expect(sessionModes).toEqual(["first-primary", "first-primary"]);
+  });
+
   it("enforces unique normalized email and username", async () => {
     await repos.users.createUser({
       id: "usr_one",

@@ -14,7 +14,14 @@
     {
       "user": "alpha-user-1",
       "completedAt": "2026-05-14T00:00:00.000Z",
+      "commands": [
+        "npx --package @cf-auth/cli@alpha cf-auth doctor --env production",
+        "npx --package @cf-auth/cli@alpha cf-auth migrate --remote --env production",
+        "npx --package @cf-auth/cli@alpha cf-auth deploy --env production"
+      ],
       "doctorReportAttached": true,
+      "doctorReportSchemaValid": true,
+      "doctorReportRedactionChecked": true,
       "doctorPassed": true,
       "migratePassed": true,
       "deployPassed": true,

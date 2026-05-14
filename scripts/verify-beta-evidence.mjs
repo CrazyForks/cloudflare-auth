@@ -68,13 +68,15 @@ function validatePublishedQuickstart(value) {
   requireString(value.packageTag, `${path}.packageTag`);
   if (value.passed !== true)
     failures.push(`${evidencePath}: ${path}.passed must be true`);
-  if (value.noWorkspaceDependencies !== true) {
-    failures.push(
-      `${evidencePath}: ${path}.noWorkspaceDependencies must be true`,
-    );
-  }
-  if (value.signupLoginVerified !== true) {
-    failures.push(`${evidencePath}: ${path}.signupLoginVerified must be true`);
+  for (const field of [
+    "cleanDirectory",
+    "documentedCommandsOnly",
+    "noWorkspaceDependencies",
+    "signupLoginVerified",
+  ]) {
+    if (value[field] !== true) {
+      failures.push(`${evidencePath}: ${path}.${field} must be true`);
+    }
   }
 }
 
@@ -105,6 +107,14 @@ function validateProductionSmoke(value) {
   requireOrigin(value.origin, `${path}.origin`);
   if (value.passed !== true)
     failures.push(`${evidencePath}: ${path}.passed must be true`);
+  for (const field of [
+    "documentedProductionPath",
+    "optInCloudflareAccountFixture",
+  ]) {
+    if (value[field] !== true) {
+      failures.push(`${evidencePath}: ${path}.${field} must be true`);
+    }
+  }
   for (const endpoint of [
     "/auth/signup",
     "/auth/login",
@@ -134,6 +144,11 @@ function validateDeployButton(value) {
   }
   if (value.verified !== true) {
     failures.push(`${evidencePath}: ${path}.verified must be true`);
+  }
+  if (value.evidenceVerifierPassed !== true) {
+    failures.push(
+      `${evidencePath}: ${path}.evidenceVerifierPassed must be true`,
+    );
   }
 }
 

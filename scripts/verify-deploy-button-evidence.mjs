@@ -66,12 +66,14 @@ function validateEvidence(value, rawText) {
   requireOrigin(value.deployedOrigin, "deployedOrigin");
 
   for (const field of [
+    "starterTemplateCreated",
     "templateRepositoryPublic",
     "templateHasNoWorkspaceDependencies",
     "d1BindingConfigured",
     "migrationsApplied",
     "authSecretConfigured",
     "publicOriginConfigured",
+    "documentedPathFollowed",
     "signupLoginSmokePassed",
   ]) {
     if (value[field] !== true) {

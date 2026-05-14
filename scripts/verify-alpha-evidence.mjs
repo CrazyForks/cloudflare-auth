@@ -92,6 +92,8 @@ function validateEvidence(value, rawText) {
     requireDate(deploy.completedAt, `${path}.completedAt`);
     for (const field of [
       "doctorReportAttached",
+      "doctorReportSchemaValid",
+      "doctorReportRedactionChecked",
       "doctorPassed",
       "migratePassed",
       "deployPassed",
@@ -101,6 +103,21 @@ function validateEvidence(value, rawText) {
         failures.push(`${evidencePath}: ${path}.${field} must be true`);
       }
     }
+    requireCommandContains(
+      deploy.commands,
+      "cf-auth doctor --env production",
+      `${path}.commands`,
+    );
+    requireCommandContains(
+      deploy.commands,
+      "cf-auth migrate --remote --env production",
+      `${path}.commands`,
+    );
+    requireCommandContains(
+      deploy.commands,
+      "cf-auth deploy --env production",
+      `${path}.commands`,
+    );
   }
 
   for (const [index, item] of failuresSeen.entries()) {
@@ -141,6 +158,17 @@ function requireDate(value, path) {
   requireString(value, path);
   if (typeof value === "string" && Number.isNaN(Date.parse(value))) {
     failures.push(`${evidencePath}: ${path} must be an ISO date string`);
+  }
+}
+
+function requireCommandContains(commands, expected, path) {
+  const commandList = Array.isArray(commands) ? commands : [];
+  if (
+    !commandList.some(
+      (command) => typeof command === "string" && command.includes(expected),
+    )
+  ) {
+    failures.push(`${evidencePath}: ${path} must include ${expected}`);
   }
 }
 

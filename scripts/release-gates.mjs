@@ -78,6 +78,15 @@ await requireText(
   "CF_AUTH_REQUIRE_PACKAGE_OWNERSHIP=1 pnpm verify:package-ownership",
 );
 await requireText("docs/alpha.md", "doctor --report");
+await requireText("docs/alpha-evidence.example.json", '"commands"');
+await requireText(
+  "docs/alpha-evidence.example.json",
+  '"doctorReportSchemaValid"',
+);
+await requireText(
+  "docs/alpha-evidence.example.json",
+  '"doctorReportRedactionChecked"',
+);
 await requireText(
   "docs/deploy-to-cloudflare.md",
   "Deploy to Cloudflare button is a public-beta gate",
@@ -94,6 +103,15 @@ await requireText("docs/public-beta.md", "docs/known-limitations.md");
 await requireText("docs/public-beta.md", "pnpm verify:beta-evidence");
 await requireText("docs/public-beta.md", "pnpm verify:deploy-button-evidence");
 await requireText("docs/public-beta.md", "pnpm verify:package-ownership");
+await requireText("docs/beta-evidence.example.json", '"cleanDirectory"');
+await requireText(
+  "docs/beta-evidence.example.json",
+  '"documentedCommandsOnly"',
+);
+await requireText(
+  "docs/beta-evidence.example.json",
+  '"optInCloudflareAccountFixture"',
+);
 await requireText("docs/release-checklist.md", "pnpm verify:security-docs");
 await requireText(
   "docs/public-beta.md",
@@ -105,6 +123,14 @@ await requireText(
 );
 await requireText("docs/beta-evidence.example.json", "/auth/logout");
 await requireText("docs/deploy-button-evidence.example.json", "/auth/logout");
+await requireText(
+  "docs/deploy-button-evidence.example.json",
+  '"starterTemplateCreated"',
+);
+await requireText(
+  "docs/deploy-button-evidence.example.json",
+  '"documentedPathFollowed"',
+);
 await requireText(
   ".github/workflows/wrangler-dev-smoke.yml",
   "pnpm smoke:wrangler-dev",

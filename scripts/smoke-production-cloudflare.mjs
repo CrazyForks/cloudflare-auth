@@ -165,7 +165,9 @@ async function rewriteWorkspaceDependencies(packageDir, specs) {
   for (const section of ["dependencies", "devDependencies"]) {
     for (const [name, version] of Object.entries(pkg[section] ?? {})) {
       if (String(version).startsWith("workspace:")) {
-        pkg[section][name] = specs[name] ?? "0.0.0";
+        const spec = specs[name];
+        if (!spec) throw new Error(`Missing local package spec for ${name}`);
+        pkg[section][name] = spec;
       }
     }
   }

@@ -1172,7 +1172,11 @@ export default app;
         stdout: (line) => userOutput.push(line),
         runCommand: (_command, args) => {
           userCalls.push({ args, sql: args.at(-1) ?? "" });
-          return { status: 0, stdout: "disabled", stderr: "" };
+          return {
+            status: 0,
+            stdout: `disabled token=cfauth.magic.k1.${"A".repeat(43)} person@example.com 203.0.113.10 __Host-cfauth-session=raw-cookie`,
+            stderr: "",
+          };
         },
       },
     );
@@ -1192,6 +1196,10 @@ export default app;
     );
     expect(userCalls[0]?.sql).toContain("UPDATE sessions SET revoked_at");
     expect(userOutput.join("\n")).not.toContain("person@example.com");
+    expect(userOutput.join("\n")).not.toContain("203.0.113.10");
+    expect(userOutput.join("\n")).not.toContain("raw-cookie");
+    expect(userOutput.join("\n")).not.toContain("cfauth.magic");
+    expect(userOutput.join("\n")).toContain("[REDACTED_EMAIL]");
 
     const sessionCalls: Array<{ args: string[]; sql: string }> = [];
     const output: string[] = [];

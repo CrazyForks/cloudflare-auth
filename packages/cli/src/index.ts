@@ -2429,8 +2429,9 @@ function runRedactedRecoveryCommand(
   const output = [result.stdout.trim(), result.stderr.trim()]
     .filter(Boolean)
     .join("\n");
-  return output
-    ? `wrangler d1 execute <redacted recovery SQL>\n${output}`
+  const redacted = redactCliOutput(output);
+  return redacted
+    ? `wrangler d1 execute <redacted recovery SQL>\n${redacted}`
     : "wrangler d1 execute <redacted recovery SQL>";
 }
 
@@ -2498,6 +2499,29 @@ function userWhereClause(identifier: string): string {
 
 function sqlStringLiteral(value: string): string {
   return `'${value.replaceAll("'", "''")}'`;
+}
+
+function redactCliOutput(value: string): string {
+  return value
+    .replace(
+      /("[A-Za-z0-9_-]*(?:password|secret|cookie|authorization|api[_-]?key|authToken|token)"\s*:\s*)"[^"]*"/giu,
+      '$1"[REDACTED]"',
+    )
+    .replace(
+      /\b((?:password|secret|cookie|authorization|api[_-]?key|authToken|token|AUTH_SECRET|AUTH_SECRET_PREVIOUS)=)[^\s,;&"']+/giu,
+      "$1[REDACTED]",
+    )
+    .replace(/\b(Bearer\s+)[A-Za-z0-9._~+/-]+=*/giu, "$1[REDACTED]")
+    .replace(
+      /\b((?:__Host-|__Secure-)?cfauth-session=)[^\s;,]+/giu,
+      "$1[REDACTED]",
+    )
+    .replace(
+      /cfauth\.(ses|magic|verify|reset)\.[A-Za-z0-9_-]{1,32}\.[A-Za-z0-9_-]{43}/gu,
+      "[REDACTED_TOKEN]",
+    )
+    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/giu, "[REDACTED_EMAIL]")
+    .replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/gu, "[REDACTED_IP]");
 }
 
 function parseLimit(value: string | boolean | undefined): number {

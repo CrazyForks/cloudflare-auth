@@ -94,8 +94,7 @@ function validateEvidence(value, rawText) {
 
 function validatePublishedQuickstart(value) {
   const path = "publishedQuickstart";
-  requireObject(value, path);
-  if (!value) return;
+  if (!requireObject(value, path)) return;
   requireUrl(value.workflowRunUrl, `${path}.workflowRunUrl`);
   requireGithubActionsRunUrl(value.workflowRunUrl, `${path}.workflowRunUrl`);
   requireBetaPackageTag(value.packageTag, `${path}.packageTag`);
@@ -115,8 +114,7 @@ function validatePublishedQuickstart(value) {
 
 function validateManualQuickstart(value) {
   const path = "manualQuickstart";
-  requireObject(value, path);
-  if (!value) return;
+  if (!requireObject(value, path)) return;
   requireString(value.maintainer, `${path}.maintainer`);
   requireDate(value.completedAt, `${path}.completedAt`);
   requireBetaPackageTag(value.packageTag, `${path}.packageTag`);
@@ -148,8 +146,7 @@ function validateManualQuickstart(value) {
 
 function validateProductionSmoke(value) {
   const path = "productionSmoke";
-  requireObject(value, path);
-  if (!value) return;
+  if (!requireObject(value, path)) return;
   requireUrl(value.workflowRunUrl, `${path}.workflowRunUrl`);
   requireGithubActionsRunUrl(value.workflowRunUrl, `${path}.workflowRunUrl`);
   requireBetaPackageTag(value.packageTag, `${path}.packageTag`);
@@ -200,8 +197,7 @@ function validateProductionSmoke(value) {
 
 function validateDeployButton(value) {
   const path = "deployButton";
-  requireObject(value, path);
-  if (!value) return;
+  if (!requireObject(value, path)) return;
   requireString(value.evidencePath, `${path}.evidencePath`);
   if (value.evidencePath !== "docs/deploy-button-evidence.json") {
     failures.push(
@@ -219,9 +215,11 @@ function validateDeployButton(value) {
 }
 
 function requireObject(value, path) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+  if (!isJsonObject(value)) {
     failures.push(`${evidencePath}: ${path} must be an object`);
+    return false;
   }
+  return true;
 }
 
 function requireString(value, path) {

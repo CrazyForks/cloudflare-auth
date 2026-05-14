@@ -291,6 +291,29 @@ describe("release evidence verifiers", () => {
     );
   });
 
+  it("rejects non-object beta evidence sections without cascading field errors", async () => {
+    const evidence = validBetaEvidence() as Record<string, unknown>;
+    evidence.publishedQuickstart = null;
+    evidence.manualQuickstart = "manual";
+    evidence.productionSmoke = [];
+    evidence.deployButton = 1;
+    const path = await writeEvidence("beta-non-object-sections", evidence);
+    const result = runScript("scripts/verify-beta-evidence.mjs", {
+      CF_AUTH_REQUIRE_BETA_EVIDENCE: "1",
+      CF_AUTH_BETA_EVIDENCE_PATH: path,
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("publishedQuickstart must be an object");
+    expect(result.stderr).toContain("manualQuickstart must be an object");
+    expect(result.stderr).toContain("productionSmoke must be an object");
+    expect(result.stderr).toContain("deployButton must be an object");
+    expect(result.stderr).not.toContain("publishedQuickstart.workflowRunUrl");
+    expect(result.stderr).not.toContain("manualQuickstart.maintainer");
+    expect(result.stderr).not.toContain("productionSmoke.workflowRunUrl");
+    expect(result.stderr).not.toContain("deployButton.evidencePath");
+  });
+
   it("rejects impossible ISO evidence dates", async () => {
     const evidence = validAlphaEvidence();
     evidence.localSetups[0]!.completedAt = "2026-02-31T00:00:00.000Z";

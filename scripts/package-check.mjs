@@ -3,6 +3,8 @@ import { access, mkdtemp, readdir, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 
+import { isJsonObject } from "./evidence-validation.mjs";
+
 const rootPackage = JSON.parse(await readFile("package.json", "utf8"));
 const rootLicense = await readFile("LICENSE", "utf8");
 const expectedPackages = new Map([
@@ -273,15 +275,38 @@ async function readOwnershipEvidence() {
   }
   const packagesByName = new Map();
   const reservedByName = new Map();
-  for (const item of Array.isArray(parsed.packages) ? parsed.packages : []) {
-    if (item && typeof item.name === "string") {
+  if (!isJsonObject(parsed)) {
+    failures.push(
+      "docs/package-ownership.json: top-level JSON value must be an object",
+    );
+    ownershipEvidence = { packagesByName, reservedByName };
+    return ownershipEvidence;
+  }
+  for (const [index, item] of (Array.isArray(parsed.packages)
+    ? parsed.packages
+    : []
+  ).entries()) {
+    if (!isJsonObject(item)) {
+      failures.push(
+        `docs/package-ownership.json: packages[${index}] must be an object`,
+      );
+      continue;
+    }
+    if (typeof item.name === "string") {
       packagesByName.set(item.name, item);
     }
   }
-  for (const item of Array.isArray(parsed.reservedPackages)
+  for (const [index, item] of (Array.isArray(parsed.reservedPackages)
     ? parsed.reservedPackages
-    : []) {
-    if (item && typeof item.name === "string") {
+    : []
+  ).entries()) {
+    if (!isJsonObject(item)) {
+      failures.push(
+        `docs/package-ownership.json: reservedPackages[${index}] must be an object`,
+      );
+      continue;
+    }
+    if (typeof item.name === "string") {
       reservedByName.set(item.name, item);
     }
   }

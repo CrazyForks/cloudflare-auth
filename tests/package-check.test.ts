@@ -224,6 +224,58 @@ describe("package checks", () => {
     );
   });
 
+  it("rejects malformed package ownership evidence before publishing reserved shims", async () => {
+    const root = await packageCheckFixture();
+    await updatePackageJson(root, "packages/cf-auth-shim/package.json", {
+      privateValue: false,
+      version: "0.1.0-beta.0",
+    });
+    await writeChangesetFixedGroup(root, [
+      ...defaultPublishablePackages,
+      "cf-auth",
+    ]);
+    await writeFile(join(root, "docs", "package-ownership.json"), "null\n");
+    const result = runPackageCheck(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "docs/package-ownership.json: top-level JSON value must be an object",
+    );
+  });
+
+  it("rejects malformed package ownership evidence entries before publishing reserved shims", async () => {
+    const root = await packageCheckFixture();
+    await updatePackageJson(root, "packages/cf-auth-shim/package.json", {
+      privateValue: false,
+      version: "0.1.0-beta.0",
+    });
+    await writeChangesetFixedGroup(root, [
+      ...defaultPublishablePackages,
+      "cf-auth",
+    ]);
+    await writeFile(
+      join(root, "docs", "package-ownership.json"),
+      `${JSON.stringify(
+        {
+          schemaVersion: 1,
+          packages: [null],
+          reservedPackages: [null],
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    const result = runPackageCheck(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "docs/package-ownership.json: packages[0] must be an object",
+    );
+    expect(result.stderr).toContain(
+      "docs/package-ownership.json: reservedPackages[0] must be an object",
+    );
+  });
+
   it("allows reserved package shims to publish after ownership evidence", async () => {
     const root = await packageCheckFixture();
     await updatePackageJson(root, "packages/cf-auth-shim/package.json", {

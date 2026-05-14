@@ -23,6 +23,7 @@
     "verify:migrations": "node scripts/verify-migrations.mjs",
     "release:gates": "node scripts/release-gates.mjs",
     "smoke:wrangler-dev": "node scripts/smoke-wrangler-dev.mjs",
+    "smoke:cloudflare-production": "node scripts/smoke-production-cloudflare.mjs",
     "smoke:tarballs": "node scripts/smoke-local-tarballs.mjs",
     "benchmark:password": "tsx scripts/benchmark-password-worker.ts"
   },

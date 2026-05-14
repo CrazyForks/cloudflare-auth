@@ -63,4 +63,26 @@ in Cloudflare Email configuration.
 
 Deploying without `--env` fails unless `doctor` proves the top-level Wrangler config is intentionally production-safe.
 
+## Opt-in Production Smoke
+
+Maintainers can run the real Cloudflare production smoke from a dedicated
+fixture account:
+
+```bash
+CF_AUTH_PRODUCTION_SMOKE=1 \
+CLOUDFLARE_ACCOUNT_ID=... \
+CLOUDFLARE_API_TOKEN=... \
+CF_AUTH_PRODUCTION_SMOKE_DATABASE_ID=... \
+CF_AUTH_PRODUCTION_SMOKE_DATABASE_NAME=cf-auth-production-smoke \
+CF_AUTH_PRODUCTION_SMOKE_WORKER_NAME=cf-auth-production-smoke \
+CF_AUTH_PRODUCTION_SMOKE_ORIGIN=https://example.workers.dev \
+pnpm smoke:cloudflare-production
+```
+
+The script creates a temporary app, runs `doctor --env production`, applies
+remote migrations, requires a clean second `doctor --env production`, deploys
+with `cf-auth deploy --env production`, and exercises deployed signup, login,
+and `/auth/user`. Set `CF_AUTH_PRODUCTION_SMOKE_PACKAGE_TAG=beta` to verify
+published beta packages instead of local tarballs.
+
 The Deploy to Cloudflare button readiness checklist is tracked in `docs/deploy-to-cloudflare.md`.

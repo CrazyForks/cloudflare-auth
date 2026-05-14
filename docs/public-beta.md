@@ -14,6 +14,14 @@ npx --package @cf-auth/cli@beta cf-auth migrate --remote --env production
 npx --package @cf-auth/cli@beta cf-auth deploy --env production
 ```
 
+The checked-in opt-in workflow for this gate is
+`.github/workflows/cloudflare-production-smoke.yml`. It requires a dedicated
+Worker/D1 fixture, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`,
+`CF_AUTH_PRODUCTION_SMOKE_DATABASE_ID`, `CF_AUTH_PRODUCTION_SMOKE_ORIGIN`, and
+the `CF_AUTH_PRODUCTION_SMOKE=1` safety flag. Set workflow input `package_tag`
+to `beta` to verify published beta packages; leave it empty to verify local
+tarballs from the current checkout.
+
 - the template repository is public and contains no workspace-only dependency references
 - `SECURITY.md` is linked from the README and includes supported versions, reporting channel, and response window
 - `docs/known-limitations.md` is linked from public docs

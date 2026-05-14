@@ -32,6 +32,7 @@
 - quickstart passes in CI using published beta versions
 - maintainer manually verifies the quickstart
 - opt-in Wrangler dev smoke workflow passes for at least one Worker example
+- opt-in Cloudflare production smoke workflow passes against the dedicated fixture
 - production smoke test passes against an opt-in Cloudflare account fixture
 - Deploy to Cloudflare button path verified or explicitly blocked
 
@@ -43,4 +44,5 @@
 - security review decision record signed
 - Dependabot, dependency review, and CodeQL automation are enabled
 - opt-in Wrangler dev smoke workflow passes for the release candidate
+- opt-in Cloudflare production smoke workflow passes for the release candidate
 - README, LICENSE, export maps, package contents, and provenance settings pass `pnpm package:check`

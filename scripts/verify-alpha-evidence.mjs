@@ -1,4 +1,5 @@
 import { access, readdir, readFile } from "node:fs/promises";
+import { isIP } from "node:net";
 import { join } from "node:path";
 
 const evidencePath =
@@ -239,8 +240,22 @@ function containsSensitiveAlphaEvidence(text) {
     ) ||
     /\b(?:__Host-|__Secure-)?cfauth-session=/u.test(text) ||
     /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/iu.test(text) ||
-    /\b(?:\d{1,3}\.){3}\d{1,3}\b/u.test(text)
+    containsIpLiteral(text)
   );
+}
+
+function containsIpLiteral(text) {
+  if (/\b(?:\d{1,3}\.){3}\d{1,3}\b/u.test(text)) return true;
+  const candidates =
+    text.match(/\[?(?:[A-Fa-f0-9]{0,4}:){2,}[A-Fa-f0-9:.%]+\]?/gu) ?? [];
+  return candidates.some((candidate) => {
+    const unwrapped =
+      candidate.startsWith("[") && candidate.endsWith("]")
+        ? candidate.slice(1, -1)
+        : candidate;
+    const withoutZone = unwrapped.split("%", 1)[0] ?? unwrapped;
+    return isIP(withoutZone) === 6;
+  });
 }
 
 async function hasPublicBetaPackageVersions() {

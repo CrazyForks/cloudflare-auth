@@ -90,6 +90,21 @@ describe("release evidence verifiers", () => {
     expect(result.stderr).toContain("@cf-auth/cli@alpha");
   });
 
+  it("rejects alpha evidence with raw IPv6 addresses", async () => {
+    const evidence = validAlphaEvidence();
+    (evidence.localSetups[0] as Record<string, unknown>).notes =
+      "observed from [2001:db8::1]";
+    const path = await writeEvidence("alpha-ipv6", evidence);
+    const result = runScript("scripts/verify-alpha-evidence.mjs", {
+      CF_AUTH_REQUIRE_ALPHA_EVIDENCE: "1",
+      CF_AUTH_ALPHA_EVIDENCE_PATH: path,
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("must not include raw secrets");
+    expect(result.stderr).toContain("IPs");
+  });
+
   it("accepts beta evidence for clean quickstart and opt-in production smoke", async () => {
     const path = await writeEvidence("beta", validBetaEvidence());
     const result = runScript("scripts/verify-beta-evidence.mjs", {
@@ -133,6 +148,21 @@ describe("release evidence verifiers", () => {
     expect(result.stderr).toContain("publishedQuickstart.packageTag");
     expect(result.stderr).toContain("manualQuickstart.packageTag");
     expect(result.stderr).toContain("productionSmoke.packageTag");
+  });
+
+  it("rejects beta evidence with raw IPv6 addresses", async () => {
+    const evidence = validBetaEvidence();
+    (evidence.productionSmoke as Record<string, unknown>).notes =
+      "deployment came from 2001:db8::1";
+    const path = await writeEvidence("beta-ipv6", evidence);
+    const result = runScript("scripts/verify-beta-evidence.mjs", {
+      CF_AUTH_REQUIRE_BETA_EVIDENCE: "1",
+      CF_AUTH_BETA_EVIDENCE_PATH: path,
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("must not include raw secrets");
+    expect(result.stderr).toContain("IPs");
   });
 
   it("accepts deploy button evidence for the documented template path", async () => {
@@ -275,6 +305,21 @@ describe("release evidence verifiers", () => {
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("issueSearchUrl");
     expect(result.stderr).toContain("advisorySearchUrl");
+  });
+
+  it("rejects security tracker evidence with raw IPv6 addresses", async () => {
+    const evidence = validSecurityTracker();
+    (evidence as Record<string, unknown>).reviewNotes =
+      "triaged from 2001:db8::1";
+    const path = await writeEvidence("security-tracker-ipv6", evidence);
+    const result = runScript("scripts/verify-security-release-tracker.mjs", {
+      CF_AUTH_REQUIRE_SECURITY_TRACKER: "1",
+      CF_AUTH_SECURITY_TRACKER_PATH: path,
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("must not include raw secrets");
+    expect(result.stderr).toContain("IPs");
   });
 
   it("rejects security tracker evidence with incomplete search URLs", async () => {

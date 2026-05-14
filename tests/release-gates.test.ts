@@ -597,6 +597,25 @@ process.exit(1);
     expect(result.stderr).toContain("betaVersions[1].version");
     expect(result.stderr).toContain("betaVersions[1].fixture");
   });
+
+  it("rejects non-object stable beta upgrade fixture manifests", async () => {
+    const root = await releaseGateFixture({
+      deployButtonEvidence: true,
+      packageVersion: "1.0.0",
+      stableEvidence: true,
+    });
+    await writeFixtureFile(
+      root,
+      "tests/fixtures/upgrade/beta-schema-versions.json",
+      "null",
+    );
+    const result = runReleaseGates(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "tests/fixtures/upgrade/beta-schema-versions.json: top-level JSON value must be an object",
+    );
+  });
 });
 
 interface ReleaseGateFixtureOptions {

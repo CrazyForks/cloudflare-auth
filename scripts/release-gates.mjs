@@ -429,6 +429,12 @@ async function requireUpgradeFixtures() {
     );
     return;
   }
+  if (!isRecord(manifest)) {
+    failures.push(
+      "tests/fixtures/upgrade/beta-schema-versions.json: top-level JSON value must be an object",
+    );
+    return;
+  }
   const betaVersions = Array.isArray(manifest.betaVersions)
     ? manifest.betaVersions
     : [];

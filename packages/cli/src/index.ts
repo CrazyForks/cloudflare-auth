@@ -1230,7 +1230,15 @@ function checkRemoteSecretName(input: {
     };
   }
   const names = parseSecretNames(result.stdout);
-  if (!names.has(input.name)) {
+  if (!names.ok) {
+    return {
+      id: remoteSecretCheckId(input.name),
+      status: "fail",
+      message: input.unavailableMessage,
+      fix: input.unavailableFix ?? input.fix,
+    };
+  }
+  if (!names.names.has(input.name)) {
     return {
       id: remoteSecretCheckId(input.name),
       status: "fail",
@@ -1252,28 +1260,25 @@ function remoteSecretCheckId(name: string): string {
   return "remote_secret";
 }
 
-function parseSecretNames(text: string): Set<string> {
+function parseSecretNames(
+  text: string,
+): { ok: true; names: Set<string> } | { ok: false } {
   try {
     const parsed = JSON.parse(text) as unknown;
-    if (!Array.isArray(parsed)) return new Set();
-    return new Set(
-      parsed
-        .map((item) => {
-          if (typeof item === "string") return item;
-          if (
-            typeof item === "object" &&
-            item !== null &&
-            "name" in item &&
-            typeof item.name === "string"
-          ) {
-            return item.name;
-          }
-          return "";
-        })
-        .filter(Boolean),
-    );
+    if (!Array.isArray(parsed)) return { ok: false };
+    const names = new Set<string>();
+    for (const item of parsed) {
+      if (typeof item === "string") {
+        names.add(item);
+      } else if (isRecord(item) && typeof item.name === "string") {
+        names.add(item.name);
+      } else {
+        return { ok: false };
+      }
+    }
+    return { ok: true, names };
   } catch {
-    return new Set();
+    return { ok: false };
   }
 }
 

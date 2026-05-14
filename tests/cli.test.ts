@@ -2038,6 +2038,35 @@ export default app;
     expect(errors.join("\n")).not.toContain("k_dev.");
   });
 
+  it("doctor reports invalid remote secret list output as unavailable", async () => {
+    const cwd = await tempDir();
+    await writeWrangler(cwd);
+    const errors: string[] = [];
+    const code = await runCli(["doctor", "--env", "production"], {
+      cwd,
+      stderr: (line) => errors.push(line),
+      runCommand: (_command, args) => {
+        if (args[0] === "--version") {
+          return { status: 0, stdout: "4.90.1\n", stderr: "" };
+        }
+        if (args[0] === "whoami") {
+          return { status: 0, stdout: healthyWhoamiJson(), stderr: "" };
+        }
+        if (args[0] === "d1" && args[1] === "execute") {
+          return { status: 0, stdout: migrationStateJson(), stderr: "" };
+        }
+        return { status: 0, stdout: "not json", stderr: "" };
+      },
+    });
+
+    expect(code).toBe(1);
+    expect(errors.join("\n")).toContain(
+      "Remote AUTH_SECRET could not be verified",
+    );
+    expect(errors.join("\n")).toContain("run wrangler login");
+    expect(errors.join("\n")).not.toContain("AUTH_SECRET is missing remotely");
+  });
+
   it("doctor detects secrets that exist only in local dev vars", async () => {
     const cwd = await tempDir();
     await writeWrangler(cwd);

@@ -425,6 +425,25 @@ async function verifyReleaseControls() {
     }
   }
 
+  const publishedQuickstartWorkflow = await readFile(
+    ".github/workflows/published-quickstart-smoke.yml",
+    "utf8",
+  );
+  for (const needle of [
+    "workflow_dispatch:",
+    "package_tag:",
+    "required: true",
+    "default: beta",
+    "pnpm smoke:published-quickstart",
+    "CF_AUTH_PUBLISHED_QUICKSTART_PACKAGE_TAG",
+  ]) {
+    if (!publishedQuickstartWorkflow.includes(needle)) {
+      failures.push(
+        `.github/workflows/published-quickstart-smoke.yml: missing ${needle}`,
+      );
+    }
+  }
+
   const changesets = JSON.parse(
     await readFile(".changeset/config.json", "utf8"),
   );

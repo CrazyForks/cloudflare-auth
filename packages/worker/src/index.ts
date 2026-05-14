@@ -1626,7 +1626,9 @@ export function createAuthHandler(configInput: AuthHelperConfig) {
           return await handleUser(request, runtime);
         if (path === "/magic-link/request" && request.method === "POST")
           return await handleMagicLinkRequest(request, runtime);
-        if (path === "/magic-link/verify" && request.method === "GET")
+        if (path === "/magic-link/verify" && request.method === "GET") {
+          if (!runtime.config.login.magicLink)
+            return errorResponse("Not found", 404, "not_found");
           return tokenPage(
             request,
             runtime,
@@ -1634,11 +1636,14 @@ export function createAuthHandler(configInput: AuthHelperConfig) {
             "/magic-link/consume",
             "Continue",
           );
+        }
         if (path === "/magic-link/consume" && request.method === "POST")
           return await handleMagicLinkConsume(request, runtime);
         if (path === "/email/verify/request" && request.method === "POST")
           return await handleEmailVerifyRequest(request, runtime);
-        if (path === "/email/verify" && request.method === "GET")
+        if (path === "/email/verify" && request.method === "GET") {
+          if (!runtime.config.emailVerification.enabled)
+            return errorResponse("Not found", 404, "not_found");
           return tokenPage(
             request,
             runtime,
@@ -1646,12 +1651,16 @@ export function createAuthHandler(configInput: AuthHelperConfig) {
             "/email/verify/consume",
             "Verify email",
           );
+        }
         if (path === "/email/verify/consume" && request.method === "POST")
           return await handleEmailVerifyConsume(request, runtime);
         if (path === "/password/reset/request" && request.method === "POST")
           return await handlePasswordResetRequest(request, runtime);
-        if (path === "/password/reset" && request.method === "GET")
+        if (path === "/password/reset" && request.method === "GET") {
+          if (!runtime.config.passwordReset.enabled)
+            return errorResponse("Not found", 404, "not_found");
           return resetPage(request, runtime);
+        }
         if (path === "/password/reset/confirm" && request.method === "POST")
           return await handlePasswordResetConfirm(request, runtime);
         return errorResponse("Not found", 404, "not_found");
@@ -2073,6 +2082,8 @@ async function handleMagicLinkConsume(
   request: Request,
   runtime: RuntimeContext,
 ): Promise<Response> {
+  if (!runtime.config.login.magicLink)
+    return errorResponse("Not found", 404, "not_found");
   const mode = contentMode(request);
   const rawBody = await parseBody(request, runtime, "json-or-form");
   await enforceTurnstile(runtime, "magic_link_consume", rawBody, request);

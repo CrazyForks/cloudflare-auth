@@ -219,6 +219,58 @@ describe("auth HTTP runtime", () => {
     ).toThrow(AuthCryptoError);
   });
 
+  it("returns not_found for disabled token feature pages and consumes", async () => {
+    const magic = await setup({
+      login: {
+        emailPassword: true,
+        usernamePassword: true,
+        magicLink: false,
+        requireVerifiedEmail: false,
+      },
+    });
+    const magicToken = `cfauth.magic.k_test.${"A".repeat(43)}`;
+    const magicPage = await magic.authFetch(
+      `/auth/magic-link/verify?token=${magicToken}`,
+    );
+    expect(magicPage.status).toBe(404);
+    const magicConsume = await magic.authFetch("/auth/magic-link/consume", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: magicToken }),
+    });
+    expect(magicConsume.status).toBe(404);
+
+    const verify = await setup({
+      emailVerification: {
+        enabled: false,
+        expiresInHours: 24,
+        createSessionAfterVerification: false,
+        activeTokenPolicy: "invalidate-previous",
+      },
+    });
+    const verifyToken = `cfauth.verify.k_test.${"A".repeat(43)}`;
+    const verifyPage = await verify.authFetch(
+      `/auth/email/verify?token=${verifyToken}`,
+    );
+    expect(verifyPage.status).toBe(404);
+
+    const reset = await setup({
+      passwordReset: {
+        enabled: false,
+        expiresInMinutes: 30,
+        revokeExistingSessions: true,
+        createSessionAfterReset: false,
+        markEmailVerifiedOnReset: true,
+        activeTokenPolicy: "invalidate-previous",
+      },
+    });
+    const resetToken = `cfauth.reset.k_test.${"A".repeat(43)}`;
+    const resetPageResponse = await reset.authFetch(
+      `/auth/password/reset?token=${resetToken}`,
+    );
+    expect(resetPageResponse.status).toBe(404);
+  });
+
   it("signs up, reads current user, logs out, and logs in", async () => {
     const { authFetch } = await setup();
     const signup = await authFetch("/auth/signup", {

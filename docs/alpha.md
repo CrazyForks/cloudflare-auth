@@ -9,6 +9,8 @@ Run from an empty working directory:
 ```bash
 npm create cloudflare-auth@alpha my-app
 cd my-app
+pnpm install
+npx cf-auth@alpha migrate --local
 npm run dev
 ```
 

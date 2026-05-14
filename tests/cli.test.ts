@@ -94,6 +94,53 @@ describe("CLI MVP", () => {
     expect(existsSync(join(cwd, "auth.config.ts"))).toBe(false);
   });
 
+  it("patches existing app package metadata without changing source", async () => {
+    const cwd = await tempDir();
+    const app = join(cwd, "existing-app");
+    await mkdir(join(app, "src"), { recursive: true });
+    const existingSource =
+      "export default { fetch: () => new Response('ok') };\n";
+    await writeFile(
+      join(app, "package.json"),
+      JSON.stringify(
+        {
+          name: "existing-app",
+          type: "module",
+          dependencies: { hono: "4.12.18" },
+        },
+        null,
+        2,
+      ) + "\n",
+    );
+    await writeFile(join(app, "src", "index.ts"), existingSource);
+    const output: string[] = [];
+
+    const code = await runCli(["init", "existing-app"], {
+      cwd,
+      stdout: (line) => output.push(line),
+    });
+
+    expect(code).toBe(0);
+    const packageJson = JSON.parse(
+      await readFile(join(app, "package.json"), "utf8"),
+    ) as {
+      dependencies: Record<string, string>;
+      devDependencies: Record<string, string>;
+    };
+    expect(packageJson.dependencies.hono).toBe("4.12.18");
+    expect(packageJson.dependencies["@cf-auth/hono"]).toBe("0.0.0");
+    expect(packageJson.dependencies["@cf-auth/worker"]).toBe("0.0.0");
+    expect(packageJson.dependencies["@cf-auth/email-cloudflare"]).toBe("0.0.0");
+    expect(packageJson.devDependencies.wrangler).toBe("4.90.1");
+    await expect(readFile(join(app, "src", "index.ts"), "utf8")).resolves.toBe(
+      existingSource,
+    );
+    expect(output.join("\n")).toContain(
+      "Existing src/index.ts was left unchanged",
+    );
+    expect(output.join("\n")).toContain("app.route(authConfig.basePath");
+  });
+
   it("constructs local and remote Wrangler migration commands", async () => {
     const cwd = await tempDir();
     await writeWrangler(cwd);

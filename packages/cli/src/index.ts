@@ -180,14 +180,12 @@ async function commandInit(
   await mkdir(join(target, "src"), { recursive: true });
   await mkdir(join(target, "migrations"), { recursive: true });
   const localSecret = `k_dev.${base64urlEncode(randomBytes(32))}`;
-  await writeIfMissing(
+  const packageResult = await writeOrPatchPackageJson(
     join(target, "package.json"),
-    JSON.stringify(
-      templatePackageJson(packageNameFromTarget(target)),
-      null,
-      2,
-    ) + "\n",
+    packageNameFromTarget(target),
   );
+  const sourceIndexPath = join(target, "src", "index.ts");
+  const sourceIndexExists = existsSync(sourceIndexPath);
   await writeIfMissing(
     join(target, "pnpm-workspace.yaml"),
     pnpmWorkspaceTemplate(),
@@ -197,7 +195,7 @@ async function commandInit(
     join(target, "src", "auth.config.ts"),
     authConfigTemplate(),
   );
-  await writeIfMissing(join(target, "src", "index.ts"), honoIndexTemplate());
+  await writeIfMissing(sourceIndexPath, honoIndexTemplate());
   await writeIfMissing(join(target, "wrangler.jsonc"), wranglerTemplate());
   await writeIfMissing(join(target, ".gitignore"), gitignoreTemplate());
   await writeIfMissing(join(target, ".dev.vars"), devVarsTemplate(localSecret));
@@ -211,6 +209,14 @@ async function commandInit(
     indexesMigrationSql(),
   );
   out(`Initialized Cloudflare Auth in ${target}`);
+  if (packageResult === "updated")
+    out("Updated package.json with Cloudflare Auth dependencies.");
+  if (sourceIndexExists) {
+    out(
+      "Existing src/index.ts was left unchanged. Add this Hono mount once if it is not already present:",
+    );
+    out("app.route(authConfig.basePath, createAuthRoutes(authConfig));");
+  }
   out("Next: pnpm install && npx cf-auth migrate --local && npm run dev");
 }
 
@@ -2413,6 +2419,46 @@ function templatePackageJson(name: string) {
       onlyBuiltDependencies: ["esbuild", "sharp", "workerd"],
     },
   };
+}
+
+type PackageJsonPatchResult = "created" | "updated" | "unchanged";
+
+async function writeOrPatchPackageJson(
+  path: string,
+  name: string,
+): Promise<PackageJsonPatchResult> {
+  if (!existsSync(path)) {
+    await writeFile(
+      path,
+      JSON.stringify(templatePackageJson(name), null, 2) + "\n",
+    );
+    return "created";
+  }
+  const pkg = JSON.parse(await readFile(path, "utf8")) as {
+    dependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+  } & Record<string, unknown>;
+  let changed = false;
+  const dependencies = { ...(pkg.dependencies ?? {}) };
+  const devDependencies = { ...(pkg.devDependencies ?? {}) };
+  for (const [dependency, version] of Object.entries(
+    templatePackageJson(name).dependencies,
+  )) {
+    if (!dependencies[dependency]) {
+      dependencies[dependency] = version;
+      changed = true;
+    }
+  }
+  if (!devDependencies.wrangler) {
+    devDependencies.wrangler =
+      templatePackageJson(name).devDependencies.wrangler;
+    changed = true;
+  }
+  if (!changed) return "unchanged";
+  pkg.dependencies = dependencies;
+  pkg.devDependencies = devDependencies;
+  await writeFile(path, JSON.stringify(pkg, null, 2) + "\n");
+  return "updated";
 }
 
 function pnpmWorkspaceTemplate(): string {

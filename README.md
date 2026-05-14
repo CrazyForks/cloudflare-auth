@@ -7,6 +7,8 @@ Cloudflare Auth is an independent open-source authentication kit for Cloudflare 
 ```bash
 npm create cloudflare-auth@latest my-app
 cd my-app
+pnpm install
+npx cf-auth@latest migrate --local
 npm run dev
 ```
 
@@ -14,6 +16,10 @@ If the unscoped package name is unavailable before publication, use:
 
 ```bash
 npx --package @cf-auth/cli@latest cf-auth init my-app --template hono-basic
+cd my-app
+pnpm install
+npx --package @cf-auth/cli@latest cf-auth migrate --local
+npm run dev
 ```
 
 The local template runs auth at `/auth`, stores data in D1, prints development email links to the terminal, and uses an unprefixed local cookie on `http://localhost`.
@@ -22,6 +28,7 @@ The local template runs auth at `/auth`, stores data in D1, prints development e
 
 ```bash
 npx cf-auth@latest init
+pnpm install
 npx cf-auth@latest migrate --local
 npm run dev
 ```
@@ -30,6 +37,9 @@ The fallback command before unscoped package publication is:
 
 ```bash
 npx --package @cf-auth/cli@latest cf-auth init
+pnpm install
+npx --package @cf-auth/cli@latest cf-auth migrate --local
+npm run dev
 ```
 
 Mount the generated routes once:

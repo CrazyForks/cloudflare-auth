@@ -4,12 +4,24 @@ Run:
 
 ```bash
 npx cf-auth@latest init
+pnpm install
 npx cf-auth@latest migrate --local
+```
+
+Fallback before `cf-auth` publication:
+
+```bash
+npx --package @cf-auth/cli@latest cf-auth init
+pnpm install
+npx --package @cf-auth/cli@latest cf-auth migrate --local
 ```
 
 Then wrap your fetch handler:
 
 ```ts
+import { createAuthHandler } from "@cf-auth/worker";
+import authConfig from "./auth.config.js";
+
 const authHandler = createAuthHandler(authConfig);
 
 export default {
@@ -20,3 +32,7 @@ export default {
   },
 };
 ```
+
+When `src/index.ts` already exists, `init` leaves it unchanged and prints the
+mount snippet. It does update `package.json` with missing Cloudflare Auth
+dependencies.

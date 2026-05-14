@@ -1,6 +1,6 @@
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { delimiter, dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
 import { describe, expect, it } from "vitest";
@@ -41,6 +41,29 @@ describe("release gates", () => {
       "scripts/verify-deploy-button-evidence.mjs",
     );
     expect(result.stderr).toContain("GitHub or GitLab repository URL");
+  });
+
+  it("runs package-name registry checks for release packages", async () => {
+    const root = await releaseGateFixture({ deployButtonEvidence: true });
+    await writeFakeNpm(
+      root,
+      `const args = process.argv.slice(2);
+const spec = args[1] ?? "";
+if (spec === "@cf-auth/cli@0.1.0-beta.0") {
+  console.log(JSON.stringify("0.1.0-beta.0"));
+  process.exit(0);
+}
+console.error("npm error code E404");
+process.exit(1);
+`,
+    );
+    const result = runReleaseGates(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("scripts/check-package-names.mjs");
+    expect(result.stderr).toContain(
+      "@cf-auth/cli@0.1.0-beta.0: target version already exists on npm",
+    );
   });
 
   it("requires stable release artifacts when packages enter 1.0", async () => {
@@ -100,6 +123,7 @@ interface ReleaseGateFixtureOptions {
 
 async function releaseGateFixture(options: ReleaseGateFixtureOptions) {
   const root = await mkdtemp(join(tmpdir(), "cf-auth-release-gates-"));
+  await writeFakeNpm(root);
 
   const requiredFiles = [
     ".github/dependabot.yml",
@@ -321,6 +345,18 @@ async function writeStableEvidence(root: string) {
   await writeFixtureFile(root, "tests/upgrade.test.ts", "upgrade tests\n");
 }
 
+async function writeFakeNpm(
+  root: string,
+  body = `console.error("npm error code E404");
+process.exit(1);
+`,
+) {
+  const npmPath = join(root, "bin", "npm");
+  await mkdir(dirname(npmPath), { recursive: true });
+  await writeFile(npmPath, `#!/usr/bin/env node\n${body}`);
+  await chmod(npmPath, 0o755);
+}
+
 function validPackageEvidence(version: string) {
   return {
     schemaVersion: 1,
@@ -491,7 +527,10 @@ function runReleaseGates(cwd: string) {
     {
       cwd,
       encoding: "utf8",
-      env: process.env,
+      env: {
+        ...process.env,
+        PATH: `${join(cwd, "bin")}${delimiter}${process.env.PATH ?? ""}`,
+      },
     },
   );
 }

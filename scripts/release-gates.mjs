@@ -182,6 +182,7 @@ if (publishedReleasePackages.length > 0) {
   requireVerifier("scripts/verify-package-ownership.mjs", {
     CF_AUTH_REQUIRE_PACKAGE_OWNERSHIP: "1",
   });
+  requireVerifier("scripts/check-package-names.mjs");
   await requirePackageChangelogs(publishedReleasePackages);
 }
 if (betaOrStablePackages.length > 0) {

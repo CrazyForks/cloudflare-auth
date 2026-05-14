@@ -17,6 +17,10 @@ import authConfig from "./auth.config.js";
 app.route(authConfig.basePath, createAuthRoutes(authConfig));
 ```
 
+Mount the auth routes before broad app-level CORS, cache, or static-file
+middleware. Auth routes own their own CORS and origin checks, and they should
+not inherit wildcard credentialed CORS behavior from the host app.
+
 When `src/index.ts` already exists, `init` leaves it unchanged and prints the
 mount snippet. It does update `package.json` with missing Cloudflare Auth
 dependencies.

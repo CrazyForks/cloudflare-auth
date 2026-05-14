@@ -25,6 +25,10 @@ export default {
 };
 ```
 
+Call the auth handler before broad app-level CORS, cache, or static-file
+behavior. Auth responses set their own CORS and origin policy and must not be
+wrapped in wildcard credentialed CORS.
+
 When `src/index.ts` already exists, `init` leaves it unchanged and prints the
 mount snippet. It does update `package.json` with missing Cloudflare Auth
 dependencies.

@@ -159,34 +159,55 @@ async function rootExportNames() {
   const names = new Set();
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
-    let source;
+    const path = join("packages", entry.name, "src", "index.ts");
+    let sourceText;
     try {
-      source = await readFile(
-        join("packages", entry.name, "src", "index.ts"),
-        "utf8",
-      );
+      sourceText = await readFile(path, "utf8");
     } catch {
       continue;
     }
-    for (const line of source.split("\n")) {
-      const trimmed = line.trim();
-      const declaration = trimmed.match(
-        /^export\s+(?:async\s+)?(?:function|class|const|interface|type)\s+([A-Za-z_$][\w$]*)/u,
-      );
-      if (declaration?.[1]) {
-        names.add(declaration[1]);
+    const sourceFile = ts.createSourceFile(
+      path,
+      sourceText,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    for (const statement of sourceFile.statements) {
+      if (ts.isExportDeclaration(statement)) {
+        collectExportDeclarationNames(statement, names);
         continue;
       }
-      const named = trimmed.match(/^export\s*\{([^}]+)\}/u);
-      if (!named?.[1]) continue;
-      for (const item of named[1].split(",")) {
-        const [name, alias] = item.trim().split(/\s+as\s+/u);
-        const exported = alias ?? name;
-        if (/^[A-Za-z_$][\w$]*$/u.test(exported)) names.add(exported);
+      if (!hasExportModifier(statement)) continue;
+      const namedDeclaration = statement;
+      if (
+        (ts.isFunctionDeclaration(namedDeclaration) ||
+          ts.isClassDeclaration(namedDeclaration) ||
+          ts.isInterfaceDeclaration(namedDeclaration) ||
+          ts.isTypeAliasDeclaration(namedDeclaration) ||
+          ts.isEnumDeclaration(namedDeclaration)) &&
+        namedDeclaration.name
+      ) {
+        names.add(namedDeclaration.name.text);
+        continue;
+      }
+      if (ts.isVariableStatement(statement)) {
+        for (const declaration of statement.declarationList.declarations) {
+          if (ts.isIdentifier(declaration.name))
+            names.add(declaration.name.text);
+        }
       }
     }
   }
   return [...names].sort();
+}
+
+function collectExportDeclarationNames(statement, names) {
+  const clause = statement.exportClause;
+  if (!clause || !ts.isNamedExports(clause)) return;
+  for (const element of clause.elements) {
+    names.add(element.name.text);
+  }
 }
 
 async function workspacePackageNames() {
@@ -531,6 +552,12 @@ function expressionName(expression) {
 function propertyNameText(name) {
   if (ts.isIdentifier(name) || ts.isStringLiteral(name)) return name.text;
   return null;
+}
+
+function hasExportModifier(node) {
+  return node.modifiers?.some(
+    (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword,
+  );
 }
 
 function stringLiteralValue(expression) {

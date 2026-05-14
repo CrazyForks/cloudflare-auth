@@ -119,6 +119,28 @@ describe("release gates", () => {
     );
   });
 
+  it("derives public API docs coverage from aliased root exports", async () => {
+    const root = await releaseGateFixture({ deployButtonEvidence: true });
+    await replaceFixtureText(
+      root,
+      "packages/cli/src/index.ts",
+      "function commandGenerate",
+      [
+        "const internalName = 1;",
+        "export { internalName as aliasedRootExport };",
+        "function commandGenerate",
+      ].join("\n"),
+    );
+    const result = runReleaseGates(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("scripts/verify-docs-coverage.mjs");
+    expect(result.stderr).toContain("docs/api.md: missing aliasedRootExport");
+    expect(result.stderr).toContain(
+      "docs/api-report.md: missing aliasedRootExport",
+    );
+  });
+
   it("derives package entrypoint docs coverage from workspace packages", async () => {
     const root = await releaseGateFixture({ deployButtonEvidence: true });
     await writeFixtureFile(

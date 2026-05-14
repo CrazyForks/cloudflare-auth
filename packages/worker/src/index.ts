@@ -1250,12 +1250,19 @@ export function defineAuthConfig(config: AuthConfigInput): AuthConfig {
   } satisfies AuthConfig["passwordHashing"];
   if (
     !Number.isInteger(passwordHashing.maxConcurrentHashesPerIsolate) ||
-    passwordHashing.maxConcurrentHashesPerIsolate < 1 ||
+    passwordHashing.maxConcurrentHashesPerIsolate < 1
+  ) {
+    throw new AuthCryptoError(
+      "invalid password hash concurrency",
+      "invalid_password_hash_concurrency",
+    );
+  }
+  if (
     !Number.isInteger(passwordHashing.queueTimeoutMs) ||
     passwordHashing.queueTimeoutMs < 1
   ) {
     throw new AuthCryptoError(
-      "invalid password hash queue settings",
+      "invalid password hash queue timeout",
       "invalid_password_hash_concurrency",
     );
   }

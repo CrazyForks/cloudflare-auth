@@ -50,6 +50,10 @@ npx --package @cf-auth/cli@latest cf-auth deploy --env production
 compatibility date and `nodejs_compat` flag. `deploy` always runs `doctor`
 first.
 
+Add `--verbose` to log the wrapped Wrangler commands to stderr. Verbose output
+redacts SQL passed through `wrangler d1 execute` so `doctor --report` remains
+machine-readable on stdout.
+
 ## Generate Snippets
 
 ```bash

@@ -1326,6 +1326,33 @@ export default app;
     );
   });
 
+  it("logs wrapped Wrangler commands in verbose mode without contaminating reports", async () => {
+    const cwd = await tempDir();
+    await writeWrangler(cwd);
+    const output: string[] = [];
+    const errors: string[] = [];
+
+    const code = await runCli(
+      ["doctor", "--report", "--env", "production", "--verbose"],
+      {
+        cwd,
+        stdout: (line) => output.push(line),
+        stderr: (line) => errors.push(line),
+        runCommand: remoteSecretRunner(),
+      },
+    );
+
+    expect(code).toBe(0);
+    expect(() => JSON.parse(output.join("\n"))).not.toThrow();
+    expect(output.join("\n")).not.toContain("$ wrangler");
+    expect(errors.join("\n")).toContain("$ wrangler --version");
+    expect(errors.join("\n")).toContain("$ wrangler whoami --json");
+    expect(errors.join("\n")).toContain(
+      "wrangler d1 execute app-auth --remote --env production --json --command <redacted SQL>",
+    );
+    expect(errors.join("\n")).not.toContain(migrationStateSql());
+  });
+
   it("writes doctor report JSON to an output file", async () => {
     const cwd = await tempDir();
     await writeWrangler(cwd);
@@ -1544,6 +1571,7 @@ export default app;
     expect(dryRun.join("\n")).not.toContain("DELETE FROM");
 
     const calls: Array<{ args: string[]; sql: string }> = [];
+    const verboseErrors: string[] = [];
     const cleanCode = await runCli(["clean", "--local"], {
       cwd,
       runCommand: (_command, args) => {
@@ -1568,6 +1596,17 @@ export default app;
     expect(calls[0]?.sql).toContain("DELETE FROM verification_tokens");
     expect(calls[0]?.sql).toContain("DELETE FROM rate_limits");
     expect(calls[0]?.sql).toContain("DELETE FROM auth_events");
+
+    const verboseCode = await runCli(["clean", "--local", "--verbose"], {
+      cwd,
+      stderr: (line) => verboseErrors.push(line),
+      runCommand: () => ({ status: 0, stdout: "cleaned", stderr: "" }),
+    });
+    expect(verboseCode).toBe(0);
+    expect(verboseErrors.join("\n")).toContain(
+      "wrangler d1 execute app-auth-dev --local --yes --command <redacted SQL>",
+    );
+    expect(verboseErrors.join("\n")).not.toContain("DELETE FROM");
   });
 
   it("rejects remote clean without an explicit named environment", async () => {

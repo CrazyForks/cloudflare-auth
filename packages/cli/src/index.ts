@@ -110,6 +110,9 @@ export async function runCli(
   const cwd = io.cwd ?? process.cwd();
   const passwordBenchmark =
     io.benchmarkPasswordProfile ?? benchmarkPasswordProfile;
+  const runner = parsed.flags.verbose
+    ? verboseRunner(io.runCommand ?? runCommand, err)
+    : (io.runCommand ?? runCommand);
   try {
     switch (parsed.command) {
       case "help":
@@ -123,13 +126,13 @@ export async function runCli(
         await commandInit(parsed, cwd, out);
         return 0;
       case "migrate":
-        out(await commandMigrate(parsed, cwd, io.runCommand ?? runCommand));
+        out(await commandMigrate(parsed, cwd, runner));
         return 0;
       case "doctor": {
         const result = await commandDoctor(
           parsed,
           cwd,
-          io.runCommand ?? runCommand,
+          runner,
           passwordBenchmark,
           {},
         );
@@ -148,29 +151,20 @@ export async function runCli(
         return result.ok ? 0 : 1;
       }
       case "deploy":
-        out(
-          await commandDeploy(
-            parsed,
-            cwd,
-            io.runCommand ?? runCommand,
-            passwordBenchmark,
-          ),
-        );
+        out(await commandDeploy(parsed, cwd, runner, passwordBenchmark));
         return 0;
       case "generate":
         out(commandGenerate(parsed));
         return 0;
       case "rotate-secret":
-        out(
-          await commandRotateSecret(parsed, cwd, io.runCommand ?? runCommand),
-        );
+        out(await commandRotateSecret(parsed, cwd, runner));
         return 0;
       case "clean":
-        out(await commandClean(parsed, cwd, io.runCommand ?? runCommand));
+        out(await commandClean(parsed, cwd, runner));
         return 0;
       case "users":
       case "sessions":
-        out(await commandRecovery(parsed, cwd, io.runCommand ?? runCommand));
+        out(await commandRecovery(parsed, cwd, runner));
         return 0;
       default:
         err(`Unknown command: ${parsed.command}`);
@@ -1058,6 +1052,16 @@ function runCommand(
     status: result.status,
     stdout: result.stdout ?? "",
     stderr: result.stderr ?? "",
+  };
+}
+
+function verboseRunner(
+  runner: CommandRunner,
+  log: (line: string) => void,
+): CommandRunner {
+  return (command, args, options) => {
+    log(`$ ${displayCommandForVerbose(command, args)}`);
+    return runner(command, args, options);
   };
 }
 
@@ -2278,6 +2282,18 @@ function stripEnvQuotes(value: string): string {
 
 function displayCommand(command: string, args: string[]): string {
   return [command, ...args].join(" ");
+}
+
+function displayCommandForVerbose(command: string, args: string[]): string {
+  if (command !== "wrangler" || args[0] !== "d1" || args[1] !== "execute") {
+    return displayCommand(command, args);
+  }
+  const redactedArgs = [...args];
+  const commandIndex = redactedArgs.indexOf("--command");
+  if (commandIndex !== -1 && redactedArgs[commandIndex + 1]) {
+    redactedArgs[commandIndex + 1] = "<redacted SQL>";
+  }
+  return displayCommand(command, redactedArgs);
 }
 
 function commandGenerate(parsed: ParsedArgs): string {

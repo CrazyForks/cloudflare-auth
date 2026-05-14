@@ -111,6 +111,7 @@ for (const dir of packageDirs) {
 }
 
 await verifyPackageNamingDocs();
+await verifyDocsManifest();
 await verifyRootScripts();
 await verifyCiControls();
 await verifyReleaseControls();
@@ -190,6 +191,51 @@ async function verifyPackageNamingDocs() {
       failures.push(
         `${file}: npm create cloudflare-auth commands are blocked until package ownership is confirmed`,
       );
+    }
+  }
+}
+
+async function verifyDocsManifest() {
+  for (const file of [
+    "docs/decisions/package-naming.md",
+    "docs/non-goals.md",
+    "docs/quickstart.md",
+    "docs/existing-hono-app.md",
+    "docs/existing-worker-app.md",
+    "docs/deployment.md",
+    "docs/cloudflare-email.md",
+    "docs/custom-email-adapter.md",
+    "docs/local-development.md",
+    "docs/configuration.md",
+    "docs/api.md",
+    "docs/security-model.md",
+    "docs/sessions-and-cookies.md",
+    "docs/rate-limiting.md",
+    "docs/turnstile.md",
+    "docs/migrations.md",
+    "docs/troubleshooting.md",
+    "docs/roadmap.md",
+    "docs/metrics.md",
+    "docs/cli.md",
+    "docs/alpha.md",
+    "docs/public-beta.md",
+    "docs/deploy-to-cloudflare.md",
+    "docs/known-limitations.md",
+    "docs/release-checklist.md",
+    "docs/upgrade-guide.md",
+    "docs/api-report.md",
+    "docs/config-schema.md",
+    "docs/decisions/security-review.md",
+    "docs/alpha-evidence.example.json",
+    "docs/beta-evidence.example.json",
+    "docs/deploy-button-evidence.example.json",
+    "docs/package-ownership.example.json",
+    "docs/security-release-tracker.example.json",
+  ]) {
+    try {
+      await access(file);
+    } catch {
+      failures.push(`${file}: required documentation file is missing`);
     }
   }
 }

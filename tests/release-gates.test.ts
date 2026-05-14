@@ -119,6 +119,26 @@ describe("release gates", () => {
     );
   });
 
+  it("derives package entrypoint docs coverage from workspace packages", async () => {
+    const root = await releaseGateFixture({ deployButtonEvidence: true });
+    await writeFixtureFile(
+      root,
+      "packages/custom-adapter/package.json",
+      JSON.stringify({
+        name: "@cf-auth/custom-adapter",
+        version: "0.1.0-beta.0",
+        private: true,
+      }),
+    );
+    const result = runReleaseGates(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("scripts/verify-docs-coverage.mjs");
+    expect(result.stderr).toContain(
+      "docs/api.md: missing @cf-auth/custom-adapter",
+    );
+  });
+
   it("derives CLI docs coverage from the runCli dispatcher", async () => {
     const root = await releaseGateFixture({ deployButtonEvidence: true });
     await replaceFixtureText(

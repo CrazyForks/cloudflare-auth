@@ -120,17 +120,8 @@ for (const text of ["Referrer-Policy: no-referrer", "history entry"]) {
   requireText("docs/api.md", docs.api, text);
 }
 
-for (const entrypoint of [
-  "cf-auth",
-  "@cf-auth/cli",
-  "create-cloudflare-auth",
-  "@cf-auth/core",
-  "@cf-auth/worker",
-  "@cf-auth/hono",
-  "@cf-auth/client",
-  "@cf-auth/email-cloudflare",
-  "@cf-auth/testing",
-]) {
+const packageEntrypoints = await workspacePackageNames();
+for (const entrypoint of packageEntrypoints) {
   requireText("docs/api.md", docs.api, entrypoint);
 }
 
@@ -255,6 +246,28 @@ async function rootExportNames() {
         const exported = alias ?? name;
         if (/^[A-Za-z_$][\w$]*$/u.test(exported)) names.add(exported);
       }
+    }
+  }
+  return [...names].sort();
+}
+
+async function workspacePackageNames() {
+  const entries = await readdir("packages", { withFileTypes: true });
+  const names = new Set();
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const path = join("packages", entry.name, "package.json");
+    let pkg;
+    try {
+      pkg = JSON.parse(await readFile(path, "utf8"));
+    } catch {
+      failures.push(`${path}: could not be read for package docs coverage`);
+      continue;
+    }
+    if (typeof pkg.name === "string") {
+      names.add(pkg.name);
+    } else {
+      failures.push(`${path}: missing package name for docs coverage`);
     }
   }
   return [...names].sort();

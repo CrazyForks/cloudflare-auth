@@ -1215,6 +1215,44 @@ export default defineAuthConfig({
     expect(workspaceOutput.join("\n")).toContain(
       "Cloudflare Auth dependencies use workspace protocol",
     );
+
+    await writeFile(join(cwd, "package.json"), "null\n");
+    const scalarOutput: string[] = [];
+    const scalarCode = await runCli(["doctor", "--env", "production"], {
+      cwd,
+      stdout: (line) => scalarOutput.push(line),
+      runCommand: remoteSecretRunner(),
+    });
+    expect(scalarCode).toBe(0);
+    expect(scalarOutput.join("\n")).toContain(
+      "package.json is not a JSON object",
+    );
+
+    await writeFile(
+      join(cwd, "package.json"),
+      JSON.stringify(
+        {
+          dependencies: {
+            "@cf-auth/worker": true,
+          },
+        },
+        null,
+        2,
+      ),
+    );
+    const invalidDependencyOutput: string[] = [];
+    const invalidDependencyCode = await runCli(
+      ["doctor", "--env", "production"],
+      {
+        cwd,
+        stdout: (line) => invalidDependencyOutput.push(line),
+        runCommand: remoteSecretRunner(),
+      },
+    );
+    expect(invalidDependencyCode).toBe(0);
+    expect(invalidDependencyOutput.join("\n")).toContain(
+      "package.json dependencies.@cf-auth/worker must be a string version",
+    );
   });
 
   it("doctor accepts byEnvironment terminal email for development only", async () => {

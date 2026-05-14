@@ -1343,26 +1343,20 @@ async function checkPackageVersions(
   cwd: string,
   remoteTarget: boolean,
 ): Promise<DoctorCheck | null> {
-  let pkg: {
-    dependencies?: Record<string, string>;
-    devDependencies?: Record<string, string>;
-    peerDependencies?: Record<string, string>;
-  };
+  let pkg: unknown;
   try {
-    pkg = JSON.parse(await readFile(join(cwd, "package.json"), "utf8")) as {
-      dependencies?: Record<string, string>;
-      devDependencies?: Record<string, string>;
-      peerDependencies?: Record<string, string>;
-    };
+    pkg = JSON.parse(await readFile(join(cwd, "package.json"), "utf8"));
   } catch {
     return null;
   }
-  const dependencyVersions = {
-    ...(pkg.dependencies ?? {}),
-    ...(pkg.devDependencies ?? {}),
-    ...(pkg.peerDependencies ?? {}),
-  };
-  const cfAuthEntries = Object.entries(dependencyVersions).filter(([name]) =>
+  if (!isRecord(pkg)) {
+    return malformedPackageVersionCheck(
+      "package.json is not a JSON object; Cloudflare Auth package versions could not be verified",
+    );
+  }
+  const dependencyEntries = collectPackageDependencyEntries(pkg);
+  if (!dependencyEntries.ok) return dependencyEntries.check;
+  const cfAuthEntries = dependencyEntries.entries.filter(([name]) =>
     isCfAuthPackageName(name),
   );
   if (cfAuthEntries.length === 0) return null;
@@ -1395,6 +1389,52 @@ async function checkPackageVersions(
     id: "package_versions",
     status: "pass",
     message: "Cloudflare Auth package versions are consistent",
+  };
+}
+
+function collectPackageDependencyEntries(
+  pkg: Record<string, unknown>,
+):
+  | { ok: true; entries: Array<[string, string]> }
+  | { ok: false; check: DoctorCheck } {
+  const entries: Array<[string, string]> = [];
+  for (const section of [
+    "dependencies",
+    "devDependencies",
+    "peerDependencies",
+  ]) {
+    const dependencies = pkg[section];
+    if (dependencies === undefined) continue;
+    if (!isRecord(dependencies)) {
+      return {
+        ok: false,
+        check: malformedPackageVersionCheck(
+          `package.json ${section} must be an object; Cloudflare Auth package versions could not be verified`,
+        ),
+      };
+    }
+    for (const [name, version] of Object.entries(dependencies)) {
+      if (typeof version === "string") {
+        entries.push([name, version]);
+      } else if (isCfAuthPackageName(name)) {
+        return {
+          ok: false,
+          check: malformedPackageVersionCheck(
+            `package.json ${section}.${name} must be a string version; Cloudflare Auth package versions could not be verified`,
+          ),
+        };
+      }
+    }
+  }
+  return { ok: true, entries };
+}
+
+function malformedPackageVersionCheck(message: string): DoctorCheck {
+  return {
+    id: "package_versions",
+    status: "warn",
+    message,
+    fix: "fix package.json so cf-auth doctor can verify package versions before deployment",
   };
 }
 

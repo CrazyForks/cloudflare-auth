@@ -3,8 +3,7 @@ import {
   createAuthHandler,
   getAuthSessionFromRequest,
   getUser as getWorkerUser,
-  type AuthConfig,
-  type MinimalAuthConfig,
+  type AuthHelperConfig,
   type PublicAuthUser,
 } from "@cf-auth/worker";
 import { Hono, type Context, type MiddlewareHandler } from "hono";
@@ -12,14 +11,9 @@ import { Hono, type Context, type MiddlewareHandler } from "hono";
 export const honoPackageName = "@cf-auth/hono";
 
 const authUserKey = "cfAuthUser";
-let defaultAuthConfig:
-  | AuthConfig
-  | (MinimalAuthConfig & Partial<AuthConfig>)
-  | null = null;
+let defaultAuthConfig: AuthHelperConfig | null = null;
 
-export function createAuthRoutes(
-  config: AuthConfig | (MinimalAuthConfig & Partial<AuthConfig>),
-) {
+export function createAuthRoutes(config: AuthHelperConfig) {
   defaultAuthConfig = config;
   const app = new Hono();
   const handler = createAuthHandler(config);
@@ -35,9 +29,7 @@ export function getAuthUser(c: Context): PublicAuthUser | null {
   return (c.get(authUserKey) as PublicAuthUser | null | undefined) ?? null;
 }
 
-export function optionalUser(
-  config?: AuthConfig | (MinimalAuthConfig & Partial<AuthConfig>),
-): MiddlewareHandler {
+export function optionalUser(config?: AuthHelperConfig): MiddlewareHandler {
   return async (c, next) => {
     const resolvedConfig = resolveHelperConfig(config);
     const user = await getWorkerUser(
@@ -51,9 +43,7 @@ export function optionalUser(
   };
 }
 
-export function requireUser(
-  config?: AuthConfig | (MinimalAuthConfig & Partial<AuthConfig>),
-): MiddlewareHandler {
+export function requireUser(config?: AuthHelperConfig): MiddlewareHandler {
   return async (c, next) => {
     const resolvedConfig = resolveHelperConfig(config);
     const user = await getWorkerUser(
@@ -73,7 +63,7 @@ export function requireUser(
 }
 
 export function requireVerifiedUser(
-  config?: AuthConfig | (MinimalAuthConfig & Partial<AuthConfig>),
+  config?: AuthHelperConfig,
 ): MiddlewareHandler {
   return async (c, next) => {
     const resolvedConfig = resolveHelperConfig(config);
@@ -120,9 +110,7 @@ function publicAuthUser(user: UserRow): PublicAuthUser {
   };
 }
 
-function resolveHelperConfig(
-  config?: AuthConfig | (MinimalAuthConfig & Partial<AuthConfig>),
-): AuthConfig | (MinimalAuthConfig & Partial<AuthConfig>) {
+function resolveHelperConfig(config?: AuthHelperConfig): AuthHelperConfig {
   const resolved = config ?? defaultAuthConfig;
   if (!resolved) {
     throw new Error(

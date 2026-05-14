@@ -57,19 +57,28 @@ export { redactLogValue } from "@cf-auth/core";
 export interface MinimalAuthConfig {
   appName: string;
   basePath: string;
-  email?: unknown;
+  email?: AuthEmailAdapter;
 }
 
 type SignupConfigInput = Partial<Omit<AuthConfig["signup"], "username">> & {
   username?: Partial<AuthConfig["signup"]["username"]>;
 };
 
-export type AuthConfigInput = MinimalAuthConfig &
-  Omit<Partial<AuthConfig>, "passwordHashing" | "request" | "signup"> & {
-    passwordHashing?: Partial<AuthConfig["passwordHashing"]>;
-    request?: Partial<AuthConfig["request"]>;
-    signup?: SignupConfigInput;
-  };
+export type AuthConfigInput = MinimalAuthConfig & {
+  runtime?: Partial<AuthConfig["runtime"]>;
+  database?: Partial<AuthConfig["database"]>;
+  session?: Partial<AuthConfig["session"]>;
+  request?: Partial<AuthConfig["request"]>;
+  security?: Partial<AuthConfig["security"]>;
+  passwordHashing?: Partial<AuthConfig["passwordHashing"]>;
+  signup?: SignupConfigInput;
+  login?: Partial<AuthConfig["login"]>;
+  magicLink?: Partial<AuthConfig["magicLink"]>;
+  passwordReset?: Partial<AuthConfig["passwordReset"]>;
+  emailVerification?: Partial<AuthConfig["emailVerification"]>;
+  turnstile?: Partial<AuthConfig["turnstile"]>;
+  redirects?: Partial<AuthConfig["redirects"]>;
+};
 
 export type AuthHelperConfig = AuthConfig | AuthConfigInput;
 

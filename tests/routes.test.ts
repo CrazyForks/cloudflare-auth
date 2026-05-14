@@ -218,6 +218,35 @@ describe("auth HTTP runtime", () => {
     ).toEqual(["http://localhost:5173"]);
   });
 
+  it("accepts partial nested config input", () => {
+    const config = defineAuthConfig({
+      appName: "Partial Config",
+      basePath: "/auth",
+      runtime: { trustedHosts: ["example.com"] },
+      database: { binding: "OTHER_DB" },
+      session: { domain: ".example.com" },
+      request: { maxBodyBytes: 8 * 1024 },
+      security: { allowedRequestOrigins: ["https://example.com"] },
+      passwordHashing: { profile: "development-fast" },
+      signup: { username: { enabled: false } },
+      login: { magicLink: false },
+      magicLink: { activeTokenPolicy: "allow-multiple-active" },
+      passwordReset: { enabled: false },
+      emailVerification: { enabled: false },
+      turnstile: { mode: "optional" },
+      redirects: { allowedOrigins: ["https://example.com"] },
+    });
+
+    expect(config.database.binding).toBe("OTHER_DB");
+    expect(config.signup.username).toEqual({
+      enabled: false,
+      required: false,
+    });
+    expect(config.login.magicLink).toBe(false);
+    expect(config.passwordReset.enabled).toBe(false);
+    expect(config.turnstile.mode).toBe("optional");
+  });
+
   it("normalizes partial runtime overrides passed directly to the handler", async () => {
     const db = createSqliteD1Database();
     await applyD1Migrations(db, [

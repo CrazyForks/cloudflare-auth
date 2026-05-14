@@ -132,6 +132,7 @@ await verifyPackageNamingDocs();
 await verifyReadmeAndNonGoals();
 await verifyDocsManifest();
 await verifyToolchainDocs();
+await verifyTroubleshootingDocs();
 await verifyRootScripts();
 await verifyCiControls();
 await verifyReleaseControls();
@@ -288,6 +289,28 @@ async function verifyDocsManifest() {
       await access(file);
     } catch {
       failures.push(`${file}: required documentation file is missing`);
+    }
+  }
+}
+
+async function verifyTroubleshootingDocs() {
+  const troubleshooting = await readFile("docs/troubleshooting.md", "utf8");
+  for (const [problem, fix] of [
+    ["Missing D1 binding", "AUTH_DB"],
+    ["Missing D1 binding", "cf-auth init --repair"],
+    ["Missing `AUTH_SECRET`", "cf-auth rotate-secret --apply --env production"],
+    ["Migrations not applied", "cf-auth migrate --local"],
+    ["Migrations not applied", "cf-auth migrate --remote --env production"],
+    ["Cookie not set in production", "__Host-"],
+    ["Cookie not set in production", "__Secure-"],
+    ["Cross-subdomain cookie rejected", "session.domain"],
+    ["Cloudflare Email binding missing", "AUTH_EMAIL"],
+    ["Cloudflare Email binding missing", "custom email"],
+  ]) {
+    if (!troubleshooting.includes(problem) || !troubleshooting.includes(fix)) {
+      failures.push(
+        `docs/troubleshooting.md: missing exact fix for ${problem}: ${fix}`,
+      );
     }
   }
 }

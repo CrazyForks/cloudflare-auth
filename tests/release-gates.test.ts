@@ -119,6 +119,23 @@ describe("release gates", () => {
     );
   });
 
+  it("derives CLI docs coverage from the runCli dispatcher", async () => {
+    const root = await releaseGateFixture({ deployButtonEvidence: true });
+    await replaceFixtureText(
+      root,
+      "packages/cli/src/index.ts",
+      '    case "sessions":',
+      ['    case "tokens":', "      return 0;", '    case "sessions":'].join(
+        "\n",
+      ),
+    );
+    const result = runReleaseGates(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("scripts/verify-docs-coverage.mjs");
+    expect(result.stderr).toContain("docs/cli.md: missing cf-auth tokens");
+  });
+
   it("derives API endpoint docs coverage from worker routes", async () => {
     const root = await releaseGateFixture({ deployButtonEvidence: true });
     await replaceFixtureText(
@@ -711,6 +728,32 @@ function configSchemaFixtureText(releaseApproval: string) {
 }
 
 async function writeDocsCoverageFixtures(root: string) {
+  await writeFixtureFile(
+    root,
+    "packages/cli/src/index.ts",
+    [
+      "async function runCli(parsed: { command: string }) {",
+      "  switch (parsed.command) {",
+      '    case "help":',
+      '    case "--help":',
+      '    case "-h":',
+      "      return 0;",
+      '    case "init":',
+      '    case "migrate":',
+      '    case "doctor":',
+      '    case "deploy":',
+      '    case "generate":',
+      '    case "rotate-secret":',
+      '    case "clean":',
+      '    case "users":',
+      '    case "sessions":',
+      "      return 0;",
+      "    default:",
+      "      return 1;",
+      "  }",
+      "}",
+    ].join("\n"),
+  );
   await writeFixtureFile(
     root,
     "packages/worker/package.json",

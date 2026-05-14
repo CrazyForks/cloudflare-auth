@@ -14,27 +14,23 @@ const docs = {
 };
 const failures = [];
 
+const cliCommands = await cliCommandNames();
+for (const command of cliCommands) {
+  requireText("docs/cli.md", docs.cli, `cf-auth ${command}`);
+}
+
 for (const command of [
-  "cf-auth init",
-  "cf-auth migrate",
-  "cf-auth doctor",
-  "cf-auth deploy",
-  "cf-auth generate",
   "cf-auth generate hono",
   "cf-auth generate worker-snippet",
   "cf-auth generate react-client",
   "cf-auth generate types",
-  "cf-auth rotate-secret",
   "cf-auth rotate-secret --print",
   "cf-auth rotate-secret --apply --env production",
-  "cf-auth clean",
   "cf-auth clean --local",
   "cf-auth clean --remote --env production",
   "cf-auth users disable",
   "cf-auth users enable",
-  "cf-auth sessions revoke",
   "cf-auth sessions revoke --user",
-  "cf-auth sessions list",
   "cf-auth sessions list --user",
 ]) {
   requireText("docs/cli.md", docs.cli, command);
@@ -314,6 +310,64 @@ async function authRouteEndpoints() {
     failures.push(`${path}: no auth endpoints found in dispatchAuthRequest`);
 
   return [...endpoints].sort();
+}
+
+async function cliCommandNames() {
+  const path = "packages/cli/src/index.ts";
+  let sourceText;
+  try {
+    sourceText = await readFile(path, "utf8");
+  } catch {
+    failures.push(`${path}: could not be read for CLI command docs coverage`);
+    return [];
+  }
+
+  const sourceFile = ts.createSourceFile(
+    path,
+    sourceText,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const commands = new Set();
+  let foundRunCli = false;
+
+  function visit(node) {
+    if (ts.isFunctionDeclaration(node) && node.name?.text === "runCli") {
+      foundRunCli = true;
+      ts.forEachChild(node, collectCliSwitch);
+      return;
+    }
+    ts.forEachChild(node, visit);
+  }
+
+  function collectCliSwitch(node) {
+    if (
+      ts.isSwitchStatement(node) &&
+      expressionName(node.expression) === "parsed.command"
+    ) {
+      for (const clause of node.caseBlock.clauses) {
+        if (
+          !ts.isCaseClause(clause) ||
+          !ts.isStringLiteral(clause.expression)
+        ) {
+          continue;
+        }
+        const command = clause.expression.text;
+        if (!["help", "--help", "-h"].includes(command)) commands.add(command);
+      }
+    }
+    ts.forEachChild(node, collectCliSwitch);
+  }
+
+  visit(sourceFile);
+
+  if (!foundRunCli)
+    failures.push(`${path}: missing runCli for CLI command docs coverage`);
+  if (commands.size === 0)
+    failures.push(`${path}: no CLI commands found in runCli dispatcher`);
+
+  return [...commands].sort();
 }
 
 function routeEndpointFromExpression(expression) {

@@ -294,6 +294,7 @@ async function verifyCiControls() {
     "pnpm lint",
     "pnpm typecheck",
     "pnpm test",
+    "pnpm test:workers",
     "pnpm build",
     "pnpm package:check",
     "pnpm version-matrix:check",

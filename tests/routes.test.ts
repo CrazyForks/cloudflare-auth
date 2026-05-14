@@ -253,7 +253,7 @@ describe("auth HTTP runtime", () => {
   });
 
   it("uses confirmation-post magic links and does not consume on GET", async () => {
-    const { authFetch, email, db } = await setup();
+    const { authFetch, email, db, handler, env } = await setup();
     await signup(authFetch, "magic@example.com");
     const request = await authFetch("/auth/magic-link/request", {
       method: "POST",
@@ -277,6 +277,18 @@ describe("auth HTTP runtime", () => {
       `/auth/magic-link/verify?token=${encodeURIComponent(token)}`,
     );
     expect(get.status).toBe(200);
+    const noD1Get = await handler.fetch(
+      new Request(
+        `${origin}/auth/magic-link/verify?token=${encodeURIComponent(token)}`,
+      ),
+      { ...env, AUTH_DB: throwingD1Database() },
+      { waitUntil() {} } as unknown as ExecutionContext,
+    );
+    expect(noD1Get?.status).toBe(200);
+    expect(noD1Get?.headers.get("Referrer-Policy")).toBe("no-referrer");
+    expect(noD1Get?.headers.get("Content-Security-Policy")).toContain(
+      "default-src 'none'",
+    );
     const beforeConsume = await db
       .prepare(
         "SELECT used_at, attempts FROM verification_tokens WHERE token_hash = ?",
@@ -306,7 +318,7 @@ describe("auth HTTP runtime", () => {
   });
 
   it("verifies email and resets password through POST confirmation flows", async () => {
-    const { authFetch, email } = await setup();
+    const { authFetch, email, handler, env } = await setup();
     const signupResponse = await signup(authFetch, "verify@example.com");
     const oldCookie = signupResponse.headers.get("Set-Cookie") ?? "";
     const verify =
@@ -316,6 +328,14 @@ describe("auth HTTP runtime", () => {
       `/auth/email/verify?token=${encodeURIComponent(verify)}`,
     );
     expect(verifyGet.status).toBe(200);
+    const noD1VerifyGet = await handler.fetch(
+      new Request(
+        `${origin}/auth/email/verify?token=${encodeURIComponent(verify)}`,
+      ),
+      { ...env, AUTH_DB: throwingD1Database() },
+      { waitUntil() {} } as unknown as ExecutionContext,
+    );
+    expect(noD1VerifyGet?.status).toBe(200);
     const verifyPost = await authFetch("/auth/email/verify/consume", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -341,6 +361,14 @@ describe("auth HTTP runtime", () => {
       `/auth/password/reset?token=${encodeURIComponent(reset)}`,
     );
     expect(resetGet.status).toBe(200);
+    const noD1ResetGet = await handler.fetch(
+      new Request(
+        `${origin}/auth/password/reset?token=${encodeURIComponent(reset)}`,
+      ),
+      { ...env, AUTH_DB: throwingD1Database() },
+      { waitUntil() {} } as unknown as ExecutionContext,
+    );
+    expect(noD1ResetGet?.status).toBe(200);
     const confirm = await authFetch("/auth/password/reset/confirm", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -758,6 +786,19 @@ async function requestEmailTokens(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email }),
   });
+}
+
+function throwingD1Database(): D1Database {
+  const fail = () => {
+    throw new Error("token GET pages must not touch D1");
+  };
+  return {
+    prepare: fail,
+    batch: fail,
+    exec: fail,
+    dump: fail,
+    withSession: fail,
+  } as unknown as D1Database;
 }
 
 async function tokenCounts(db: D1Database) {

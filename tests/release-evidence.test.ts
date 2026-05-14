@@ -435,6 +435,23 @@ describe("release evidence verifiers", () => {
     expect(result.stderr).toContain("cf-auth deploy --env production");
   });
 
+  it("rejects beta manual quickstart evidence without command proof", async () => {
+    const evidence = validBetaEvidence();
+    evidence.manualQuickstart.commands = [];
+    const path = await writeEvidence("beta-missing-manual-command", evidence);
+    const result = runScript("scripts/verify-beta-evidence.mjs", {
+      CF_AUTH_REQUIRE_BETA_EVIDENCE: "1",
+      CF_AUTH_BETA_EVIDENCE_PATH: path,
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("manualQuickstart.commands");
+    expect(result.stderr).toContain("cf-auth init");
+    expect(result.stderr).toContain("cf-auth migrate --local");
+    expect(result.stderr).toContain("pnpm install");
+    expect(result.stderr).toContain("npm run dev");
+  });
+
   it("rejects beta production smoke commands without package tag proof", async () => {
     const evidence = validBetaEvidence();
     evidence.productionSmoke.commands = evidence.productionSmoke.commands.map(
@@ -1082,6 +1099,12 @@ function validBetaEvidence() {
       maintainer: "release-reviewer",
       completedAt: "2026-05-14T00:00:00.000Z",
       packageTag: "beta",
+      commands: [
+        "npx --package @cf-auth/cli@beta cf-auth init my-app --template hono-basic",
+        "pnpm install",
+        "npx --package @cf-auth/cli@beta cf-auth migrate --local",
+        "npm run dev",
+      ],
       cleanDirectory: true,
       documentedCommandsOnly: true,
       signupLoginVerified: true,

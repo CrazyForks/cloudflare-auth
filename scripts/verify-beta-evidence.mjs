@@ -107,6 +107,21 @@ function validateManualQuickstart(value) {
       failures.push(`${evidencePath}: ${path}.${field} must be true`);
     }
   }
+  requireCommandContains(value.commands, "cf-auth init", `${path}.commands`);
+  requireCommandContains(value.commands, "pnpm install", `${path}.commands`);
+  requireCommandContains(
+    value.commands,
+    "cf-auth migrate --local",
+    `${path}.commands`,
+  );
+  requireCommandContains(value.commands, "npm run dev", `${path}.commands`);
+  if (typeof value.packageTag === "string") {
+    requireCommandContains(
+      value.commands,
+      `@cf-auth/cli@${value.packageTag}`,
+      `${path}.commands`,
+    );
+  }
 }
 
 function validateProductionSmoke(value) {

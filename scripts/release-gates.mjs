@@ -140,6 +140,10 @@ await requireText(
   '"optInCloudflareAccountFixture"',
 );
 await requireText("docs/beta-evidence.example.json", '"commands"');
+await requireText("docs/beta-evidence.example.json", "cf-auth init");
+await requireText("docs/beta-evidence.example.json", "cf-auth migrate --local");
+await requireText("docs/beta-evidence.example.json", "pnpm install");
+await requireText("docs/beta-evidence.example.json", "npm run dev");
 await requireText("docs/release-checklist.md", "pnpm verify:security-docs");
 await requireText(
   "docs/public-beta.md",

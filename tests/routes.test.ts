@@ -532,6 +532,23 @@ describe("auth HTTP runtime", () => {
     expect(allowedPreflight?.headers.get("Access-Control-Allow-Origin")).toBe(
       origin,
     );
+    expect(
+      allowedPreflight?.headers.get("Access-Control-Allow-Origin"),
+    ).not.toBe("*");
+    expect(allowedPreflight?.headers.get("Vary")).toBe("Origin");
+
+    const disallowedPreflight = await handler.fetch(
+      new Request(`${origin}/auth/signup`, {
+        method: "OPTIONS",
+        headers: { Origin: "https://evil.example" },
+      }),
+      env,
+      { waitUntil() {} } as unknown as ExecutionContext,
+    );
+    expect(disallowedPreflight?.status).toBe(403);
+    expect(
+      disallowedPreflight?.headers.get("Access-Control-Allow-Origin"),
+    ).toBeNull();
   });
 
   it("keeps rate-limit keys opaque and feature-disabled endpoints side-effect free", async () => {

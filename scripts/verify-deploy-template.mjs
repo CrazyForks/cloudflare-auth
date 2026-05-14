@@ -13,6 +13,9 @@ run("node", ["scripts/export-deploy-template.mjs", output]);
 const packageJson = JSON.parse(
   await readFile(join(output, "package.json"), "utf8"),
 );
+const versionMatrix = JSON.parse(
+  await readFile("scripts/version-matrix.json", "utf8"),
+);
 const wrangler = JSON.parse(
   await readFile(join(output, "wrangler.jsonc"), "utf8"),
 );
@@ -43,6 +46,22 @@ console.log(`deploy template verified: ${output}`);
 function checkPackageJson(pkg) {
   if (pkg.private !== true)
     failures.push("package.json: template package must be private");
+  if (pkg.packageManager !== `pnpm@${versionMatrix.pnpm}`) {
+    failures.push(
+      `package.json: packageManager must be pnpm@${versionMatrix.pnpm}`,
+    );
+  }
+  for (const [section, name, expected] of [
+    ["dependencies", "hono", versionMatrix.hono],
+    ["devDependencies", "typescript", versionMatrix.typescript],
+    ["devDependencies", "vitest", versionMatrix.vitest],
+    ["devDependencies", "wrangler", versionMatrix.wrangler],
+  ]) {
+    const actual = pkg[section]?.[name];
+    if (actual !== expected) {
+      failures.push(`package.json: ${section}.${name} must be ${expected}`);
+    }
+  }
   for (const [section, deps] of Object.entries({
     dependencies: pkg.dependencies ?? {},
     devDependencies: pkg.devDependencies ?? {},
@@ -78,6 +97,17 @@ function checkPackageJson(pkg) {
 }
 
 function checkWrangler(config) {
+  if (
+    typeof config.compatibility_date !== "string" ||
+    config.compatibility_date < versionMatrix.workersCompatibilityDateFloor
+  ) {
+    failures.push(
+      `wrangler.jsonc: compatibility_date must be at least ${versionMatrix.workersCompatibilityDateFloor}`,
+    );
+  }
+  if (!config.compatibility_flags?.includes("nodejs_compat")) {
+    failures.push("wrangler.jsonc: must enable nodejs_compat");
+  }
   if (config.vars?.AUTH_ENV !== "production") {
     failures.push(
       "wrangler.jsonc: deploy template must default AUTH_ENV to production",

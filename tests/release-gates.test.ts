@@ -23,6 +23,26 @@ describe("release gates", () => {
     expect(result.stdout).toContain("release gates passed");
   });
 
+  it("runs evidence verifiers instead of accepting marker-only files", async () => {
+    const root = await releaseGateFixture({ deployButtonEvidence: true });
+    const evidence = validDeployButtonEvidence();
+    evidence.templateRepositoryUrl = "https://example.org/acme/template";
+    evidence.deployButtonUrl =
+      "https://deploy.workers.cloudflare.com/?url=https://example.org/acme/template";
+    await writeFixtureFile(
+      root,
+      "docs/deploy-button-evidence.json",
+      JSON.stringify(evidence, null, 2),
+    );
+    const result = runReleaseGates(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "scripts/verify-deploy-button-evidence.mjs",
+    );
+    expect(result.stderr).toContain("GitHub or GitLab repository URL");
+  });
+
   it("requires stable release artifacts when packages enter 1.0", async () => {
     const root = await releaseGateFixture({
       deployButtonEvidence: true,
@@ -231,20 +251,20 @@ async function releaseGateFixture(options: ReleaseGateFixtureOptions) {
   await writeFixtureFile(
     root,
     "docs/package-ownership.json",
-    '{"ownershipConfirmed": true}\n',
+    JSON.stringify(validPackageEvidence(packageVersion), null, 2),
   );
   if (options.alphaEvidence ?? true) {
     await writeFixtureFile(
       root,
       "docs/alpha-evidence.json",
-      '{"localSetups": [], "productionDeploys": []}\n',
+      JSON.stringify(validAlphaEvidence(), null, 2),
     );
   }
   if (options.deployButtonEvidence) {
     await writeFixtureFile(
       root,
       "docs/deploy-button-evidence.json",
-      '{"status": "verified", "templateRepositoryUrl": "https://github.com/acme/template", "deployButtonUrl": "https://deploy.workers.cloudflare.com/?url=https://github.com/acme/template", "packageTag": "beta"}\n',
+      JSON.stringify(validDeployButtonEvidence(), null, 2),
     );
   }
   if (options.stableEvidence) {
@@ -271,7 +291,7 @@ async function writeStableEvidence(root: string) {
   await writeFixtureFile(
     root,
     "docs/beta-evidence.json",
-    '{"publishedQuickstart": {}, "productionSmoke": {}}\n',
+    JSON.stringify(validBetaEvidence(), null, 2),
   );
   await writeFixtureFile(
     root,
@@ -291,7 +311,7 @@ async function writeStableEvidence(root: string) {
   await writeFixtureFile(
     root,
     "docs/security-release-tracker.json",
-    '{"openHighCriticalAuthSecurityIssues": [], "issueSearchUrl": "https://github.com/acme/cf-auth/issues", "advisorySearchUrl": "https://github.com/acme/cf-auth/security/advisories"}\n',
+    JSON.stringify(validSecurityTracker(), null, 2),
   );
   await writeFixtureFile(
     root,
@@ -299,6 +319,162 @@ async function writeStableEvidence(root: string) {
     '{"betaVersions": [{"version": "1.0.0-beta.0"}]}\n',
   );
   await writeFixtureFile(root, "tests/upgrade.test.ts", "upgrade tests\n");
+}
+
+function validPackageEvidence(version: string) {
+  return {
+    schemaVersion: 1,
+    verifiedAt: "2026-05-14T00:00:00.000Z",
+    verifiedBy: "release-reviewer",
+    packages: [
+      {
+        name: "@cf-auth/cli",
+        registry: "https://registry.npmjs.org/",
+        version,
+        ownershipConfirmed: true,
+        publisherTwoFactorEnabled: true,
+        provenancePublish: true,
+      },
+    ],
+    reservedPackages: [],
+  };
+}
+
+function validAlphaEvidence() {
+  return {
+    schemaVersion: 1,
+    localSetups: Array.from({ length: 5 }, (_, index) => ({
+      user: `alpha-user-${index + 1}`,
+      completedAt: "2026-05-14T00:00:00.000Z",
+      setupMinutes: 8,
+      commands: [
+        "npx --package @cf-auth/cli@alpha cf-auth init my-app --template hono-basic",
+        "pnpm install",
+        "npx --package @cf-auth/cli@alpha cf-auth migrate --local",
+        "npm run dev",
+      ],
+      cleanDirectory: true,
+      documentedCommandsOnly: true,
+      signupLoginVerified: true,
+    })),
+    productionDeploys: Array.from({ length: 3 }, (_, index) => ({
+      user: `alpha-user-${index + 1}`,
+      completedAt: "2026-05-14T00:00:00.000Z",
+      commands: [
+        "npx --package @cf-auth/cli@alpha cf-auth doctor --report --env production",
+        "npx --package @cf-auth/cli@alpha cf-auth migrate --remote --env production",
+        "npx --package @cf-auth/cli@alpha cf-auth deploy --env production",
+      ],
+      doctorReportAttached: true,
+      doctorReportSchemaValid: true,
+      doctorReportRedactionChecked: true,
+      doctorPassed: true,
+      migratePassed: true,
+      deployPassed: true,
+      signupLoginVerified: true,
+    })),
+    failures: [],
+  };
+}
+
+function validDeployButtonEvidence() {
+  return {
+    schemaVersion: 1,
+    status: "verified",
+    verifiedAt: "2026-05-14T00:00:00.000Z",
+    verifiedBy: "release-reviewer",
+    templateRepositoryUrl: "https://github.com/acme/cloudflare-auth-template",
+    deployButtonUrl:
+      "https://deploy.workers.cloudflare.com/?url=https://github.com/acme/cloudflare-auth-template",
+    packageTag: "beta",
+    deployedOrigin: "https://auth.acme.test",
+    starterTemplateCreated: true,
+    templateRepositoryPublic: true,
+    templateHasNoWorkspaceDependencies: true,
+    d1BindingConfigured: true,
+    migrationsApplied: true,
+    authSecretConfigured: true,
+    publicOriginConfigured: true,
+    documentedPathFollowed: true,
+    signupLoginSmokePassed: true,
+    smokedEndpoints: [
+      "/auth/signup",
+      "/auth/login",
+      "/auth/logout",
+      "/auth/user",
+    ],
+  };
+}
+
+function validBetaEvidence() {
+  return {
+    schemaVersion: 1,
+    reviewedAt: "2026-05-14T00:00:00.000Z",
+    reviewedBy: "release-reviewer",
+    publishedQuickstart: {
+      workflowRunUrl:
+        "https://github.com/acme/cloudflare-auth/actions/runs/123",
+      packageTag: "beta",
+      passed: true,
+      cleanDirectory: true,
+      documentedCommandsOnly: true,
+      noWorkspaceDependencies: true,
+      signupLoginVerified: true,
+    },
+    manualQuickstart: {
+      maintainer: "release-reviewer",
+      completedAt: "2026-05-14T00:00:00.000Z",
+      packageTag: "beta",
+      cleanDirectory: true,
+      documentedCommandsOnly: true,
+      signupLoginVerified: true,
+    },
+    productionSmoke: {
+      workflowRunUrl:
+        "https://github.com/acme/cloudflare-auth/actions/runs/124",
+      packageTag: "beta",
+      origin: "https://auth.acme.test",
+      passed: true,
+      documentedProductionPath: true,
+      optInCloudflareAccountFixture: true,
+      commands: [
+        "npx --package @cf-auth/cli@beta cf-auth doctor --env production",
+        "npx --package @cf-auth/cli@beta cf-auth migrate --remote --env production",
+        "npx --package @cf-auth/cli@beta cf-auth deploy --env production",
+      ],
+      smokedEndpoints: [
+        "/auth/signup",
+        "/auth/login",
+        "/auth/logout",
+        "/auth/user",
+      ],
+    },
+    deployButton: {
+      evidencePath: "docs/deploy-button-evidence.json",
+      verified: true,
+      evidenceVerifierPassed: true,
+    },
+  };
+}
+
+function validSecurityTracker() {
+  return {
+    schemaVersion: 1,
+    reviewedAt: "2026-05-14T00:00:00.000Z",
+    reviewedBy: "release-reviewer",
+    issueSearchUrl:
+      "https://github.com/acme/cloudflare-auth/issues?q=is%3Aissue%20is%3Aopen%20label%3Aauth%20label%3Ahigh%2Ccritical",
+    advisorySearchUrl:
+      "https://github.com/acme/cloudflare-auth/security/advisories",
+    openHighCriticalAuthSecurityIssues: [],
+    advisories: [
+      {
+        id: "GHSA-abcd-1234-5678",
+        severity: "high",
+        status: "resolved",
+      },
+    ],
+  };
 }
 
 async function writeFixtureFile(root: string, path: string, content: string) {

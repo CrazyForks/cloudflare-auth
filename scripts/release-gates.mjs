@@ -1,5 +1,10 @@
+import { spawnSync } from "node:child_process";
 import { access, readdir, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const scriptDir = dirname(fileURLToPath(import.meta.url));
+const repoRoot = dirname(scriptDir);
 
 const packageDirs = (await readdir("packages", { withFileTypes: true }))
   .filter((entry) => entry.isDirectory())
@@ -174,12 +179,18 @@ const publishedReleasePackages = packages.filter((pkg) =>
 if (publishedReleasePackages.length > 0) {
   await requireFile("docs/package-ownership.json");
   await requireText("docs/package-ownership.json", '"ownershipConfirmed"');
+  requireVerifier("scripts/verify-package-ownership.mjs", {
+    CF_AUTH_REQUIRE_PACKAGE_OWNERSHIP: "1",
+  });
   await requirePackageChangelogs(publishedReleasePackages);
 }
 if (betaOrStablePackages.length > 0) {
   await requireFile("docs/alpha-evidence.json");
   await requireText("docs/alpha-evidence.json", '"localSetups"');
   await requireText("docs/alpha-evidence.json", '"productionDeploys"');
+  requireVerifier("scripts/verify-alpha-evidence.mjs", {
+    CF_AUTH_REQUIRE_ALPHA_EVIDENCE: "1",
+  });
 }
 if (betaOrStablePackages.length > 0) {
   await requireFile("docs/deploy-button-evidence.json");
@@ -190,11 +201,17 @@ if (betaOrStablePackages.length > 0) {
   );
   await requireText("docs/deploy-button-evidence.json", '"deployButtonUrl"');
   await requireText("docs/deploy-button-evidence.json", '"packageTag"');
+  requireVerifier("scripts/verify-deploy-button-evidence.mjs", {
+    CF_AUTH_REQUIRE_DEPLOY_BUTTON_EVIDENCE: "1",
+  });
 }
 if (stablePackages.length > 0) {
   await requireFile("docs/beta-evidence.json");
   await requireText("docs/beta-evidence.json", '"publishedQuickstart"');
   await requireText("docs/beta-evidence.json", '"productionSmoke"');
+  requireVerifier("scripts/verify-beta-evidence.mjs", {
+    CF_AUTH_REQUIRE_BETA_EVIDENCE: "1",
+  });
   await requireReleaseApproval("docs/api-report.md", "Public API report");
   await requireReleaseApproval("docs/config-schema.md", "Config schema");
   await requireSecurityReviewDecision();
@@ -208,6 +225,9 @@ if (stablePackages.length > 0) {
     "docs/security-release-tracker.json",
     '"advisorySearchUrl"',
   );
+  requireVerifier("scripts/verify-security-release-tracker.mjs", {
+    CF_AUTH_REQUIRE_SECURITY_TRACKER: "1",
+  });
   await requireFile("tests/upgrade.test.ts");
   await requireFile("tests/fixtures/upgrade/beta-schema-versions.json");
   await requireUpgradeFixtures();
@@ -252,6 +272,19 @@ async function requireReleaseApproval(path, label) {
   const text = await requireText(path, "Release approval:");
   if (!/^Release approval:\s*release-approved\b/im.test(text)) {
     failures.push(`${path}: ${label} must be release-approved before 1.0`);
+  }
+}
+
+function requireVerifier(script, env) {
+  const result = spawnSync(process.execPath, [join(repoRoot, script)], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    env: { ...process.env, ...env },
+  });
+  if (result.status !== 0) {
+    failures.push(
+      `${script}: verifier failed\n${(result.stderr || result.stdout).trim()}`,
+    );
   }
 }
 

@@ -7,6 +7,7 @@ const evidencePath =
 const registry = "https://registry.npmjs.org/";
 const packages = await publishablePackages();
 const reservedPackages = await privateReservedPackages();
+const reservedPackageNames = new Set(reservedPackages.map((pkg) => pkg.name));
 const failures = [];
 
 const { packageEvidenceByName, reservedEvidenceByName } =
@@ -195,6 +196,11 @@ async function readOwnershipEvidence() {
       "name" in item &&
       typeof item.name === "string"
     ) {
+      if (!reservedPackageNames.has(item.name)) {
+        failures.push(
+          `${evidencePath}: ${item.name} must not be listed under reservedPackages unless its workspace package is private`,
+        );
+      }
       reservedEvidenceByName.set(item.name, item);
     }
   }

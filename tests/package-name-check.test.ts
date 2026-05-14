@@ -36,10 +36,29 @@ describe("package name registry checks", () => {
       "@cf-auth/cli: release workflow must not publish placeholder version 0.0.0",
     );
   });
+
+  it("rejects stale reserved evidence after a shim becomes publishable", async () => {
+    const fixture = await packageNameFixture({
+      publishCfAuthShim: true,
+      staleCfAuthReservation: true,
+    });
+    const result = runPackageNameCheck(fixture.root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("cf-auth");
+    expect(result.stderr).toContain(
+      "must not be listed under reservedPackages",
+    );
+  });
 });
 
 async function packageNameFixture(
-  options: { cfAuthRegistryVersion?: string; packageVersion?: string } = {},
+  options: {
+    cfAuthRegistryVersion?: string;
+    packageVersion?: string;
+    publishCfAuthShim?: boolean;
+    staleCfAuthReservation?: boolean;
+  } = {},
 ) {
   const root = await mkdtemp(join(tmpdir(), "cf-auth-package-names-"));
   await mkdir(join(root, "packages"), { recursive: true });
@@ -55,6 +74,31 @@ async function packageNameFixture(
     ["testing", "@cf-auth/testing"],
     ["worker", "@cf-auth/worker"],
   ] as const;
+  const packageEvidence: Array<{
+    name: string;
+    registry: string;
+    version: string;
+    ownershipConfirmed: boolean;
+    publisherTwoFactorEnabled: boolean;
+    provenancePublish: boolean;
+  }> = publishable.map(([, name]) => ({
+    name,
+    registry: "https://registry.npmjs.org/",
+    version: options.packageVersion ?? "0.1.0-beta.0",
+    ownershipConfirmed: true,
+    publisherTwoFactorEnabled: true,
+    provenancePublish: true,
+  }));
+  if (options.publishCfAuthShim) {
+    packageEvidence.push({
+      name: "cf-auth",
+      registry: "https://registry.npmjs.org/",
+      version: options.packageVersion ?? "0.1.0-beta.0",
+      ownershipConfirmed: true,
+      publisherTwoFactorEnabled: true,
+      provenancePublish: true,
+    });
+  }
   for (const [dir, name] of publishable) {
     await writePackageJson(root, dir, {
       name,
@@ -64,7 +108,7 @@ async function packageNameFixture(
   await writePackageJson(root, "cf-auth-shim", {
     name: "cf-auth",
     version: options.packageVersion ?? "0.1.0-beta.0",
-    private: true,
+    private: !options.publishCfAuthShim,
   });
   await writePackageJson(root, "create-cloudflare-auth", {
     name: "create-cloudflare-auth",
@@ -79,21 +123,18 @@ async function packageNameFixture(
         schemaVersion: 1,
         verifiedAt: "2026-05-14T00:00:00.000Z",
         verifiedBy: "release-reviewer",
-        packages: publishable.map(([, name]) => ({
-          name,
-          registry: "https://registry.npmjs.org/",
-          version: options.packageVersion ?? "0.1.0-beta.0",
-          ownershipConfirmed: true,
-          publisherTwoFactorEnabled: true,
-          provenancePublish: true,
-        })),
+        packages: packageEvidence,
         reservedPackages: [
-          {
-            name: "cf-auth",
-            registry: "https://registry.npmjs.org/",
-            registryVersion: options.cfAuthRegistryVersion ?? "1.0.2",
-            publishableAfterOwnershipConfirmed: true,
-          },
+          ...(options.publishCfAuthShim && !options.staleCfAuthReservation
+            ? []
+            : [
+                {
+                  name: "cf-auth",
+                  registry: "https://registry.npmjs.org/",
+                  registryVersion: options.cfAuthRegistryVersion ?? "1.0.2",
+                  publishableAfterOwnershipConfirmed: true,
+                },
+              ]),
           {
             name: "create-cloudflare-auth",
             registry: "https://registry.npmjs.org/",

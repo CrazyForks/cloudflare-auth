@@ -598,6 +598,31 @@ describe("release evidence verifiers", () => {
     expect(result.stderr).toContain("reservedPackages");
   });
 
+  it("rejects reserved package evidence after a shim becomes publishable", async () => {
+    const cwd = await packageOwnershipFixture({
+      publishCfAuthShim: true,
+      staleCfAuthReservation: true,
+    });
+    const result = runScript(
+      "scripts/verify-package-ownership.mjs",
+      {
+        CF_AUTH_REQUIRE_PACKAGE_OWNERSHIP: "1",
+        CF_AUTH_PACKAGE_OWNERSHIP_PATH: join(
+          cwd,
+          "docs",
+          "package-ownership.json",
+        ),
+      },
+      cwd,
+    );
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("cf-auth");
+    expect(result.stderr).toContain(
+      "must not be listed under reservedPackages",
+    );
+  });
+
   it("rejects package ownership evidence without target package versions", async () => {
     const evidence = validPackageEvidence();
     delete (evidence.packages[0] as Record<string, unknown>).version;
@@ -795,6 +820,63 @@ async function packageVersionFixture(version: string): Promise<string> {
     `${JSON.stringify({ name: "@cf-auth/cli", version })}\n`,
   );
   return root;
+}
+
+async function packageOwnershipFixture(options: {
+  publishCfAuthShim: boolean;
+  staleCfAuthReservation: boolean;
+}): Promise<string> {
+  const root = await mkdtemp(join(tmpdir(), "cf-auth-package-ownership-"));
+  await mkdir(join(root, "packages", "cli"), { recursive: true });
+  await mkdir(join(root, "packages", "cf-auth-shim"), { recursive: true });
+  await mkdir(join(root, "docs"), { recursive: true });
+  await writeFile(
+    join(root, "packages", "cli", "package.json"),
+    `${JSON.stringify({ name: "@cf-auth/cli", version: "0.1.0-beta.0" })}\n`,
+  );
+  await writeFile(
+    join(root, "packages", "cf-auth-shim", "package.json"),
+    `${JSON.stringify({
+      name: "cf-auth",
+      version: "0.1.0-beta.0",
+      private: !options.publishCfAuthShim,
+    })}\n`,
+  );
+  await writeFile(
+    join(root, "docs", "package-ownership.json"),
+    `${JSON.stringify(
+      packageOwnershipFixtureEvidence(options.staleCfAuthReservation),
+      null,
+      2,
+    )}\n`,
+  );
+  return root;
+}
+
+function packageOwnershipFixtureEvidence(staleCfAuthReservation: boolean) {
+  return {
+    schemaVersion: 1,
+    verifiedAt: "2026-05-14T00:00:00.000Z",
+    verifiedBy: "release-reviewer",
+    packages: ["@cf-auth/cli", "cf-auth"].map((name) => ({
+      name,
+      registry: "https://registry.npmjs.org/",
+      version: "0.1.0-beta.0",
+      ownershipConfirmed: true,
+      publisherTwoFactorEnabled: true,
+      provenancePublish: true,
+    })),
+    reservedPackages: staleCfAuthReservation
+      ? [
+          {
+            name: "cf-auth",
+            registry: "https://registry.npmjs.org/",
+            registryVersion: "1.0.2",
+            publishableAfterOwnershipConfirmed: true,
+          },
+        ]
+      : [],
+  };
 }
 
 function runScript(

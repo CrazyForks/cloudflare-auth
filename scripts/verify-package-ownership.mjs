@@ -14,6 +14,7 @@ const evidencePath =
   process.env.CF_AUTH_PACKAGE_OWNERSHIP_PATH ?? "docs/package-ownership.json";
 const packages = await publishablePackages();
 const reservedPackages = await privateReservedPackages();
+const reservedPackageNames = new Set(reservedPackages.map((pkg) => pkg.name));
 const requireEvidence =
   process.env.CF_AUTH_REQUIRE_PACKAGE_OWNERSHIP === "1" ||
   packages.some((pkg) => isPublishedReleaseVersion(pkg.version));
@@ -116,6 +117,11 @@ function validateEvidence(value, rawText) {
       if (reservedByName.has(item.name)) {
         failures.push(
           `${evidencePath}: duplicate reserved package evidence for ${item.name}`,
+        );
+      }
+      if (!reservedPackageNames.has(item.name)) {
+        failures.push(
+          `${evidencePath}: ${item.name} must not be listed under reservedPackages unless its workspace package is private`,
         );
       }
       reservedByName.set(item.name, item);

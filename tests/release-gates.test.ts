@@ -136,6 +136,23 @@ describe("release gates", () => {
     );
   });
 
+  it("requires CLI docs for every shipped command variant", async () => {
+    const root = await releaseGateFixture({ deployButtonEvidence: true });
+    await replaceFixtureText(
+      root,
+      "docs/cli.md",
+      "cf-auth generate types",
+      "cf-auth generate env-types",
+    );
+    const result = runReleaseGates(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("scripts/verify-docs-coverage.mjs");
+    expect(result.stderr).toContain(
+      "docs/cli.md: missing cf-auth generate types",
+    );
+  });
+
   it("requires password benchmark evidence in release gates", async () => {
     const root = await releaseGateFixture({ deployButtonEvidence: true });
     await writeFixtureFile(
@@ -682,12 +699,22 @@ async function writeDocsCoverageFixtures(root: string) {
       "cf-auth doctor",
       "cf-auth deploy",
       "cf-auth generate",
+      "cf-auth generate hono",
+      "cf-auth generate worker-snippet",
+      "cf-auth generate react-client",
+      "cf-auth generate types",
       "cf-auth rotate-secret",
+      "cf-auth rotate-secret --print",
+      "cf-auth rotate-secret --apply --env production",
       "cf-auth clean",
+      "cf-auth clean --local",
+      "cf-auth clean --remote --env production",
       "cf-auth users disable",
       "cf-auth users enable",
       "cf-auth sessions revoke",
+      "cf-auth sessions revoke --user",
       "cf-auth sessions list",
+      "cf-auth sessions list --user",
     ].join("\n"),
   );
   await writeFixtureFile(

@@ -19,12 +19,22 @@ for (const command of [
   "cf-auth doctor",
   "cf-auth deploy",
   "cf-auth generate",
+  "cf-auth generate hono",
+  "cf-auth generate worker-snippet",
+  "cf-auth generate react-client",
+  "cf-auth generate types",
   "cf-auth rotate-secret",
+  "cf-auth rotate-secret --print",
+  "cf-auth rotate-secret --apply --env production",
   "cf-auth clean",
+  "cf-auth clean --local",
+  "cf-auth clean --remote --env production",
   "cf-auth users disable",
   "cf-auth users enable",
   "cf-auth sessions revoke",
+  "cf-auth sessions revoke --user",
   "cf-auth sessions list",
+  "cf-auth sessions list --user",
 ]) {
   requireText("docs/cli.md", docs.cli, command);
 }

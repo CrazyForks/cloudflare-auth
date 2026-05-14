@@ -542,6 +542,12 @@ describe("auth HTTP runtime", () => {
       }),
     });
     expect(ok.status).toBe(200);
+    const malformed = await authFetch("/auth/magic-link/consume", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ token: "not-a-token" }),
+    });
+    expect(malformed.status).toBe(400);
 
     const events = await db
       .prepare(
@@ -558,8 +564,16 @@ describe("auth HTTP runtime", () => {
         "signup_success",
         "password_login_failed",
         "password_login_success",
+        "magic_link_consume_failed",
       ]),
     );
+    expect(
+      events.results?.some(
+        (row) =>
+          row.event_type === "magic_link_consume_failed" &&
+          row.metadata_json.includes("malformed_token"),
+      ),
+    ).toBe(true);
     for (const event of events.results ?? []) {
       expect(event.ip_hash).toMatch(/^[A-Za-z0-9_-]{43}$/);
       expect(event.user_agent_hash).toMatch(/^[A-Za-z0-9_-]{43}$/);

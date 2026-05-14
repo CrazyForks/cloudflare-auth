@@ -1424,7 +1424,18 @@ async function handleMagicLinkConsume(
     15 * 60 * 1000,
     request,
   );
-  const tokenHash = hashRawAuthToken(body.token, runtime.keyRing, "magic_link");
+  let tokenHash: string;
+  try {
+    tokenHash = hashRawAuthToken(body.token, runtime.keyRing, "magic_link");
+  } catch (error) {
+    queueAuthEvent(runtime, request, "magic_link_consume_failed", {
+      metadata: {
+        reason:
+          error instanceof AuthCryptoError ? error.code : "token_hash_failed",
+      },
+    });
+    throw error;
+  }
   const consumed =
     await runtime.repos.verificationTokens.consumeVerificationToken({
       tokenHash,
@@ -1559,11 +1570,22 @@ async function handleEmailVerifyConsume(
     60 * 60 * 1000,
     request,
   );
-  const tokenHash = hashRawAuthToken(
-    body.token,
-    runtime.keyRing,
-    "email_verification",
-  );
+  let tokenHash: string;
+  try {
+    tokenHash = hashRawAuthToken(
+      body.token,
+      runtime.keyRing,
+      "email_verification",
+    );
+  } catch (error) {
+    queueAuthEvent(runtime, request, "email_verification_consume_failed", {
+      metadata: {
+        reason:
+          error instanceof AuthCryptoError ? error.code : "token_hash_failed",
+      },
+    });
+    throw error;
+  }
   const consumed =
     await runtime.repos.verificationTokens.consumeVerificationToken({
       tokenHash,
@@ -1698,11 +1720,18 @@ async function handlePasswordResetConfirm(
       400,
       validation.code ?? "invalid_password",
     );
-  const tokenHash = hashRawAuthToken(
-    body.token,
-    runtime.keyRing,
-    "password_reset",
-  );
+  let tokenHash: string;
+  try {
+    tokenHash = hashRawAuthToken(body.token, runtime.keyRing, "password_reset");
+  } catch (error) {
+    queueAuthEvent(runtime, request, "password_reset_confirm_failed", {
+      metadata: {
+        reason:
+          error instanceof AuthCryptoError ? error.code : "token_hash_failed",
+      },
+    });
+    throw error;
+  }
   const active =
     await runtime.repos.verificationTokens.findActiveVerificationTokenByHash(
       tokenHash,

@@ -43,6 +43,20 @@ describe("release gates", () => {
     expect(result.stderr).toContain("GitHub or GitLab repository URL");
   });
 
+  it("runs local release verifiers instead of checking only that scripts exist", async () => {
+    const root = await releaseGateFixture({ deployButtonEvidence: true });
+    await writeFixtureFile(
+      root,
+      "scripts/export-deploy-template.mjs",
+      'process.stderr.write("deploy template broken"); process.exit(1);',
+    );
+    const result = runReleaseGates(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("scripts/verify-deploy-template.mjs");
+    expect(result.stderr).toContain("deploy template broken");
+  });
+
   it("runs package-name registry checks for release packages", async () => {
     const root = await releaseGateFixture({ deployButtonEvidence: true });
     await writeFakeNpm(
@@ -183,6 +197,7 @@ async function releaseGateFixture(options: ReleaseGateFixtureOptions) {
     "scripts/verify-deploy-button-evidence.mjs",
     "scripts/verify-deploy-template.mjs",
     "scripts/verify-docs-coverage.mjs",
+    "scripts/verify-migrations.mjs",
     "scripts/verify-package-ownership.mjs",
     "scripts/verify-security-docs.mjs",
     "scripts/verify-security-release-tracker.mjs",
@@ -296,6 +311,7 @@ async function releaseGateFixture(options: ReleaseGateFixtureOptions) {
       requiredText.get(file)?.join("\n") ?? "",
     );
   }
+  await writeLocalVerifierFixtures(root);
 
   const packageVersion = options.packageVersion ?? "0.1.0-beta.0";
   await writePackage(root, packageVersion);
@@ -338,6 +354,331 @@ async function writePackage(root: string, version: string) {
   await writeFile(join(packageDir, "CHANGELOG.md"), `${version}\n`);
 }
 
+async function writeLocalVerifierFixtures(root: string) {
+  await writeDocsCoverageFixtures(root);
+  await writeSecurityDocsFixtures(root);
+  await writeMigrationFixtures(root);
+  await writeDeployTemplateFixtures(root);
+}
+
+async function writeDocsCoverageFixtures(root: string) {
+  await writeFixtureFile(
+    root,
+    "docs/cli.md",
+    [
+      "cf-auth init",
+      "cf-auth migrate",
+      "cf-auth doctor",
+      "cf-auth deploy",
+      "cf-auth generate",
+      "cf-auth rotate-secret",
+      "cf-auth clean",
+      "cf-auth users disable",
+      "cf-auth users enable",
+      "cf-auth sessions revoke",
+      "cf-auth sessions list",
+    ].join("\n"),
+  );
+  await writeFixtureFile(
+    root,
+    "docs/configuration.md",
+    [
+      "appName",
+      "basePath",
+      "runtime.mode",
+      "runtime.publicOrigin",
+      "runtime.trustedHosts",
+      "database.binding",
+      "session.cookieName",
+      "session.maxAgeDays",
+      "session.sameSite",
+      "session.secure",
+      "session.domain",
+      "session.requireVerifiedEmail",
+      "request.maxBodyBytes",
+      "request.requireOriginOnUnsafeMethods",
+      "request.enumerationMinResponseMs",
+      "request.enumerationJitterMs",
+      "security.allowedRequestOrigins",
+      "security.allowedPreviewRequestOrigins",
+      "passwordHashing.profile",
+      "passwordHashing.maxConcurrentHashesPerIsolate",
+      "passwordHashing.queueTimeoutMs",
+      "signup.enabled",
+      "signup.requireEmailVerificationBeforeSession",
+      "signup.enumerationSafe",
+      "signup.username.enabled",
+      "signup.username.required",
+      "login.emailPassword",
+      "login.usernamePassword",
+      "login.magicLink",
+      "login.requireVerifiedEmail",
+      "magicLink.allowSignups",
+      "magicLink.expiresInMinutes",
+      "magicLink.activeTokenPolicy",
+      "passwordReset.enabled",
+      "passwordReset.expiresInMinutes",
+      "passwordReset.revokeExistingSessions",
+      "passwordReset.createSessionAfterReset",
+      "passwordReset.markEmailVerifiedOnReset",
+      "passwordReset.activeTokenPolicy",
+      "emailVerification.enabled",
+      "emailVerification.expiresInHours",
+      "emailVerification.createSessionAfterVerification",
+      "emailVerification.activeTokenPolicy",
+      "turnstile.mode",
+      "turnstile.endpoints",
+      "turnstile.verify",
+      "email",
+      "redirects.defaultAfterLogin",
+      "redirects.defaultAfterLogout",
+      "redirects.defaultAfterEmailVerification",
+      "redirects.defaultAfterPasswordReset",
+      "redirects.allowedOrigins",
+      "redirects.allowedPreviewOrigins",
+    ].join("\n"),
+  );
+  await writeFixtureFile(
+    root,
+    "docs/config-schema.md",
+    [
+      "Release approval: pending.",
+      "AUTH_DB",
+      "AUTH_SECRET",
+      "AUTH_SECRET_PREVIOUS",
+      "AUTH_ENV",
+      "AUTH_PUBLIC_ORIGIN",
+      "TURNSTILE_SECRET_KEY",
+      "AUTH_RATE_LIMITER",
+      "AUTH_EMAIL",
+    ].join("\n"),
+  );
+  await writeFixtureFile(
+    root,
+    "docs/api.md",
+    [
+      "POST /auth/signup",
+      "POST /auth/login",
+      "POST /auth/logout",
+      "GET /auth/user",
+      "POST /auth/magic-link/request",
+      "GET /auth/magic-link/verify",
+      "POST /auth/magic-link/consume",
+      "POST /auth/email/verify/request",
+      "GET /auth/email/verify",
+      "POST /auth/email/verify/consume",
+      "POST /auth/password/reset/request",
+      "GET /auth/password/reset",
+      "POST /auth/password/reset/confirm",
+      "GET /auth/dev/emails",
+      "Referrer-Policy: no-referrer",
+      "history entry",
+      "cf-auth",
+      "@cf-auth/cli",
+      "create-cloudflare-auth",
+      "@cf-auth/core",
+      "@cf-auth/worker",
+      "@cf-auth/hono",
+      "@cf-auth/client",
+      "@cf-auth/email-cloudflare",
+      "@cf-auth/testing",
+      "defineAuthConfig",
+      "createAuthHandler",
+      "getSession",
+      "getUser",
+      "requireUser",
+      "requireVerifiedUser",
+      "getAuthSessionFromRequest",
+      "createD1Repositories",
+      "cleanCfAuth",
+      "terminalEmail",
+      "byEnvironment",
+      "verifyTurnstileToken",
+      "cloudflareRateLimitPrefilter",
+      "redactLogValue",
+      "Default retention windows",
+      "non-negative integer",
+    ].join("\n"),
+  );
+  await writeFixtureFile(
+    root,
+    "docs/migrations.md",
+    [
+      "cf-auth migrate --local",
+      "cf-auth migrate --remote --env production",
+      "cf-auth migrate --status --local",
+      "cf-auth migrate --status --remote --env production",
+      "cleanCfAuth",
+      "ctx.waitUntil",
+      "non-negative integer",
+    ].join("\n"),
+  );
+  await writeFixtureFile(
+    root,
+    "docs/deployment.md",
+    [
+      "cf-auth doctor --env production",
+      "cf-auth migrate --remote --env production",
+      "cf-auth deploy --env production",
+      "AUTH_PUBLIC_ORIGIN",
+      "AUTH_SECRET",
+      "AUTH_DB.database_id",
+      "AUTH_EMAIL",
+      "/auth/logout",
+    ].join("\n"),
+  );
+}
+
+async function writeSecurityDocsFixtures(root: string) {
+  const threatRows = [
+    "Account enumeration",
+    "Credential stuffing",
+    "Brute-force login",
+    "Reset email abuse",
+    "Magic-link abuse",
+    "Email link scanners",
+    "Token replay",
+    "Token leakage",
+    "Open redirects",
+    "CSRF",
+    "Session theft",
+    "Session fixation",
+    "D1 consistency/concurrency",
+    "Email delivery failure",
+    "Secret rotation",
+    "Permissive CORS middleware",
+    "Raw PII in logs",
+    "Bot pressure",
+    "Edge floods",
+    "Operational blind spots",
+  ].map((threat) => `| ${threat} | mitigation | [tests](../tests/x) |`);
+  await writeFixtureFile(
+    root,
+    "docs/security-model.md",
+    [
+      ...threatRows,
+      "Optional Turnstile checks before account-specific branching",
+      "Optional Cloudflare rate-limit binding before D1 counters",
+      "scrub browser history",
+      "Known residual risks",
+    ].join("\n"),
+  );
+  await writeFixtureFile(
+    root,
+    "docs/turnstile.md",
+    [
+      'mode: "required"',
+      "before schema validation, account lookup, token lookup, token consume, or password hashing",
+      "tests/security-hardening.test.ts",
+      "magic_link_consume",
+      "password_reset_confirm",
+      "transport errors and malformed responses are treated as failed challenges",
+    ].join("\n"),
+  );
+  await writeFixtureFile(
+    root,
+    "docs/rate-limiting.md",
+    [
+      "AUTH_RATE_LIMITER",
+      "D1 remains authoritative",
+      "fails open to the D1 limiter",
+      "Raw emails, identifiers, and IP addresses are never stored",
+      "tests/routes.test.ts",
+      "tests/security-hardening.test.ts",
+    ].join("\n"),
+  );
+  await writeFixtureFile(
+    root,
+    "docs/metrics.md",
+    [
+      "dummy_password_verification",
+      "rate_limit_hit",
+      "email_send_failed",
+      "config_error",
+      "malformed_token",
+      "invalid_or_expired",
+      "disabled_user",
+      "GROUP BY reason",
+    ].join("\n"),
+  );
+}
+
+async function writeMigrationFixtures(root: string) {
+  await writeFixtureFile(
+    root,
+    "migrations/0001_initial.sql",
+    "CREATE TABLE auth_schema_migrations(version TEXT);\n",
+  );
+  await writeFixtureFile(
+    root,
+    "migrations/0002_indexes.sql",
+    "INSERT INTO auth_schema_migrations VALUES ('0002');\nUPDATE auth_meta SET schema_version = 2;\n",
+  );
+}
+
+async function writeDeployTemplateFixtures(root: string) {
+  await writeFixtureFile(
+    root,
+    "scripts/version-matrix.json",
+    JSON.stringify({
+      pnpm: "11.1.1",
+      hono: "4.12.18",
+      typescript: "6.0.3",
+      vitest: "4.1.6",
+      wrangler: "4.90.1",
+      workersCompatibilityDateFloor: "2024-09-23",
+    }),
+  );
+  await writeFixtureFile(
+    root,
+    "scripts/export-deploy-template.mjs",
+    `import { mkdir, writeFile } from "node:fs/promises";
+const dir = process.argv[2];
+await mkdir(dir + "/src", { recursive: true });
+await mkdir(dir + "/migrations", { recursive: true });
+await writeFile(dir + "/package.json", JSON.stringify({
+  name: "cloudflare-auth-template",
+  private: true,
+  packageManager: "pnpm@11.1.1",
+  scripts: {
+    dev: "wrangler dev",
+    build: "tsc -p tsconfig.json --noEmit",
+    test: "vitest run --passWithNoTests",
+    "db:migrations:apply": "wrangler d1 migrations apply AUTH_DB --remote",
+    deploy: "npm run db:migrations:apply && wrangler deploy"
+  },
+  dependencies: {
+    "@cf-auth/email-cloudflare": "beta",
+    "@cf-auth/hono": "beta",
+    "@cf-auth/worker": "beta",
+    hono: "4.12.18"
+  },
+  devDependencies: {
+    "@cf-auth/cli": "beta",
+    typescript: "6.0.3",
+    vitest: "4.1.6",
+    wrangler: "4.90.1"
+  },
+  cloudflare: {
+    bindings: {
+      AUTH_DB: { description: "D1 database" },
+      AUTH_SECRET: { description: "Auth secret" },
+      AUTH_PUBLIC_ORIGIN: { description: "Public origin" }
+    }
+  }
+}, null, 2));
+await writeFile(dir + "/wrangler.jsonc", JSON.stringify({
+  compatibility_date: "2026-05-13",
+  compatibility_flags: ["nodejs_compat"],
+  vars: { AUTH_ENV: "production", AUTH_PUBLIC_ORIGIN: "https://auth.example.test" },
+  d1_databases: [{ binding: "AUTH_DB", database_name: "auth", database_id: "auth", migrations_dir: "migrations" }]
+}, null, 2));
+await writeFile(dir + "/README.md", "https://deploy.workers.cloudflare.com/?url=https://github.com/acme/cloudflare-auth-template\\nAUTH_PUBLIC_ORIGIN\\nAUTH_SECRET\\n");
+await writeFile(dir + "/.dev.vars.example", "AUTH_SECRET=k1.REPLACE_WITH_32_BYTE_BASE64URL_SECRET\\n");
+`,
+  );
+}
+
 async function writeStableEvidence(root: string) {
   await writeFixtureFile(
     root,
@@ -352,7 +693,17 @@ async function writeStableEvidence(root: string) {
   await writeFixtureFile(
     root,
     "docs/config-schema.md",
-    "Release approval: release-approved by maintainer on 2026-05-14\n",
+    [
+      "Release approval: release-approved by maintainer on 2026-05-14",
+      "AUTH_DB",
+      "AUTH_SECRET",
+      "AUTH_SECRET_PREVIOUS",
+      "AUTH_ENV",
+      "AUTH_PUBLIC_ORIGIN",
+      "TURNSTILE_SECRET_KEY",
+      "AUTH_RATE_LIMITER",
+      "AUTH_EMAIL",
+    ].join("\n"),
   );
   await writeFixtureFile(
     root,

@@ -49,6 +49,7 @@ await requireFile("scripts/verify-beta-evidence.mjs");
 await requireFile("scripts/verify-deploy-button-evidence.mjs");
 await requireFile("scripts/verify-deploy-template.mjs");
 await requireFile("scripts/verify-docs-coverage.mjs");
+await requireFile("scripts/verify-migrations.mjs");
 await requireFile("scripts/verify-package-ownership.mjs");
 await requireFile("scripts/verify-security-docs.mjs");
 await requireFile("scripts/verify-security-release-tracker.mjs");
@@ -165,6 +166,11 @@ await requireText(
   "docs/release-checklist.md",
   "opt-in Wrangler dev smoke workflow passes",
 );
+
+requireVerifier("scripts/verify-deploy-template.mjs");
+requireVerifier("scripts/verify-docs-coverage.mjs");
+requireVerifier("scripts/verify-migrations.mjs");
+requireVerifier("scripts/verify-security-docs.mjs");
 
 const stablePackages = packages.filter((pkg) =>
   isStableOneOrLater(pkg.version),

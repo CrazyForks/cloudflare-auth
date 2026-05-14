@@ -3,3 +3,4 @@ dist/
 .pnpm-store/
 pnpm-lock.yaml
 cloudflare_auth_implementation_plan.md
+**/.dev.vars.example

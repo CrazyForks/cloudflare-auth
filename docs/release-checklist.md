@@ -30,6 +30,7 @@
 - beta packages published from a dry-run artifact
 - quickstart passes in CI using published beta versions
 - maintainer manually verifies the quickstart
+- opt-in Wrangler dev smoke workflow passes for at least one Worker example
 - production smoke test passes against an opt-in Cloudflare account fixture
 - Deploy to Cloudflare button path verified or explicitly blocked
 
@@ -40,4 +41,5 @@
 - upgrade tests cover every beta schema version
 - security review decision record signed
 - dependency review automation is enabled
+- opt-in Wrangler dev smoke workflow passes for the release candidate
 - README, LICENSE, export maps, package contents, and provenance settings pass `pnpm package:check`

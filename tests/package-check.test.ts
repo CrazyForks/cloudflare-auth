@@ -193,6 +193,31 @@ describe("package checks", () => {
     );
   });
 
+  it("requires release readiness audit coverage for every blocking evidence gate", async () => {
+    const root = await packageCheckFixture();
+    await replaceFixtureText(
+      root,
+      "docs/release-readiness-audit.md",
+      "| Published quickstart smoke",
+      "| Published quickstart",
+    );
+    await replaceFixtureText(
+      root,
+      "docs/release-readiness-audit.md",
+      "not be fabricated in the repo",
+      "not be copied from examples",
+    );
+    const result = runPackageCheck(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "docs/release-readiness-audit.md: missing Published quickstart smoke",
+    );
+    expect(result.stderr).toContain(
+      "docs/release-readiness-audit.md: missing not be fabricated in the repo",
+    );
+  });
+
   it("requires release readiness audit coverage for every non-negotiable rule", async () => {
     const root = await packageCheckFixture();
     await replaceFixtureText(

@@ -118,6 +118,21 @@ describe("release gates", () => {
     expect(result.stderr).toContain("## Source Notes And README Draft Audit");
   });
 
+  it("requires release readiness audit coverage for blocking evidence gates", async () => {
+    const root = await releaseGateFixture({ deployButtonEvidence: true });
+    await replaceFixtureText(
+      root,
+      "docs/release-readiness-audit.md",
+      "Published quickstart smoke",
+      "Published quickstart",
+    );
+    const result = runReleaseGates(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("docs/release-readiness-audit.md");
+    expect(result.stderr).toContain("Published quickstart smoke");
+  });
+
   it("derives evidence example endpoint coverage from the smoke script", async () => {
     const root = await releaseGateFixture({ deployButtonEvidence: true });
     await writeFixtureFile(
@@ -1417,6 +1432,22 @@ function releaseReadinessAuditFixtureText() {
     "Remote deploy works with documented Cloudflare setup.",
     "Packages can be published with Changesets.",
     "No known high-severity auth bug is open.",
+    "## Blocking Evidence",
+    "maintainer, npm, GitHub, or Cloudflare evidence",
+    "not be fabricated in the repo",
+    "Private alpha evidence",
+    "Public beta evidence",
+    "Published quickstart smoke",
+    "Deploy to Cloudflare evidence",
+    "Production Cloudflare smoke",
+    "Package ownership",
+    "Security release tracker",
+    "API approval",
+    "Config schema approval",
+    "Security review decision",
+    "Published package versions",
+    "## Release Rule",
+    "not ready for public beta or stable 1.0",
     "scripts/lint.mjs",
     "interpolated D1 `prepare`/`exec` template SQL",
     "tests/lint.test.ts",

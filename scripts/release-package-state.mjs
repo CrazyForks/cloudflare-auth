@@ -22,6 +22,9 @@ export async function readReleasePackageState() {
       continue;
     }
     if (!pkg.private) {
+      if (typeof pkg.name !== "string" || pkg.name.trim().length === 0) {
+        failures.push(`${path}: name must be a non-empty string`);
+      }
       if (typeof pkg.version !== "string" || pkg.version.trim().length === 0) {
         failures.push(`${path}: version must be a non-empty string`);
         continue;

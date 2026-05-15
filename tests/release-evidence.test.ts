@@ -1198,6 +1198,28 @@ describe("release evidence verifiers", () => {
     }
   });
 
+  it("rejects publishable package manifests without string names before release evidence checks", async () => {
+    const cwd = await packageVersionFixture("1.0.0");
+    await writeFile(
+      join(cwd, "packages", "cli", "package.json"),
+      `${JSON.stringify({ name: 1, version: "1.0.0" })}\n`,
+    );
+
+    for (const script of [
+      "scripts/verify-alpha-evidence.mjs",
+      "scripts/verify-beta-evidence.mjs",
+      "scripts/verify-deploy-button-evidence.mjs",
+      "scripts/verify-security-release-tracker.mjs",
+    ]) {
+      const result = runScript(script, {}, cwd);
+
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain(
+        "packages/cli/package.json: name must be a non-empty string",
+      );
+    }
+  });
+
   it("rejects publishable package manifests with blank versions before release evidence checks", async () => {
     const cwd = await packageVersionFixture("1.0.0");
     await writeFile(

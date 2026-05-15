@@ -1439,6 +1439,19 @@ describe("auth HTTP runtime", () => {
     expect(pulls).toBeLessThan(5);
     expect(canceled).toBe(true);
 
+    const invalidLength = await limited.authFetch("/auth/signup", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Content-Length": "-1",
+      },
+      body: "{}",
+    });
+    expect(invalidLength.status).toBe(400);
+    await expect(invalidLength.json()).resolves.toMatchObject({
+      error: { code: "validation_failed" },
+    });
+
     const { authFetch, handler, env } = await setup();
     const unsafe = await authFetch("/auth/magic-link/request", {
       method: "POST",

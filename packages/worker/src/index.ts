@@ -3284,7 +3284,16 @@ async function readLimitedBodyText(
   request: Request,
   maxBytes: number,
 ): Promise<string> {
-  const declaredLength = Number(request.headers.get("Content-Length") ?? "0");
+  const declaredLengthHeader = request.headers.get("Content-Length");
+  const declaredLength =
+    declaredLengthHeader === null ? 0 : Number(declaredLengthHeader);
+  if (
+    declaredLengthHeader !== null &&
+    (!/^\d+$/u.test(declaredLengthHeader) ||
+      !Number.isSafeInteger(declaredLength))
+  ) {
+    throw new AuthCryptoError("Invalid Content-Length", "validation_failed");
+  }
   if (declaredLength > maxBytes) {
     throw new AuthCryptoError("Request body too large", "body_too_large");
   }

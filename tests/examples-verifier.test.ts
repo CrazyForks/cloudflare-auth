@@ -123,6 +123,10 @@ describe("examples verifier", () => {
       join(root, "templates", "worker-basic", ".env.local"),
       "AUTH_SECRET=k1.secret\n",
     );
+    await writeFile(
+      join(root, "examples", "worker-basic", "src", ".env.production"),
+      "AUTH_SECRET=k1.secret\n",
+    );
     const result = runExamplesVerifier(root);
 
     expect(result.status).toBe(1);
@@ -131,6 +135,40 @@ describe("examples verifier", () => {
     );
     expect(result.stderr).toContain(
       "templates/worker-basic: must not include .env.local",
+    );
+    expect(result.stderr).toContain(
+      "examples/worker-basic/src: must not include .env.production",
+    );
+  });
+
+  it("requires explicit local runtime vars in example Wrangler configs", async () => {
+    const root = await examplesFixture();
+    await writeJson(join(root, "examples", "hono-basic", "wrangler.jsonc"), {
+      $schema: "./node_modules/wrangler/config-schema.json",
+      compatibility_date: "2026-05-15",
+      compatibility_flags: ["nodejs_compat"],
+      observability: { enabled: true, head_sampling_rate: 1 },
+      vars: {
+        AUTH_ENV: "production",
+        AUTH_PUBLIC_ORIGIN: "https://example.com",
+      },
+      d1_databases: [
+        {
+          binding: "AUTH_DB",
+          database_name: "auth",
+          database_id: "local-development",
+          migrations_dir: "../../migrations",
+        },
+      ],
+    });
+    const result = runExamplesVerifier(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "examples/hono-basic: wrangler.jsonc top-level vars.AUTH_ENV must be development",
+    );
+    expect(result.stderr).toContain(
+      "examples/hono-basic: wrangler.jsonc top-level vars.AUTH_PUBLIC_ORIGIN must be http://localhost:8787",
     );
   });
 

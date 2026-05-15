@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { mkdtemp, readdir, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 
 import { isJsonObject } from "./evidence-validation.mjs";
 
@@ -222,18 +222,12 @@ async function checkIsolatedTree(dir) {
     "node_modules",
     ".wrangler",
     "pnpm-workspace.yaml",
-    ".dev.vars",
-    ".env",
   ]) {
     if (entries.has(forbidden)) {
       failures.push(`template tree: must not include ${forbidden}`);
     }
   }
-  for (const entry of entries) {
-    if (entry.startsWith(".env.")) {
-      failures.push(`template tree: must not include ${entry}`);
-    }
-  }
+  await checkNoSecretEnvFiles(dir);
   for (const required of [
     "README.md",
     "package.json",
@@ -245,6 +239,23 @@ async function checkIsolatedTree(dir) {
     if (!entries.has(required))
       failures.push(`template tree: missing ${required}`);
   }
+}
+
+async function checkNoSecretEnvFiles(root, dir = root) {
+  const entries = await readdir(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const path = join(dir, entry.name);
+    if (isSecretEnvFileName(entry.name)) {
+      failures.push(`template tree: must not include ${relative(root, path)}`);
+    }
+    if (entry.isDirectory()) {
+      await checkNoSecretEnvFiles(root, path);
+    }
+  }
+}
+
+function isSecretEnvFileName(name) {
+  return name === ".dev.vars" || name === ".env" || name.startsWith(".env.");
 }
 
 async function checkMigrations(dir) {

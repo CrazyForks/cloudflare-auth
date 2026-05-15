@@ -41,6 +41,7 @@ for (const root of ["examples", "templates"]) {
     );
     if (!wrangler) continue;
     verifyWranglerToolchain(dir, wrangler);
+    verifyWranglerLocalRuntime(dir, wrangler);
     verifyWranglerD1Binding(
       dir,
       wrangler,
@@ -159,16 +160,24 @@ async function verifyDevVarsExample(dir) {
 }
 
 async function verifyNoSecretEnvFiles(dir) {
-  const entries = await readdir(dir);
+  await verifyNoSecretEnvFilesInDir(dir);
+}
+
+async function verifyNoSecretEnvFilesInDir(dir) {
+  const entries = await readdir(dir, { withFileTypes: true });
   for (const entry of entries) {
-    if (
-      entry === ".dev.vars" ||
-      entry === ".env" ||
-      entry.startsWith(".env.")
-    ) {
-      failures.push(`${dir}: must not include ${entry}`);
+    const path = join(dir, entry.name);
+    if (isSecretEnvFileName(entry.name)) {
+      failures.push(`${dir}: must not include ${entry.name}`);
+    }
+    if (entry.isDirectory()) {
+      await verifyNoSecretEnvFilesInDir(path);
     }
   }
+}
+
+function isSecretEnvFileName(name) {
+  return name === ".dev.vars" || name === ".env" || name.startsWith(".env.");
 }
 
 async function verifyAuthConfigPasswordHashing(dir) {
@@ -249,6 +258,19 @@ function verifyWranglerToolchain(dir, wrangler) {
   if (wrangler.observability?.head_sampling_rate !== 1) {
     failures.push(
       `${dir}: wrangler.jsonc observability head_sampling_rate must be 1`,
+    );
+  }
+}
+
+function verifyWranglerLocalRuntime(dir, wrangler) {
+  if (wrangler.vars?.AUTH_ENV !== "development") {
+    failures.push(
+      `${dir}: wrangler.jsonc top-level vars.AUTH_ENV must be development`,
+    );
+  }
+  if (wrangler.vars?.AUTH_PUBLIC_ORIGIN !== "http://localhost:8787") {
+    failures.push(
+      `${dir}: wrangler.jsonc top-level vars.AUTH_PUBLIC_ORIGIN must be http://localhost:8787`,
     );
   }
 }

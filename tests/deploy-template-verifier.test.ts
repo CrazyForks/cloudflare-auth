@@ -104,6 +104,7 @@ describe("deploy template verifier", () => {
       extraExporterSource: [
         'await writeFile(dir + "/.dev.vars", "AUTH_SECRET=k1.secret\\n");',
         'await writeFile(dir + "/.env.production", "AUTH_SECRET=k1.secret\\n");',
+        'await writeFile(dir + "/src/.env.local", "AUTH_SECRET=k1.secret\\n");',
       ].join("\n"),
     });
     const result = runDeployTemplateVerifier(root);
@@ -114,6 +115,9 @@ describe("deploy template verifier", () => {
     );
     expect(result.stderr).toContain(
       "template tree: must not include .env.production",
+    );
+    expect(result.stderr).toContain(
+      "template tree: must not include src/.env.local",
     );
   });
 

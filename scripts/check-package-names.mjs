@@ -204,19 +204,23 @@ async function readOwnershipEvidence() {
       failures.push(`${evidencePath}: packages[${index}] must be an object`);
       continue;
     }
-    if (typeof item.name === "string") {
-      if (packageEvidenceByName.has(item.name)) {
-        failures.push(
-          `${evidencePath}: duplicate package evidence for ${item.name}`,
-        );
-      }
-      if (!packageNames.has(item.name)) {
-        failures.push(
-          `${evidencePath}: ${item.name} must match a publishable workspace package`,
-        );
-      }
-      packageEvidenceByName.set(item.name, item);
+    if (typeof item.name !== "string" || item.name.trim().length === 0) {
+      failures.push(
+        `${evidencePath}: packages[${index}].name must be a non-empty string`,
+      );
+      continue;
     }
+    if (packageEvidenceByName.has(item.name)) {
+      failures.push(
+        `${evidencePath}: duplicate package evidence for ${item.name}`,
+      );
+    }
+    if (!packageNames.has(item.name)) {
+      failures.push(
+        `${evidencePath}: ${item.name} must match a publishable workspace package`,
+      );
+    }
+    packageEvidenceByName.set(item.name, item);
   }
   const reservedEvidenceByName = new Map();
   for (const [index, item] of reservedEvidence.entries()) {
@@ -226,19 +230,23 @@ async function readOwnershipEvidence() {
       );
       continue;
     }
-    if (typeof item.name === "string") {
-      if (reservedEvidenceByName.has(item.name)) {
-        failures.push(
-          `${evidencePath}: duplicate reserved package evidence for ${item.name}`,
-        );
-      }
-      if (!reservedPackageNames.has(item.name)) {
-        failures.push(
-          `${evidencePath}: ${item.name} must not be listed under reservedPackages unless its workspace package is private`,
-        );
-      }
-      reservedEvidenceByName.set(item.name, item);
+    if (typeof item.name !== "string" || item.name.trim().length === 0) {
+      failures.push(
+        `${evidencePath}: reservedPackages[${index}].name must be a non-empty string`,
+      );
+      continue;
     }
+    if (reservedEvidenceByName.has(item.name)) {
+      failures.push(
+        `${evidencePath}: duplicate reserved package evidence for ${item.name}`,
+      );
+    }
+    if (!reservedPackageNames.has(item.name)) {
+      failures.push(
+        `${evidencePath}: ${item.name} must not be listed under reservedPackages unless its workspace package is private`,
+      );
+    }
+    reservedEvidenceByName.set(item.name, item);
   }
   return { packageEvidenceByName, reservedEvidenceByName };
 }

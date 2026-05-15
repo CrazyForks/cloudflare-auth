@@ -150,6 +150,45 @@ describe("package name registry checks", () => {
     expect(result.stderr).toContain("reservedPackages[0] must be an object");
   });
 
+  it("rejects package ownership entries without nonblank names", async () => {
+    const fixture = await packageNameFixture();
+    const evidence = JSON.parse(
+      await readFile(
+        join(fixture.root, "docs", "package-ownership.json"),
+        "utf8",
+      ),
+    ) as {
+      packages: unknown[];
+      reservedPackages: unknown[];
+    };
+    evidence.packages.push({
+      name: "   ",
+      registry: "https://registry.npmjs.org/",
+      version: "0.1.0-beta.0",
+      ownershipConfirmed: true,
+      publisherTwoFactorEnabled: true,
+      provenancePublish: true,
+    });
+    evidence.reservedPackages.push({
+      name: 1,
+      registry: "https://registry.npmjs.org/",
+      publishableAfterOwnershipConfirmed: true,
+    });
+    await writeFile(
+      join(fixture.root, "docs", "package-ownership.json"),
+      `${JSON.stringify(evidence, null, 2)}\n`,
+    );
+    const result = runPackageNameCheck(fixture.root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "packages[7].name must be a non-empty string",
+    );
+    expect(result.stderr).toContain(
+      "reservedPackages[2].name must be a non-empty string",
+    );
+  });
+
   it("rejects duplicate package ownership entries", async () => {
     const fixture = await packageNameFixture();
     const evidence = JSON.parse(

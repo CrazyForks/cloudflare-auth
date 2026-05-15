@@ -178,6 +178,36 @@ describe("package name registry checks", () => {
     );
   });
 
+  it("rejects package ownership entries for unknown package names", async () => {
+    const fixture = await packageNameFixture();
+    const evidence = JSON.parse(
+      await readFile(
+        join(fixture.root, "docs", "package-ownership.json"),
+        "utf8",
+      ),
+    ) as {
+      packages: unknown[];
+    };
+    evidence.packages.push({
+      name: "@cf-auth/unknown",
+      registry: "https://registry.npmjs.org/",
+      version: "0.1.0-beta.0",
+      ownershipConfirmed: true,
+      publisherTwoFactorEnabled: true,
+      provenancePublish: true,
+    });
+    await writeFile(
+      join(fixture.root, "docs", "package-ownership.json"),
+      `${JSON.stringify(evidence, null, 2)}\n`,
+    );
+    const result = runPackageNameCheck(fixture.root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "@cf-auth/unknown must match a publishable workspace package",
+    );
+  });
+
   it("rejects non-object npm package lookup results", async () => {
     const fixture = await packageNameFixture({
       cliRegistryOutput: "null",

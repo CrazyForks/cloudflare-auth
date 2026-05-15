@@ -14,6 +14,7 @@ const packages = workspacePackages
   .map((entry) => workspacePackageIdentity(entry))
   .filter((pkg) => pkg !== null)
   .sort((a, b) => a.name.localeCompare(b.name));
+const packageNames = new Set(packages.map((pkg) => pkg.name));
 const reservedPackages = workspacePackages
   .filter(
     (entry) =>
@@ -207,6 +208,11 @@ async function readOwnershipEvidence() {
       if (packageEvidenceByName.has(item.name)) {
         failures.push(
           `${evidencePath}: duplicate package evidence for ${item.name}`,
+        );
+      }
+      if (!packageNames.has(item.name)) {
+        failures.push(
+          `${evidencePath}: ${item.name} must match a publishable workspace package`,
         );
       }
       packageEvidenceByName.set(item.name, item);

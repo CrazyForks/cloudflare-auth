@@ -140,6 +140,19 @@ describe("deploy template verifier", () => {
       "package.json: deploy script must apply D1 migrations before deploy",
     );
   });
+
+  it("rejects generated templates with drifted migrations", async () => {
+    const root = await deployTemplateFixture({
+      extraExporterSource:
+        'await writeFile(dir + "/migrations/0002_indexes.sql", "-- drifted\\n");',
+    });
+    const result = runDeployTemplateVerifier(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "migrations/0002_indexes.sql: must match root migration",
+    );
+  });
 });
 
 async function deployTemplateFixture(
@@ -152,6 +165,15 @@ async function deployTemplateFixture(
 ) {
   const root = await mkdtemp(join(tmpdir(), "cf-auth-deploy-template-test-"));
   await mkdir(join(root, "scripts"), { recursive: true });
+  await mkdir(join(root, "migrations"), { recursive: true });
+  await writeFile(
+    join(root, "migrations", "0001_initial.sql"),
+    "-- initial migration\n",
+  );
+  await writeFile(
+    join(root, "migrations", "0002_indexes.sql"),
+    "-- index migration\n",
+  );
   await writeJson(join(root, "scripts", "version-matrix.json"), {
     node: ">=22.12.0",
     pnpm: "11.1.1",
@@ -251,6 +273,8 @@ function exporterSource(input: {
 const dir = process.argv[2];
 await mkdir(dir + "/src", { recursive: true });
 await mkdir(dir + "/migrations", { recursive: true });
+await writeFile(dir + "/migrations/0001_initial.sql", "-- initial migration\\n");
+await writeFile(dir + "/migrations/0002_indexes.sql", "-- index migration\\n");
 await writeFile(dir + "/package.json", ${JSON.stringify(input.packageJson)});
 await writeFile(dir + "/wrangler.jsonc", ${JSON.stringify(input.wranglerJson)});
 await writeFile(dir + "/README.md", "https://deploy.workers.cloudflare.com/?url=https://github.com/acme/cloudflare-auth-template\\nAUTH_PUBLIC_ORIGIN\\nAUTH_SECRET\\nAUTH_EMAIL\\nnpx --package @cf-auth/cli@beta cf-auth rotate-secret --print\\n");

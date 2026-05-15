@@ -9,6 +9,9 @@ const root = process.cwd();
 const temp = await mkdtemp(join(tmpdir(), "cf-auth-deploy-template-"));
 const output = join(temp, "template");
 const failures = [];
+const rootMigrationFiles = (await readdir("migrations"))
+  .filter((file) => file.endsWith(".sql"))
+  .sort();
 
 run("node", ["scripts/export-deploy-template.mjs", output]);
 
@@ -39,6 +42,7 @@ const gitignore = await readRequiredText(
 if (packageJson && versionMatrix) checkPackageJson(packageJson);
 if (wrangler && versionMatrix) checkWrangler(wrangler);
 await checkIsolatedTree(output);
+await checkMigrations(output);
 checkReadme(readme);
 checkDevVarsExample(devVarsExample);
 checkGitignore(gitignore);
@@ -240,6 +244,34 @@ async function checkIsolatedTree(dir) {
   ]) {
     if (!entries.has(required))
       failures.push(`template tree: missing ${required}`);
+  }
+}
+
+async function checkMigrations(dir) {
+  let templateMigrationFiles = [];
+  try {
+    templateMigrationFiles = (await readdir(join(dir, "migrations")))
+      .filter((file) => file.endsWith(".sql"))
+      .sort();
+  } catch {
+    failures.push("migrations: required deploy template directory is missing");
+    return;
+  }
+  if (templateMigrationFiles.join("\n") !== rootMigrationFiles.join("\n")) {
+    failures.push(
+      "migrations: deploy template must include every root migration",
+    );
+  }
+  for (const file of rootMigrationFiles) {
+    const [rootSql, templateSql] = await Promise.all([
+      readFile(join("migrations", file), "utf8"),
+      readFile(join(dir, "migrations", file), "utf8").catch(() => null),
+    ]);
+    if (templateSql === null) {
+      failures.push(`migrations/${file}: required migration is missing`);
+    } else if (templateSql !== rootSql) {
+      failures.push(`migrations/${file}: must match root migration`);
+    }
   }
 }
 

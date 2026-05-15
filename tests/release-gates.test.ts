@@ -1422,6 +1422,7 @@ function releaseReadinessAuditFixtureText() {
     "tests/lint.test.ts",
     "docs/metrics.md",
     "runtime auth-event metrics docs",
+    "pnpm verify:release-audit",
     "CF_AUTH_REQUIRE_ALPHA_EVIDENCE=1 pnpm verify:alpha-evidence",
     "CF_AUTH_REQUIRE_BETA_EVIDENCE=1 pnpm verify:beta-evidence",
     "CF_AUTH_REQUIRE_DEPLOY_BUTTON_EVIDENCE=1 pnpm verify:deploy-button-evidence",

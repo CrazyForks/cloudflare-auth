@@ -113,6 +113,22 @@ describe("package checks", () => {
     );
   });
 
+  it("requires package READMEs to carry the independent-project disclaimer", async () => {
+    const root = await packageCheckFixture();
+    await replaceFixtureText(
+      root,
+      "packages/core/README.md",
+      "Cloudflare Auth is an independent open-source project and is not affiliated with, endorsed by, or sponsored by Cloudflare.",
+      "Cloudflare Auth is an authentication package.",
+    );
+    const result = runPackageCheck(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "@cf-auth/core: README must include independent-project disclaimer",
+    );
+  });
+
   it("requires detailed release readiness audit sections", async () => {
     const root = await packageCheckFixture();
     await replaceFixtureText(

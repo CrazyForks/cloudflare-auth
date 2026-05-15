@@ -83,6 +83,20 @@ for (const dir of packageDirs) {
   } catch {
     failures.push(`${pkg.name}: LICENSE file missing`);
   }
+  try {
+    const packageReadme = await readFile(join(dir, "README.md"), "utf8");
+    if (
+      !packageReadme.includes(
+        "not affiliated with, endorsed by, or sponsored by Cloudflare",
+      )
+    ) {
+      failures.push(
+        `${pkg.name}: README must include independent-project disclaimer`,
+      );
+    }
+  } catch {
+    failures.push(`${pkg.name}: README file missing`);
+  }
   const rootExport = rootExportMap(pkg);
   if (!rootExport) {
     failures.push(`${pkg.name}: missing explicit root export map`);

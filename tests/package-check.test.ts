@@ -721,6 +721,32 @@ describe("package checks", () => {
     );
   });
 
+  it("requires tarball smoke to run in install mode", async () => {
+    const root = await packageCheckFixture();
+    await replaceFixtureText(
+      root,
+      ".github/workflows/release.yml",
+      [
+        "      - run: pnpm smoke:tarballs",
+        "        env:",
+        '          CF_AUTH_TARBALL_INSTALL: "1"',
+        "      - run: pnpm benchmark:password",
+      ].join("\n"),
+      [
+        "      - run: pnpm smoke:tarballs",
+        "      - run: pnpm benchmark:password",
+        "        env:",
+        '          CF_AUTH_TARBALL_INSTALL: "1"',
+      ].join("\n"),
+    );
+    const result = runPackageCheck(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      '.github/workflows/release.yml: pnpm smoke:tarballs must run with CF_AUTH_TARBALL_INSTALL: "1"',
+    );
+  });
+
   it("requires publish dry-run script to emit a summary artifact", async () => {
     const root = await packageCheckFixture();
     await replaceFixtureText(root, "package.json", " --report-summary", "");

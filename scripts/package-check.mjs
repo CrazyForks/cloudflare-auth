@@ -930,6 +930,15 @@ async function verifyReleaseControls() {
       failures.push(`.github/workflows/release.yml: missing ${needle}`);
     }
   }
+  if (
+    !/-\s+run:\s+pnpm smoke:tarballs\s*\n\s+env:\s*\n\s+CF_AUTH_TARBALL_INSTALL:\s+"1"/u.test(
+      releaseWorkflow,
+    )
+  ) {
+    failures.push(
+      '.github/workflows/release.yml: pnpm smoke:tarballs must run with CF_AUTH_TARBALL_INSTALL: "1"',
+    );
+  }
   requireOrderedText(".github/workflows/release.yml", releaseWorkflow, [
     "pnpm install --frozen-lockfile",
     "pnpm format:check",

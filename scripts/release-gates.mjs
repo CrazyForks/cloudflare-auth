@@ -60,6 +60,7 @@ await requireFile("docs/deploy-to-cloudflare.md");
 await requireFile("docs/known-limitations.md");
 await requireFile("docs/package-ownership.example.json");
 await requireFile("docs/public-beta.md");
+await requireFile("docs/release-readiness-audit.md");
 await requireFile("docs/security-release-tracker.example.json");
 await requireFile("schemas/doctor-report.schema.json");
 await requireFile("scripts/export-deploy-template.mjs");
@@ -82,6 +83,7 @@ await requireText("docs/release-checklist.md", "unresolved high/critical");
 await requireText("docs/release-checklist.md", "public API report reviewed");
 await requireText("docs/release-checklist.md", "config schema reviewed");
 await requireText("docs/release-checklist.md", "security review decision");
+await requireText("docs/release-checklist.md", "release-readiness-audit.md");
 await requireText(
   "docs/release-checklist.md",
   "pnpm install --frozen-lockfile",
@@ -100,6 +102,24 @@ await requireText(
   "docs/decisions/password-benchmark.md",
   "pnpm benchmark:password",
 );
+await requireText(
+  "docs/release-readiness-audit.md",
+  "cloudflare_auth_implementation_plan.md",
+);
+for (const text of [
+  "CF_AUTH_REQUIRE_ALPHA_EVIDENCE=1 pnpm verify:alpha-evidence",
+  "CF_AUTH_REQUIRE_BETA_EVIDENCE=1 pnpm verify:beta-evidence",
+  "CF_AUTH_REQUIRE_DEPLOY_BUTTON_EVIDENCE=1 pnpm verify:deploy-button-evidence",
+  "CF_AUTH_REQUIRE_PACKAGE_OWNERSHIP=1 pnpm verify:package-ownership",
+  "pnpm check:package-names",
+  "CF_AUTH_REQUIRE_SECURITY_TRACKER=1 pnpm verify:security-tracker",
+  "docs/api-report.md",
+  "docs/config-schema.md",
+  "docs/decisions/security-review.md",
+  "0.0.0",
+]) {
+  await requireText("docs/release-readiness-audit.md", text);
+}
 await requireText("SECURITY.md", "secret scanning");
 await requireText("SECURITY.md", "push protection");
 await requireText("SECURITY.md", "advisory evidence only");

@@ -143,6 +143,7 @@ for (const dir of packageDirs) {
 await verifyPackageNamingDocs();
 await verifyReadmeAndNonGoals();
 await verifyDocsManifest();
+await verifyReleaseReadinessAudit();
 await verifyBenchmarkDocs();
 await verifyToolchainDocs();
 await verifyTroubleshootingDocs();
@@ -474,6 +475,7 @@ async function verifyDocsManifest() {
     "docs/deploy-to-cloudflare.md",
     "docs/known-limitations.md",
     "docs/release-checklist.md",
+    "docs/release-readiness-audit.md",
     "docs/upgrade-guide.md",
     "docs/api-report.md",
     "docs/config-schema.md",
@@ -489,6 +491,39 @@ async function verifyDocsManifest() {
     } catch {
       failures.push(`${file}: required documentation file is missing`);
     }
+  }
+}
+
+async function verifyReleaseReadinessAudit() {
+  let audit;
+  try {
+    audit = await readFile("docs/release-readiness-audit.md", "utf8");
+  } catch {
+    return;
+  }
+  for (const needle of [
+    "cloudflare_auth_implementation_plan.md",
+    "CF_AUTH_REQUIRE_ALPHA_EVIDENCE=1 pnpm verify:alpha-evidence",
+    "CF_AUTH_REQUIRE_BETA_EVIDENCE=1 pnpm verify:beta-evidence",
+    "CF_AUTH_REQUIRE_DEPLOY_BUTTON_EVIDENCE=1 pnpm verify:deploy-button-evidence",
+    "CF_AUTH_REQUIRE_PACKAGE_OWNERSHIP=1 pnpm verify:package-ownership",
+    "pnpm check:package-names",
+    "CF_AUTH_REQUIRE_SECURITY_TRACKER=1 pnpm verify:security-tracker",
+    "docs/api-report.md",
+    "docs/config-schema.md",
+    "docs/decisions/security-review.md",
+    "0.0.0",
+  ]) {
+    if (!audit.includes(needle)) {
+      failures.push(`docs/release-readiness-audit.md: missing ${needle}`);
+    }
+  }
+
+  const releaseChecklist = await readFile("docs/release-checklist.md", "utf8");
+  if (!releaseChecklist.includes("release-readiness-audit.md")) {
+    failures.push(
+      "docs/release-checklist.md: missing release-readiness-audit.md",
+    );
   }
 }
 

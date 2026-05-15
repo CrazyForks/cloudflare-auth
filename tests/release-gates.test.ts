@@ -780,6 +780,7 @@ async function releaseGateFixture(options: ReleaseGateFixtureOptions) {
     "docs/known-limitations.md",
     "docs/package-ownership.example.json",
     "docs/public-beta.md",
+    "docs/release-readiness-audit.md",
     "docs/security-release-tracker.example.json",
     "schemas/doctor-report.schema.json",
     "scripts/export-deploy-template.mjs",
@@ -821,6 +822,22 @@ async function releaseGateFixture(options: ReleaseGateFixtureOptions) {
       ],
     ],
     ["docs/release-checklist.md", releaseChecklistFixtureText()],
+    [
+      "docs/release-readiness-audit.md",
+      [
+        "cloudflare_auth_implementation_plan.md",
+        "CF_AUTH_REQUIRE_ALPHA_EVIDENCE=1 pnpm verify:alpha-evidence",
+        "CF_AUTH_REQUIRE_BETA_EVIDENCE=1 pnpm verify:beta-evidence",
+        "CF_AUTH_REQUIRE_DEPLOY_BUTTON_EVIDENCE=1 pnpm verify:deploy-button-evidence",
+        "CF_AUTH_REQUIRE_PACKAGE_OWNERSHIP=1 pnpm verify:package-ownership",
+        "pnpm check:package-names",
+        "CF_AUTH_REQUIRE_SECURITY_TRACKER=1 pnpm verify:security-tracker",
+        "docs/api-report.md",
+        "docs/config-schema.md",
+        "docs/decisions/security-review.md",
+        "0.0.0",
+      ],
+    ],
     [
       ".github/workflows/dependency-review.yml",
       ["actions/dependency-review-action"],
@@ -1025,6 +1042,7 @@ function releaseChecklistFixtureText() {
     "public API report reviewed",
     "config schema reviewed",
     "security review decision",
+    "release-readiness-audit.md",
     "pnpm install --frozen-lockfile",
     "pnpm audit --audit-level high",
     ...Object.keys(rootPackageScripts())

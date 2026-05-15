@@ -4,6 +4,7 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  rm,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -51,6 +52,17 @@ describe("package checks", () => {
     expect(result.status).toBe(1);
     expect(result.stderr).toContain(
       "scripts/version-matrix.json: top-level JSON value must be an object",
+    );
+  });
+
+  it("requires the release readiness audit", async () => {
+    const root = await packageCheckFixture();
+    await rm(join(root, "docs", "release-readiness-audit.md"));
+    const result = runPackageCheck(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "docs/release-readiness-audit.md: required documentation file is missing",
     );
   });
 

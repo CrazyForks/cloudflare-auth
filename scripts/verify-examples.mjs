@@ -31,6 +31,7 @@ for (const root of ["examples", "templates"]) {
     const pkg = await readJsonObject(join(dir, "package.json"));
     if (!pkg) continue;
     verifyProjectToolchain(dir, pkg);
+    await verifyNoSecretEnvFiles(dir);
     const wrangler = parseJsoncObject(
       await readFile(join(dir, "wrangler.jsonc"), "utf8"),
       join(dir, "wrangler.jsonc"),
@@ -142,6 +143,19 @@ async function verifyDevVarsExample(dir) {
   ]) {
     if (!text.includes(line)) {
       failures.push(`${dir}: .dev.vars.example missing ${line}`);
+    }
+  }
+}
+
+async function verifyNoSecretEnvFiles(dir) {
+  const entries = await readdir(dir);
+  for (const entry of entries) {
+    if (
+      entry === ".dev.vars" ||
+      entry === ".env" ||
+      entry.startsWith(".env.")
+    ) {
+      failures.push(`${dir}: must not include ${entry}`);
     }
   }
 }

@@ -52,6 +52,27 @@ describe("examples verifier", () => {
       "scripts/version-matrix.json: must be valid JSON",
     );
   });
+
+  it("rejects local secret env files in examples and templates", async () => {
+    const root = await examplesFixture();
+    await writeFile(
+      join(root, "examples", "hono-basic", ".dev.vars"),
+      "AUTH_SECRET=k1.secret\n",
+    );
+    await writeFile(
+      join(root, "templates", "worker-basic", ".env.local"),
+      "AUTH_SECRET=k1.secret\n",
+    );
+    const result = runExamplesVerifier(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "examples/hono-basic: must not include .dev.vars",
+    );
+    expect(result.stderr).toContain(
+      "templates/worker-basic: must not include .env.local",
+    );
+  });
 });
 
 async function examplesFixture() {

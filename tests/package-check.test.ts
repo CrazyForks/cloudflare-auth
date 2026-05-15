@@ -593,6 +593,22 @@ describe("package checks", () => {
     );
   });
 
+  it("requires package ownership docs to cover redaction rules", async () => {
+    const root = await packageCheckFixture();
+    await replaceFixtureText(
+      root,
+      "docs/decisions/package-naming.md",
+      "raw secrets, auth tokens, cookies, emails, IPs, user agents",
+      "raw secrets and tokens",
+    );
+    const result = runPackageCheck(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "docs/decisions/package-naming.md: missing package naming evidence raw secrets, auth tokens, cookies, emails, IPs, user agents",
+    );
+  });
+
   it("requires release gates before package publication", async () => {
     const root = await packageCheckFixture();
     await replaceFixtureText(

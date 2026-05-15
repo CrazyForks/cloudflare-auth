@@ -548,6 +548,7 @@ async function verifyPackageNamingDocs() {
     "@cloudflare-auth/worker",
     "availability signal only",
     "ownership evidence",
+    "raw secrets, auth tokens, cookies, emails, IPs, user agents",
   ]) {
     if (!naming.includes(needle)) {
       failures.push(

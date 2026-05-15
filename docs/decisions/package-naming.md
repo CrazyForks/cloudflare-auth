@@ -100,5 +100,6 @@ For an already-published npm name, include `registryVersion` with the current
 registry version at review time. The registry check fails if that value is stale
 or if the target package version already exists.
 
-Do not include npm tokens, auth-token environment variables, or registry
-session data in the evidence file.
+Do not include raw secrets, auth tokens, cookies, emails, IPs, user agents,
+npm tokens, auth-token environment variables, or registry session data in the
+evidence file.

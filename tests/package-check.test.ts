@@ -1372,17 +1372,34 @@ const defaultPublishablePackageDirs = [
 async function packageCheckFixture() {
   const sourceRoot = process.cwd();
   const root = await mkdtemp(join(tmpdir(), "cf-auth-package-check-"));
-  for (const file of ["package.json", "LICENSE", "README.md"]) {
+  for (const file of [
+    "package.json",
+    "pnpm-workspace.yaml",
+    "tsconfig.base.json",
+    "tsconfig.build.json",
+    "tsup.config.ts",
+    "vitest.config.ts",
+    "vitest.workers.config.ts",
+    "LICENSE",
+    "README.md",
+    "SECURITY.md",
+    "CONTRIBUTING.md",
+  ]) {
     await cp(join(sourceRoot, file), join(root, file));
   }
-  for (const dir of ["docs", "packages", ".github", ".changeset"]) {
+  for (const dir of [
+    "docs",
+    "examples",
+    "migrations",
+    "packages",
+    "schemas",
+    "scripts",
+    "tests",
+    ".github",
+    ".changeset",
+  ]) {
     await cp(join(sourceRoot, dir), join(root, dir), { recursive: true });
   }
-  await mkdir(join(root, "scripts"), { recursive: true });
-  await cp(
-    join(sourceRoot, "scripts", "version-matrix.json"),
-    join(root, "scripts", "version-matrix.json"),
-  );
   return root;
 }
 

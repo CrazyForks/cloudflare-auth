@@ -14,7 +14,7 @@
     "format:check": "prettier --check .",
     "lint": "node scripts/lint.mjs",
     "typecheck": "tsc -p tsconfig.base.json --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --no-file-parallelism",
     "test:workers": "vitest run -c vitest.workers.config.ts",
     "build": "pnpm -r --filter './packages/**' --sort --workspace-concurrency=1 build",
     "check:package-names": "node scripts/check-package-names.mjs",

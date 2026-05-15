@@ -3,6 +3,11 @@ import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import {
+  containsIpLiteral,
+  containsRawSecretMaterial,
+  containsRawUserAgent,
+} from "./evidence-redaction.mjs";
+import {
   isFutureIsoDateString,
   isIsoDateString,
   isJsonObject,
@@ -193,6 +198,11 @@ async function readOwnershipEvidence() {
     failures.push(`${evidencePath}: top-level JSON value must be an object`);
     fail();
   }
+  if (containsSensitiveEvidence(text)) {
+    failures.push(
+      `${evidencePath}: must not include raw secrets, tokens, cookies, emails, IPs, user agents, or Cloudflare API tokens`,
+    );
+  }
   validateEvidenceMetadata(parsed);
   if (!Array.isArray(parsed.packages)) {
     failures.push(`${evidencePath}: packages must be an array`);
@@ -284,6 +294,19 @@ function requireDate(value, path) {
   } else if (typeof value === "string" && isFutureIsoDateString(value)) {
     failures.push(`${evidencePath}: ${path} must not be in the future`);
   }
+}
+
+function containsSensitiveEvidence(text) {
+  return (
+    containsRawSecretMaterial(text) ||
+    /\bcfauth\.(?:ses|magic|verify|reset)\.[A-Za-z0-9_-]{1,32}\.[A-Za-z0-9_-]{20,}/u.test(
+      text,
+    ) ||
+    /\b(?:__Host-|__Secure-)?cfauth-session=/u.test(text) ||
+    /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/iu.test(text) ||
+    containsIpLiteral(text) ||
+    containsRawUserAgent(text)
+  );
 }
 
 async function workspacePackageManifests() {

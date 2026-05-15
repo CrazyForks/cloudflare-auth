@@ -165,6 +165,28 @@ describe("package name registry checks", () => {
     expect(result.stderr).toContain("verifiedAt must not be in the future");
   });
 
+  it("rejects package ownership evidence with raw sensitive material", async () => {
+    const fixture = await packageNameFixture();
+    const evidence = JSON.parse(
+      await readFile(
+        join(fixture.root, "docs", "package-ownership.json"),
+        "utf8",
+      ),
+    ) as Record<string, unknown>;
+    evidence.auditTrail =
+      "reviewed by release-owner@example.com from 2001:db8::1 with Mozilla/5.0";
+    await writeFile(
+      join(fixture.root, "docs", "package-ownership.json"),
+      `${JSON.stringify(evidence, null, 2)}\n`,
+    );
+    const result = runPackageNameCheck(fixture.root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "must not include raw secrets, tokens, cookies, emails, IPs, user agents, or Cloudflare API tokens",
+    );
+  });
+
   it("rejects non-object workspace package manifests", async () => {
     const fixture = await packageNameFixture();
     await writeFile(

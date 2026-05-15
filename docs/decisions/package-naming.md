@@ -31,6 +31,11 @@ behind the package-name gate or switch every package name, import, template,
 test, and doc to the approved fallback scope.
 
 As of May 15, 2026, `npm view create-cloudflare-auth name version --json` returns `E404`. Until maintainers create and control that package, public docs must not use `npm create cloudflare-auth`.
+Until then, public docs must also not use `npm init cloudflare-auth`,
+`pnpm dlx cf-auth`, `pnpm create cloudflare-auth`, `yarn dlx cf-auth`,
+`yarn create cloudflare-auth`, `bunx cf-auth`, or `bun create cloudflare-auth`
+because those forms resolve through the same unscoped shim and create-package
+names.
 
 If `cf-auth` is unavailable, public docs must use:
 

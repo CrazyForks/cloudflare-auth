@@ -78,6 +78,44 @@ const reservedPackageEvidenceNames = new Set([
   "cf-auth",
   "create-cloudflare-auth",
 ]);
+const blockedPublicPackageCommands = [
+  {
+    label: "npx cf-auth",
+    pattern: /\bnpx\s+cf-auth(?:@[\w.-]+)?(?![\w.-])/,
+  },
+  {
+    label: "npm create cloudflare-auth",
+    pattern: /\bnpm\s+create\s+cloudflare-auth(?:@[\w.-]+)?(?![\w.-])/,
+  },
+  {
+    label: "npm init cloudflare-auth",
+    pattern: /\bnpm\s+init\s+cloudflare-auth(?:@[\w.-]+)?(?![\w.-])/,
+  },
+  {
+    label: "pnpm dlx cf-auth",
+    pattern: /\bpnpm\s+dlx\s+cf-auth(?:@[\w.-]+)?(?![\w.-])/,
+  },
+  {
+    label: "pnpm create cloudflare-auth",
+    pattern: /\bpnpm\s+create\s+cloudflare-auth(?:@[\w.-]+)?(?![\w.-])/,
+  },
+  {
+    label: "yarn dlx cf-auth",
+    pattern: /\byarn\s+dlx\s+cf-auth(?:@[\w.-]+)?(?![\w.-])/,
+  },
+  {
+    label: "yarn create cloudflare-auth",
+    pattern: /\byarn\s+create\s+cloudflare-auth(?:@[\w.-]+)?(?![\w.-])/,
+  },
+  {
+    label: "bunx cf-auth",
+    pattern: /\bbunx\s+cf-auth(?:@[\w.-]+)?(?![\w.-])/,
+  },
+  {
+    label: "bun create cloudflare-auth",
+    pattern: /\bbun\s+create\s+cloudflare-auth(?:@[\w.-]+)?(?![\w.-])/,
+  },
+];
 let ownershipEvidence;
 for (const expectedDir of expectedPackages.keys()) {
   if (!packageDirs.includes(join("packages", expectedDir))) {
@@ -494,6 +532,13 @@ async function verifyPackageNamingDocs() {
     "create and control the `@cf-auth/*` scope",
     "npm view create-cloudflare-auth name version --json",
     "public docs must not use `npm create cloudflare-auth`",
+    "public docs must also not use `npm init cloudflare-auth`",
+    "`pnpm dlx cf-auth`",
+    "`pnpm create cloudflare-auth`",
+    "`yarn dlx cf-auth`",
+    "`yarn create cloudflare-auth`",
+    "`bunx cf-auth`",
+    "`bun create cloudflare-auth`",
     "@cloudflare-auth/cli",
     "@cloudflare-auth/client",
     "@cloudflare-auth/core",
@@ -553,15 +598,12 @@ async function verifyPackageNamingDocs() {
   );
   for (const file of publicCommandFiles) {
     const text = await readFile(file, "utf8");
-    if (/\bnpx\s+cf-auth(?:@[\w.-]+)?\b/.test(text)) {
-      failures.push(
-        `${file}: npx cf-auth commands are blocked until package ownership is confirmed`,
-      );
-    }
-    if (/\bnpm\s+create\s+cloudflare-auth(?:@[\w.-]+)?\b/.test(text)) {
-      failures.push(
-        `${file}: npm create cloudflare-auth commands are blocked until package ownership is confirmed`,
-      );
+    for (const { label, pattern } of blockedPublicPackageCommands) {
+      if (pattern.test(text)) {
+        failures.push(
+          `${file}: ${label} commands are blocked until package ownership is confirmed`,
+        );
+      }
     }
     for (const alias of ["cf-auth upgrade", "cf-auth add turnstile"]) {
       if (text.includes(alias)) {

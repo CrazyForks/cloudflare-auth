@@ -343,6 +343,64 @@ describe("package checks", () => {
     );
   });
 
+  it("blocks unowned package manager shortcuts in public docs", async () => {
+    const root = await packageCheckFixture();
+    await writeFile(
+      join(root, "docs", "package-shortcuts-fixture.md"),
+      [
+        "# Roadmap",
+        "",
+        "Do not publish `npm init cloudflare-auth my-app`.",
+        "Do not publish `pnpm dlx cf-auth@latest init`.",
+        "Do not publish `pnpm create cloudflare-auth@latest my-app`.",
+        "Do not publish `yarn dlx cf-auth init`.",
+        "Do not publish `yarn create cloudflare-auth my-app`.",
+        "Do not publish `bunx cf-auth init`.",
+        "Do not publish `bun create cloudflare-auth my-app`.",
+      ].join("\n"),
+    );
+    const result = runPackageCheck(root);
+
+    expect(result.status).toBe(1);
+    for (const label of [
+      "npm init cloudflare-auth",
+      "pnpm dlx cf-auth",
+      "pnpm create cloudflare-auth",
+      "yarn dlx cf-auth",
+      "yarn create cloudflare-auth",
+      "bunx cf-auth",
+      "bun create cloudflare-auth",
+    ]) {
+      expect(result.stderr).toContain(
+        `docs/package-shortcuts-fixture.md: ${label} commands are blocked until package ownership is confirmed`,
+      );
+    }
+  });
+
+  it("allows similarly named package manager commands in public docs", async () => {
+    const root = await packageCheckFixture();
+    await writeFile(
+      join(root, "docs", "package-shortcuts-allowlist.md"),
+      [
+        "# Roadmap",
+        "",
+        "The blocklist should not catch `npx cf-authentication init`.",
+        "The blocklist should not catch `npm create cloudflare-auth-app`.",
+        "The blocklist should not catch `npm init cloudflare-auth-app`.",
+        "The blocklist should not catch `pnpm dlx cf-auth-helper init`.",
+        "The blocklist should not catch `pnpm create cloudflare-auth-app`.",
+        "The blocklist should not catch `yarn dlx cf-auth-helper init`.",
+        "The blocklist should not catch `yarn create cloudflare-auth-app`.",
+        "The blocklist should not catch `bunx cf-auth-helper init`.",
+        "The blocklist should not catch `bun create cloudflare-auth-app`.",
+      ].join("\n"),
+    );
+    const result = runPackageCheck(root);
+
+    expect(result.status).toBe(0);
+    expect(result.stderr).toBe("");
+  });
+
   it("blocks unsupported v1 command aliases in public docs", async () => {
     const root = await packageCheckFixture();
     await writeFile(
@@ -507,6 +565,31 @@ describe("package checks", () => {
     );
     expect(result.stderr).toContain(
       "docs/decisions/package-naming.md: missing package naming evidence public docs must not use `npm create cloudflare-auth`",
+    );
+  });
+
+  it("requires alternate package manager command docs to stay explicit", async () => {
+    const root = await packageCheckFixture();
+    await replaceFixtureText(
+      root,
+      "docs/decisions/package-naming.md",
+      "public docs must also not use `npm init cloudflare-auth`",
+      "public docs must avoid equivalent create commands",
+    );
+    await replaceFixtureText(
+      root,
+      "docs/decisions/package-naming.md",
+      "`yarn create cloudflare-auth`",
+      "`yarn create cloudflare-auth-app`",
+    );
+    const result = runPackageCheck(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "docs/decisions/package-naming.md: missing package naming evidence public docs must also not use `npm init cloudflare-auth`",
+    );
+    expect(result.stderr).toContain(
+      "docs/decisions/package-naming.md: missing package naming evidence `yarn create cloudflare-auth`",
     );
   });
 

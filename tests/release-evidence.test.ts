@@ -93,6 +93,49 @@ describe("release evidence verifiers", () => {
     expect(result.stderr).toContain("documented alpha commands");
   });
 
+  it("rejects release evidence commands with dot-segment app names", async () => {
+    const alphaEvidence = validAlphaEvidence();
+    alphaEvidence.localSetups[0]!.commands = [
+      ...alphaEvidence.localSetups[0]!.commands,
+      "npx --package @cf-auth/cli@alpha cf-auth init .. --template hono-basic",
+      "cd ..",
+    ];
+    const alphaPath = await writeEvidence(
+      "alpha-dot-segment-command",
+      alphaEvidence,
+    );
+    const alphaResult = runScript("scripts/verify-alpha-evidence.mjs", {
+      CF_AUTH_REQUIRE_ALPHA_EVIDENCE: "1",
+      CF_AUTH_ALPHA_EVIDENCE_PATH: alphaPath,
+    });
+
+    const betaEvidence = validBetaEvidence();
+    betaEvidence.manualQuickstart.commands = [
+      ...betaEvidence.manualQuickstart.commands,
+      "npx --package @cf-auth/cli@beta cf-auth init .. --template hono-basic",
+      "cd ..",
+    ];
+    const betaPath = await writeEvidence(
+      "beta-dot-segment-command",
+      betaEvidence,
+    );
+    const betaResult = runScript("scripts/verify-beta-evidence.mjs", {
+      CF_AUTH_REQUIRE_BETA_EVIDENCE: "1",
+      CF_AUTH_BETA_EVIDENCE_PATH: betaPath,
+    });
+
+    expect(alphaResult.status).toBe(1);
+    expect(alphaResult.stderr).toContain("localSetups[0].commands[5]");
+    expect(alphaResult.stderr).toContain("localSetups[0].commands[6]");
+    expect(alphaResult.stderr).toContain("documented alpha commands");
+    expect(betaResult.status).toBe(1);
+    expect(betaResult.stderr).toContain("manualQuickstart.commands[5]");
+    expect(betaResult.stderr).toContain("manualQuickstart.commands[6]");
+    expect(betaResult.stderr).toContain(
+      "documented public-beta quickstart commands",
+    );
+  });
+
   it("rejects alpha evidence that reuses the same users for thresholds", async () => {
     const evidence = validAlphaEvidence();
     for (const setup of evidence.localSetups) setup.user = "alpha-user-1";

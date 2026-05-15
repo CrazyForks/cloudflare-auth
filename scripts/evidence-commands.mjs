@@ -32,7 +32,7 @@ export function requireOnlyDocumentedCommands({
 }
 
 export function documentedLocalSetupCommands(packageTag) {
-  const appName = "[A-Za-z0-9._-]+";
+  const appName = "[A-Za-z0-9][A-Za-z0-9_-]*(?:\\.[A-Za-z0-9][A-Za-z0-9_-]*)*";
   return [
     npxCfAuthCommand(packageTag, `init ${appName} --template hono-basic`),
     new RegExp(`^cd ${appName}$`, "u"),

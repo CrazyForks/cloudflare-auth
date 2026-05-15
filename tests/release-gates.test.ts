@@ -1989,6 +1989,10 @@ async function writeExamplesFixtures(root: string) {
         "    maxConcurrentHashesPerIsolate: 1,",
         "    queueTimeoutMs: 2000,",
         "  },",
+        "  rateLimit: {",
+        '    adapter: "d1",',
+        '    edgePrefilter: "optional",',
+        "  },",
         "});",
       ].join("\n"),
     );

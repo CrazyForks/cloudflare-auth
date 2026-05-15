@@ -195,6 +195,9 @@ async function verifyAuthConfigPasswordHashing(dir) {
     'profile: "workers-balanced"',
     "maxConcurrentHashesPerIsolate: 1",
     "queueTimeoutMs: 2000",
+    "rateLimit",
+    'adapter: "d1"',
+    'edgePrefilter: "optional"',
   ]) {
     if (!source.includes(expected)) {
       failures.push(`${dir}: auth config missing ${expected}`);

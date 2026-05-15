@@ -3708,6 +3708,10 @@ export default defineAuthConfig({
     maxConcurrentHashesPerIsolate: 1,
     queueTimeoutMs: 2000
   },
+  rateLimit: {
+    adapter: "d1",
+    edgePrefilter: "optional"
+  },
   email: byEnvironment({
     development: terminalEmail({ outbox: true }),
     preview: cloudflareEmail({

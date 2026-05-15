@@ -113,3 +113,30 @@ export function isPlaceholderRepositoryUrl(value) {
     ].includes(segment ?? ""),
   );
 }
+
+export function isPlaceholderEvidenceIdentity(value) {
+  const normalized = String(value)
+    .trim()
+    .toLowerCase()
+    .replaceAll("_", "-")
+    .replace(/\s+/gu, "-");
+  if (
+    [
+      "maintainer",
+      "maintainer-name",
+      "release-reviewer",
+      "reviewer",
+      "security-reviewer",
+      "external-reviewer",
+      "todo",
+      "tbd",
+      "n-a",
+      "none",
+    ].includes(normalized)
+  ) {
+    return true;
+  }
+  return /^(?:alpha-user|beta-user|user|tester|participant|reviewer|maintainer)-\d+$/u.test(
+    normalized,
+  );
+}

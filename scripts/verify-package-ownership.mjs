@@ -10,6 +10,7 @@ import {
   isFutureIsoDateString,
   isIsoDateString,
   isJsonObject,
+  isPlaceholderEvidenceIdentity,
 } from "./evidence-validation.mjs";
 
 const evidencePath =
@@ -86,6 +87,7 @@ function validateEvidence(value, rawText) {
     failures.push(`${evidencePath}: schemaVersion must be 1`);
   }
   requireString(value.verifiedBy, "verifiedBy");
+  rejectPlaceholderIdentity(value.verifiedBy, "verifiedBy");
   requireDate(value.verifiedAt, "verifiedAt");
 
   if (!Array.isArray(value.packages)) {
@@ -228,6 +230,14 @@ function requireString(value, path) {
   }
 }
 
+function rejectPlaceholderIdentity(value, path) {
+  if (typeof value === "string" && isPlaceholderEvidenceIdentity(value)) {
+    failures.push(
+      `${evidencePath}: ${path} must not be a placeholder identity`,
+    );
+  }
+}
+
 function requireDate(value, path) {
   requireString(value, path);
   if (typeof value === "string" && !isIsoDateString(value)) {
@@ -251,7 +261,7 @@ function containsSensitiveEvidence(text) {
 }
 
 function containsPlaceholderEvidence(text) {
-  return /\bmaintainer-name\b/u.test(text);
+  return /\bmaintainer-name\b|\brelease-reviewer\b/iu.test(text);
 }
 
 async function workspacePackageManifests() {

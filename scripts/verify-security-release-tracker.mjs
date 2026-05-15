@@ -9,6 +9,7 @@ import {
   isFutureIsoDateString,
   isIsoDateString,
   isJsonObject,
+  isPlaceholderEvidenceIdentity,
   isPlaceholderRepositoryUrl,
 } from "./evidence-validation.mjs";
 import { readReleasePackageState } from "./release-package-state.mjs";
@@ -67,6 +68,7 @@ function validateTracker(value, rawText) {
     failures.push(`${trackerPath}: schemaVersion must be 1`);
   }
   requireString(value.reviewedBy, "reviewedBy");
+  rejectPlaceholderIdentity(value.reviewedBy, "reviewedBy");
   requireDate(value.reviewedAt, "reviewedAt");
   requireUrl(value.issueSearchUrl, "issueSearchUrl");
   requireIssueSearchUrl(value.issueSearchUrl);
@@ -137,6 +139,12 @@ function requireObject(value, path) {
 function requireString(value, path) {
   if (typeof value !== "string" || value.length === 0) {
     failures.push(`${trackerPath}: ${path} must be a non-empty string`);
+  }
+}
+
+function rejectPlaceholderIdentity(value, path) {
+  if (typeof value === "string" && isPlaceholderEvidenceIdentity(value)) {
+    failures.push(`${trackerPath}: ${path} must not be a placeholder identity`);
   }
 }
 
@@ -259,6 +267,7 @@ function githubRepoForAdvisorySearch(value) {
 function containsPlaceholderEvidence(text) {
   return (
     /\bmaintainer-name\b|\bGHSA-example\b|\bOWNER\b|\bREPO\b/u.test(text) ||
+    /\brelease-reviewer\b/iu.test(text) ||
     /github\.com\/(?:acme|example)\//iu.test(text)
   );
 }

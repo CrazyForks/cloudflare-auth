@@ -9,6 +9,7 @@ import {
   isFutureIsoDateString,
   isIsoDateString,
   isJsonObject,
+  isPlaceholderEvidenceIdentity,
   isPlaceholderRepositoryUrl,
   isReservedEvidenceHostname,
 } from "./evidence-validation.mjs";
@@ -80,6 +81,7 @@ function validateEvidence(value, rawText) {
     failures.push(`${evidencePath}: schemaVersion must be 1`);
   }
   requireString(value.verifiedBy, "verifiedBy");
+  rejectPlaceholderIdentity(value.verifiedBy, "verifiedBy");
   requireDate(value.verifiedAt, "verifiedAt");
   if (value.status !== "verified") {
     failures.push(
@@ -144,6 +146,14 @@ function validateEvidence(value, rawText) {
 function requireString(value, path) {
   if (typeof value !== "string" || value.length === 0) {
     failures.push(`${evidencePath}: ${path} must be a non-empty string`);
+  }
+}
+
+function rejectPlaceholderIdentity(value, path) {
+  if (typeof value === "string" && isPlaceholderEvidenceIdentity(value)) {
+    failures.push(
+      `${evidencePath}: ${path} must not be a placeholder identity`,
+    );
   }
 }
 
@@ -277,6 +287,7 @@ function containsSensitiveEvidence(text) {
 function containsPlaceholderEvidence(text) {
   return (
     /\bOWNER\b|\bREPO\b/u.test(text) ||
+    /\bmaintainer-name\b|\brelease-reviewer\b/iu.test(text) ||
     /github\.com\/(?:acme|example)\//iu.test(text) ||
     /https?:\/\/[^\s"']*(?:example\.(?:com|net|org)|\.example|\.invalid|\.test|\.localhost|localhost)\b/iu.test(
       text,

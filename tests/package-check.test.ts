@@ -370,7 +370,7 @@ describe("package checks", () => {
         {
           schemaVersion: 1,
           verifiedAt: "2026-05-14T00:00:00.000Z",
-          verifiedBy: "release-reviewer",
+          verifiedBy: "release-captain-ada",
         },
         null,
         2,
@@ -516,7 +516,7 @@ async function writeOwnershipEvidence(root: string, packageNames: string[]) {
       {
         schemaVersion: 1,
         verifiedAt: "2026-05-14T00:00:00.000Z",
-        verifiedBy: "release-reviewer",
+        verifiedBy: "release-captain-ada",
         packages: packageNames.map((name) => ({
           name,
           registry: "https://registry.npmjs.org/",

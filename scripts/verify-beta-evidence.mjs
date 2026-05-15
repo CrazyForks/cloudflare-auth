@@ -9,6 +9,7 @@ import {
   isFutureIsoDateString,
   isIsoDateString,
   isJsonObject,
+  isPlaceholderEvidenceIdentity,
   isPlaceholderRepositoryUrl,
   isReservedEvidenceHostname,
 } from "./evidence-validation.mjs";
@@ -76,6 +77,7 @@ function validateEvidence(value, rawText) {
     failures.push(`${evidencePath}: schemaVersion must be 1`);
   }
   requireString(value.reviewedBy, "reviewedBy");
+  rejectPlaceholderIdentity(value.reviewedBy, "reviewedBy");
   requireDate(value.reviewedAt, "reviewedAt");
 
   validatePublishedQuickstart(value.publishedQuickstart);
@@ -119,6 +121,7 @@ function validateManualQuickstart(value) {
   const path = "manualQuickstart";
   if (!requireObject(value, path)) return;
   requireString(value.maintainer, `${path}.maintainer`);
+  rejectPlaceholderIdentity(value.maintainer, `${path}.maintainer`);
   requireDate(value.completedAt, `${path}.completedAt`);
   requireBetaPackageTag(value.packageTag, `${path}.packageTag`);
   for (const field of [
@@ -231,6 +234,14 @@ function requireString(value, path) {
   }
 }
 
+function rejectPlaceholderIdentity(value, path) {
+  if (typeof value === "string" && isPlaceholderEvidenceIdentity(value)) {
+    failures.push(
+      `${evidencePath}: ${path} must not be a placeholder identity`,
+    );
+  }
+}
+
 function requireBetaPackageTag(value, path) {
   requireString(value, path);
   if (typeof value !== "string") return;
@@ -329,6 +340,7 @@ function containsSensitiveEvidence(text) {
 function containsPlaceholderEvidence(text) {
   return (
     /\bmaintainer-name\b/u.test(text) ||
+    /\brelease-reviewer\b/iu.test(text) ||
     /\bOWNER\b|\bREPO\b/u.test(text) ||
     /github\.com\/(?:acme|example)\//iu.test(text) ||
     /\/actions\/runs\/0+\b/u.test(text) ||

@@ -52,6 +52,97 @@ describe("release evidence verifiers", () => {
     expect(result.stderr).toContain("3 distinct alpha users");
   });
 
+  it("rejects placeholder reviewer and participant identities in release evidence", async () => {
+    const alphaEvidence = validAlphaEvidence();
+    alphaEvidence.localSetups[0]!.user = "alpha-user-1";
+    const alphaPath = await writeEvidence(
+      "alpha-placeholder-identity",
+      alphaEvidence,
+    );
+    const alphaResult = runScript("scripts/verify-alpha-evidence.mjs", {
+      CF_AUTH_REQUIRE_ALPHA_EVIDENCE: "1",
+      CF_AUTH_ALPHA_EVIDENCE_PATH: alphaPath,
+    });
+
+    const betaEvidence = validBetaEvidence();
+    betaEvidence.reviewedBy = "release-reviewer";
+    betaEvidence.manualQuickstart.maintainer = "maintainer-name";
+    const betaPath = await writeEvidence(
+      "beta-placeholder-identity",
+      betaEvidence,
+    );
+    const betaResult = runScript("scripts/verify-beta-evidence.mjs", {
+      CF_AUTH_REQUIRE_BETA_EVIDENCE: "1",
+      CF_AUTH_BETA_EVIDENCE_PATH: betaPath,
+    });
+
+    const deployButtonEvidence = validDeployButtonEvidence();
+    deployButtonEvidence.verifiedBy = "release-reviewer";
+    const deployButtonPath = await writeEvidence(
+      "deploy-button-placeholder-identity",
+      deployButtonEvidence,
+    );
+    const deployButtonResult = runScript(
+      "scripts/verify-deploy-button-evidence.mjs",
+      {
+        CF_AUTH_REQUIRE_DEPLOY_BUTTON_EVIDENCE: "1",
+        CF_AUTH_DEPLOY_BUTTON_EVIDENCE_PATH: deployButtonPath,
+      },
+    );
+
+    const packageEvidence = validPackageEvidence();
+    packageEvidence.verifiedBy = "release-reviewer";
+    const packagePath = await writeEvidence(
+      "package-ownership-placeholder-identity",
+      packageEvidence,
+    );
+    const packageResult = runScript("scripts/verify-package-ownership.mjs", {
+      CF_AUTH_REQUIRE_PACKAGE_OWNERSHIP: "1",
+      CF_AUTH_PACKAGE_OWNERSHIP_PATH: packagePath,
+    });
+
+    const securityTracker = validSecurityTracker();
+    securityTracker.reviewedBy = "release-reviewer";
+    const securityTrackerPath = await writeEvidence(
+      "security-tracker-placeholder-identity",
+      securityTracker,
+    );
+    const securityTrackerResult = runScript(
+      "scripts/verify-security-release-tracker.mjs",
+      {
+        CF_AUTH_REQUIRE_SECURITY_TRACKER: "1",
+        CF_AUTH_SECURITY_TRACKER_PATH: securityTrackerPath,
+      },
+    );
+
+    expect(alphaResult.status).toBe(1);
+    expect(alphaResult.stderr).toContain(
+      "localSetups[0].user must not be a placeholder identity",
+    );
+    expect(alphaResult.stderr).toContain(
+      "replace placeholder alpha participant values",
+    );
+    expect(betaResult.status).toBe(1);
+    expect(betaResult.stderr).toContain(
+      "reviewedBy must not be a placeholder identity",
+    );
+    expect(betaResult.stderr).toContain(
+      "manualQuickstart.maintainer must not be a placeholder identity",
+    );
+    expect(deployButtonResult.status).toBe(1);
+    expect(deployButtonResult.stderr).toContain(
+      "verifiedBy must not be a placeholder identity",
+    );
+    expect(packageResult.status).toBe(1);
+    expect(packageResult.stderr).toContain(
+      "verifiedBy must not be a placeholder identity",
+    );
+    expect(securityTrackerResult.status).toBe(1);
+    expect(securityTrackerResult.stderr).toContain(
+      "reviewedBy must not be a placeholder identity",
+    );
+  });
+
   it("rejects alpha local setup evidence without command proof", async () => {
     const evidence = validAlphaEvidence();
     evidence.localSetups[0]!.commands = [];
@@ -1545,7 +1636,7 @@ function packageOwnershipFixtureEvidence(options: {
   return {
     schemaVersion: 1,
     verifiedAt: "2026-05-14T00:00:00.000Z",
-    verifiedBy: "release-reviewer",
+    verifiedBy: "release-captain-ada",
     packages: packages.map((name) => ({
       name,
       registry: "https://registry.npmjs.org/",
@@ -1595,10 +1686,17 @@ function authSecret(kid: string) {
 }
 
 function validAlphaEvidence() {
+  const alphaUsers = [
+    "pilot-ada",
+    "pilot-ben",
+    "pilot-cy",
+    "pilot-dee",
+    "pilot-eli",
+  ];
   return {
     schemaVersion: 1,
     localSetups: Array.from({ length: 5 }, (_, index) => ({
-      user: `alpha-user-${index + 1}`,
+      user: alphaUsers[index],
       completedAt: "2026-05-14T00:00:00.000Z",
       setupMinutes: 8,
       commands: [
@@ -1612,7 +1710,7 @@ function validAlphaEvidence() {
       signupLoginVerified: true,
     })),
     productionDeploys: Array.from({ length: 3 }, (_, index) => ({
-      user: `alpha-user-${index + 1}`,
+      user: alphaUsers[index],
       completedAt: "2026-05-14T00:00:00.000Z",
       commands: [
         "npx --package @cf-auth/cli@alpha cf-auth doctor --report --env production",
@@ -1635,7 +1733,7 @@ function validBetaEvidence() {
   return {
     schemaVersion: 1,
     reviewedAt: "2026-05-14T00:00:00.000Z",
-    reviewedBy: "release-reviewer",
+    reviewedBy: "release-captain-ada",
     publishedQuickstart: {
       workflowRunUrl:
         "https://github.com/cf-auth-release/cloudflare-auth/actions/runs/123",
@@ -1647,7 +1745,7 @@ function validBetaEvidence() {
       signupLoginVerified: true,
     },
     manualQuickstart: {
-      maintainer: "release-reviewer",
+      maintainer: "release-captain-ada",
       completedAt: "2026-05-14T00:00:00.000Z",
       packageTag: "beta",
       commands: [
@@ -1693,7 +1791,7 @@ function validDeployButtonEvidence() {
     schemaVersion: 1,
     status: "verified",
     verifiedAt: "2026-05-14T00:00:00.000Z",
-    verifiedBy: "release-reviewer",
+    verifiedBy: "release-captain-ada",
     templateRepositoryUrl:
       "https://github.com/cf-auth-release/cloudflare-auth-template",
     deployButtonUrl:
@@ -1723,7 +1821,7 @@ function validPackageEvidence() {
   return {
     schemaVersion: 1,
     verifiedAt: "2026-05-14T00:00:00.000Z",
-    verifiedBy: "release-reviewer",
+    verifiedBy: "release-captain-ada",
     packages: [
       "@cf-auth/cli",
       "@cf-auth/client",
@@ -1760,7 +1858,7 @@ function validSecurityTracker() {
   return {
     schemaVersion: 1,
     reviewedAt: "2026-05-14T00:00:00.000Z",
-    reviewedBy: "release-reviewer",
+    reviewedBy: "release-captain-ada",
     issueSearchUrl:
       "https://github.com/cf-auth-release/cloudflare-auth/issues?q=is%3Aissue%20is%3Aopen%20label%3Aauth%20label%3Ahigh%2Ccritical",
     advisorySearchUrl:

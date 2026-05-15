@@ -85,7 +85,7 @@ describe("package name registry checks", () => {
         {
           schemaVersion: 1,
           verifiedAt: "2026-05-14T00:00:00.000Z",
-          verifiedBy: "release-reviewer",
+          verifiedBy: "release-captain-ada",
         },
         null,
         2,
@@ -269,7 +269,7 @@ async function packageNameFixture(
       {
         schemaVersion: 1,
         verifiedAt: "2026-05-14T00:00:00.000Z",
-        verifiedBy: "release-reviewer",
+        verifiedBy: "release-captain-ada",
         packages: packageEvidence,
         reservedPackages: [
           ...(options.publishCfAuthShim && !options.staleCfAuthReservation

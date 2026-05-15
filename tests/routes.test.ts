@@ -32,16 +32,36 @@ function setCookieHeaders(response: Response): string[] {
   return header ? header.split(/,\s*/u) : [];
 }
 
-async function expectSafeFormError(response: Response, secret: string) {
-  expect(response.status).toBe(400);
-  expect(response.headers.get("Content-Type")).toContain("text/html");
+function expectAuthSecurityHeaders(response: Response | null | undefined) {
+  expect(response).toBeDefined();
+  if (!response) throw new Error("expected auth response");
+  expect(response.headers.get("Cache-Control")).toBe("no-store");
+  expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
   expect(response.headers.get("Referrer-Policy")).toBe("no-referrer");
+}
+
+function expectHtmlSecurityHeaders(response: Response | null | undefined) {
+  expectAuthSecurityHeaders(response);
+  if (!response) throw new Error("expected html auth response");
+  expect(response.headers.get("X-Frame-Options")).toBe("DENY");
   expect(response.headers.get("Content-Security-Policy")).toContain(
     "default-src 'none'",
   );
   expect(response.headers.get("Content-Security-Policy")).toContain(
+    "base-uri 'none'",
+  );
+  expect(response.headers.get("Content-Security-Policy")).toContain(
+    "frame-ancestors 'none'",
+  );
+  expect(response.headers.get("Content-Security-Policy")).toContain(
     "form-action 'self'",
   );
+}
+
+async function expectSafeFormError(response: Response, secret: string) {
+  expect(response.status).toBe(400);
+  expect(response.headers.get("Content-Type")).toContain("text/html");
+  expectHtmlSecurityHeaders(response);
   const text = await response.text();
   expect(text).toContain("Could not complete request");
   expect(text).not.toContain(secret);
@@ -109,6 +129,46 @@ async function setup(overrides: Partial<AuthConfigInput> = {}) {
 }
 
 describe("auth HTTP runtime", () => {
+  it("sets required security headers on JSON, HTML, redirect, and preflight auth responses", async () => {
+    const { authFetch, email, handler, env, ctx } = await setup();
+
+    const jsonResponse = await authFetch("/auth/user");
+    expectAuthSecurityHeaders(jsonResponse);
+
+    const htmlResponse = await authFetch(
+      `/auth/magic-link/verify?token=${encodeURIComponent(`cfauth.magic.k1.${"A".repeat(43)}`)}`,
+    );
+    expectHtmlSecurityHeaders(htmlResponse);
+
+    const noOriginPreflight = await handler.fetch(
+      new Request(`${origin}/auth/signup`, { method: "OPTIONS" }),
+      env,
+      ctx,
+    );
+    expect(noOriginPreflight?.status).toBe(204);
+    expectAuthSecurityHeaders(noOriginPreflight);
+
+    await signup(authFetch, "headers@example.com");
+    const request = await authFetch("/auth/magic-link/request", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: "headers@example.com",
+        redirectTo: "/inside",
+      }),
+    });
+    expect(request.status).toBe(200);
+    const token = email.messages.find((item) => item.type === "magic")?.token;
+    if (!token) throw new Error("expected magic link token");
+    const redirectResponse = await authFetch("/auth/magic-link/consume", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ token }),
+    });
+    expect(redirectResponse.status).toBe(303);
+    expectAuthSecurityHeaders(redirectResponse);
+  });
+
   it("rejects invalid origin allowlists and unsupported SameSite config", () => {
     expect(() =>
       defineAuthConfig({
@@ -929,16 +989,7 @@ describe("auth HTTP runtime", () => {
       { waitUntil() {} } as unknown as ExecutionContext,
     );
     expect(noD1Get?.status).toBe(200);
-    expect(noD1Get?.headers.get("Referrer-Policy")).toBe("no-referrer");
-    expect(noD1Get?.headers.get("Content-Security-Policy")).toContain(
-      "default-src 'none'",
-    );
-    expect(noD1Get?.headers.get("Content-Security-Policy")).toContain(
-      "base-uri 'none'",
-    );
-    expect(noD1Get?.headers.get("Content-Security-Policy")).toContain(
-      "frame-ancestors 'none'",
-    );
+    expectHtmlSecurityHeaders(noD1Get);
     expect(noD1Get?.headers.get("Content-Security-Policy")).toContain(
       "script-src 'unsafe-inline'",
     );
@@ -1056,7 +1107,7 @@ describe("auth HTTP runtime", () => {
       { waitUntil() {} } as unknown as ExecutionContext,
     );
     expect(noD1ResetGet?.status).toBe(200);
-    expect(noD1ResetGet?.headers.get("Referrer-Policy")).toBe("no-referrer");
+    expectHtmlSecurityHeaders(noD1ResetGet);
     expect(noD1ResetGet?.headers.get("Content-Security-Policy")).toContain(
       "script-src 'unsafe-inline'",
     );
@@ -1497,6 +1548,40 @@ describe("auth HTTP runtime", () => {
     expect(earlyRejectedStream.status).toBe(413);
     expect(pulls).toBeLessThan(5);
     expect(canceled).toBe(true);
+
+    const oversizedForm = await limited.authFetch("/auth/magic-link/consume", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ token: "x".repeat(32) }),
+    });
+    expect(oversizedForm.status).toBe(413);
+    expectHtmlSecurityHeaders(oversizedForm);
+
+    let formPulls = 0;
+    let formCanceled = false;
+    const oversizedFormStream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        formPulls += 1;
+        controller.enqueue(new TextEncoder().encode("token=abcdef"));
+        if (formPulls > 5) controller.close();
+      },
+      cancel() {
+        formCanceled = true;
+      },
+    });
+    const oversizedFormStreamResponse = await limited.authFetch(
+      "/auth/magic-link/consume",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: oversizedFormStream as unknown as BodyInit,
+        duplex: "half",
+      } as RequestInit & { duplex: "half" },
+    );
+    expect(oversizedFormStreamResponse.status).toBe(413);
+    expectHtmlSecurityHeaders(oversizedFormStreamResponse);
+    expect(formPulls).toBeLessThan(5);
+    expect(formCanceled).toBe(true);
 
     const invalidLength = await limited.authFetch("/auth/signup", {
       method: "POST",

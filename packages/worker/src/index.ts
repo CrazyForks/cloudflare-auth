@@ -4062,6 +4062,7 @@ function html(
   const headers = securityHeaders();
   headers.set("Content-Type", "text/html; charset=utf-8");
   headers.set("Referrer-Policy", "no-referrer");
+  headers.set("X-Frame-Options", "DENY");
   headers.set(
     "Content-Security-Policy",
     `default-src 'none'; base-uri 'none'; frame-ancestors 'none'; style-src 'unsafe-inline'; form-action 'self'${options.allowInlineScript ? "; script-src 'unsafe-inline'" : ""}`,
@@ -4074,6 +4075,7 @@ function html(
 
 function securityHeaders(): Headers {
   return new Headers({
+    "Cache-Control": "no-store",
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "no-referrer",
   });

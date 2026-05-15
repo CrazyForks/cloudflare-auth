@@ -2,7 +2,9 @@
 
 Use [release-readiness-audit.md](release-readiness-audit.md) to distinguish
 local verification evidence from maintainer/manual evidence that must be
-recorded before public beta or 1.0.
+recorded at the correct stage: package ownership, private-alpha, and Deploy to
+Cloudflare button evidence before public beta; public-beta and security-tracker
+evidence plus API/config/security signoffs before stable 1.0.
 
 ## Every Release
 

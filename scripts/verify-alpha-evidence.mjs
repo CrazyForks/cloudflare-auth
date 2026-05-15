@@ -227,10 +227,17 @@ function validateEvidence(value, rawText) {
     });
   }
 
+  const failureIds = new Set();
   for (const [index, item] of failuresSeen.entries()) {
     const path = `failures[${index}]`;
     if (!requireObject(item, path)) continue;
     requireString(item.id, `${path}.id`);
+    if (typeof item.id === "string" && item.id.trim().length > 0) {
+      if (failureIds.has(item.id)) {
+        failures.push(`${evidencePath}: ${path}.id duplicates ${item.id}`);
+      }
+      failureIds.add(item.id);
+    }
     requireString(item.flow, `${path}.flow`);
     requireString(item.classification, `${path}.classification`);
   }
@@ -241,7 +248,7 @@ function validateEvidence(value, rawText) {
         (item.doctorDiagnostic === true ||
           (item.exactFixDocumented === true &&
             typeof item.troubleshootingEntry === "string" &&
-            item.troubleshootingEntry.length > 0)),
+            item.troubleshootingEntry.trim().length > 0)),
     ).length;
     if (covered / failuresSeen.length < 0.8) {
       failures.push(

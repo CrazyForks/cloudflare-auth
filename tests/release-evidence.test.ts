@@ -271,6 +271,56 @@ describe("release evidence verifiers", () => {
     expect(result.stderr).toContain("3 distinct alpha users");
   });
 
+  it("rejects duplicate alpha failure evidence IDs", async () => {
+    const evidence = validAlphaEvidence();
+    evidence.failures = [
+      {
+        id: "failure-001",
+        flow: "local setup",
+        classification: "docs gap",
+        exactFixDocumented: true,
+        troubleshootingEntry: "docs/troubleshooting.md#missing-d1-binding",
+      },
+      {
+        id: "failure-001",
+        flow: "production deploy",
+        classification: "doctor diagnostic",
+        doctorDiagnostic: true,
+      },
+    ];
+    const path = await writeEvidence("alpha-duplicate-failure-id", evidence);
+    const result = runScript("scripts/verify-alpha-evidence.mjs", {
+      CF_AUTH_REQUIRE_ALPHA_EVIDENCE: "1",
+      CF_AUTH_ALPHA_EVIDENCE_PATH: path,
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("failures[1].id duplicates failure-001");
+  });
+
+  it("rejects alpha failure coverage with blank troubleshooting entries", async () => {
+    const evidence = validAlphaEvidence();
+    evidence.failures = [
+      {
+        id: "failure-blank-fix",
+        flow: "local setup",
+        classification: "docs gap",
+        exactFixDocumented: true,
+        troubleshootingEntry: "   ",
+      },
+    ];
+    const path = await writeEvidence("alpha-blank-failure-fix", evidence);
+    const result = runScript("scripts/verify-alpha-evidence.mjs", {
+      CF_AUTH_REQUIRE_ALPHA_EVIDENCE: "1",
+      CF_AUTH_ALPHA_EVIDENCE_PATH: path,
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "at least 80% of alpha failures need a doctor diagnostic or troubleshooting entry with an exact fix",
+    );
+  });
+
   it("rejects placeholder reviewer and participant identities in release evidence", async () => {
     const alphaEvidence = validAlphaEvidence();
     alphaEvidence.localSetups[0]!.user = "alpha-user-1";

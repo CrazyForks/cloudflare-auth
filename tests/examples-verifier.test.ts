@@ -53,6 +53,66 @@ describe("examples verifier", () => {
     );
   });
 
+  it("requires build and test scripts in examples and templates", async () => {
+    const root = await examplesFixture();
+    await writeJson(join(root, "examples", "hono-basic", "package.json"), {
+      name: "examples-hono-basic",
+      packageManager: "pnpm@11.1.1",
+      scripts: {
+        test: 'node -e ""',
+      },
+      dependencies: {
+        hono: "4.12.18",
+      },
+      devDependencies: {
+        typescript: "6.0.3",
+        vitest: "4.1.6",
+        wrangler: "4.90.1",
+      },
+      engines: {
+        node: ">=22.12.0",
+      },
+    });
+    await writeJson(join(root, "templates", "worker-basic", "package.json"), {
+      name: "templates-worker-basic",
+      packageManager: "pnpm@11.1.1",
+      scripts: {
+        build: 'node -e ""',
+      },
+      dependencies: {
+        hono: "4.12.18",
+      },
+      devDependencies: {
+        typescript: "6.0.3",
+        vitest: "4.1.6",
+        wrangler: "4.90.1",
+      },
+      engines: {
+        node: ">=22.12.0",
+      },
+    });
+    const result = runExamplesVerifier(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "examples/hono-basic: missing build script",
+    );
+    expect(result.stderr).toContain(
+      "templates/worker-basic: missing test script",
+    );
+  });
+
+  it("rejects examples when build or test scripts fail", async () => {
+    const root = await examplesFixture({
+      failingPnpmScripts: ["build", "test"],
+    });
+    const result = runExamplesVerifier(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("examples/hono-basic: pnpm build failed");
+    expect(result.stderr).toContain("examples/hono-basic: pnpm test failed");
+  });
+
   it("rejects local secret env files in examples and templates", async () => {
     const root = await examplesFixture();
     await writeFile(
@@ -106,12 +166,14 @@ describe("examples verifier", () => {
   });
 });
 
-async function examplesFixture() {
+async function examplesFixture(
+  options: { failingPnpmScripts?: string[] } = {},
+) {
   const root = await mkdtemp(join(tmpdir(), "cf-auth-examples-"));
   await mkdir(join(root, "scripts"), { recursive: true });
   await mkdir(join(root, "packages", "cli"), { recursive: true });
   await mkdir(join(root, "migrations"), { recursive: true });
-  await writeFakePnpm(root);
+  await writeFakePnpm(root, options);
   await writeJson(join(root, "scripts", "version-matrix.json"), {
     node: ">=22.12.0",
     pnpm: "11.1.1",
@@ -217,14 +279,20 @@ async function writeProject(root: string, dir: string) {
   }
 }
 
-async function writeFakePnpm(root: string) {
+async function writeFakePnpm(
+  root: string,
+  options: { failingPnpmScripts?: string[] } = {},
+) {
   const bin = join(root, "bin");
   await mkdir(bin, { recursive: true });
   const pnpm = join(bin, "pnpm");
+  const failingScripts = JSON.stringify(options.failingPnpmScripts ?? []);
   await writeFile(
     pnpm,
     `#!/usr/bin/env node
-process.exit(0);
+const failingScripts = new Set(${failingScripts});
+const script = process.argv.at(-1);
+process.exit(failingScripts.has(script) ? 1 : 0);
 `,
   );
   await chmod(pnpm, 0o755);

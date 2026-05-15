@@ -90,12 +90,14 @@ function validateEvidence(value, rawText) {
   const localSetupUsers = new Set(
     localSetups
       .map((setup) => (isJsonObject(setup) ? setup.user : null))
-      .filter((user) => typeof user === "string" && user.length > 0),
+      .map(evidenceIdentityKey)
+      .filter((user) => user.length > 0),
   );
   const productionDeployUsers = new Set(
     productionDeploys
       .map((deploy) => (isJsonObject(deploy) ? deploy.user : null))
-      .filter((user) => typeof user === "string" && user.length > 0),
+      .map(evidenceIdentityKey)
+      .filter((user) => user.length > 0),
   );
 
   if (localSetupUsers.size < 5) {
@@ -232,11 +234,12 @@ function validateEvidence(value, rawText) {
     const path = `failures[${index}]`;
     if (!requireObject(item, path)) continue;
     requireString(item.id, `${path}.id`);
-    if (typeof item.id === "string" && item.id.trim().length > 0) {
-      if (failureIds.has(item.id)) {
-        failures.push(`${evidencePath}: ${path}.id duplicates ${item.id}`);
+    const failureId = evidenceIdentityKey(item.id);
+    if (failureId.length > 0) {
+      if (failureIds.has(failureId)) {
+        failures.push(`${evidencePath}: ${path}.id duplicates ${failureId}`);
       }
-      failureIds.add(item.id);
+      failureIds.add(failureId);
     }
     requireString(item.flow, `${path}.flow`);
     requireString(item.classification, `${path}.classification`);
@@ -298,6 +301,10 @@ function requireDate(value, path) {
   } else if (typeof value === "string" && isFutureIsoDateString(value)) {
     failures.push(`${evidencePath}: ${path} must not be in the future`);
   }
+}
+
+function evidenceIdentityKey(value) {
+  return typeof value === "string" ? value.trim() : "";
 }
 
 function requireCommandContains(commands, expected, path) {

@@ -271,6 +271,33 @@ describe("release evidence verifiers", () => {
     expect(result.stderr).toContain("3 distinct alpha users");
   });
 
+  it("normalizes alpha evidence users before checking thresholds", async () => {
+    const evidence = validAlphaEvidence();
+    const paddedUsers = [
+      "pilot-ada",
+      " pilot-ada",
+      "pilot-ada ",
+      " pilot-ada ",
+      "\tpilot-ada",
+    ];
+    for (const [index, setup] of evidence.localSetups.entries()) {
+      setup.user = paddedUsers[index]!;
+    }
+    const paddedDeployUsers = ["pilot-ben", " pilot-ben", "pilot-ben "];
+    for (const [index, deploy] of evidence.productionDeploys.entries()) {
+      deploy.user = paddedDeployUsers[index]!;
+    }
+    const path = await writeEvidence("alpha-padded-users", evidence);
+    const result = runScript("scripts/verify-alpha-evidence.mjs", {
+      CF_AUTH_REQUIRE_ALPHA_EVIDENCE: "1",
+      CF_AUTH_ALPHA_EVIDENCE_PATH: path,
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("5 distinct alpha users");
+    expect(result.stderr).toContain("3 distinct alpha users");
+  });
+
   it("rejects duplicate alpha failure evidence IDs", async () => {
     const evidence = validAlphaEvidence();
     evidence.failures = [
@@ -282,7 +309,7 @@ describe("release evidence verifiers", () => {
         troubleshootingEntry: "docs/troubleshooting.md#missing-d1-binding",
       },
       {
-        id: "failure-001",
+        id: " failure-001 ",
         flow: "production deploy",
         classification: "doctor diagnostic",
         doctorDiagnostic: true,

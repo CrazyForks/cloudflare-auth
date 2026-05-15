@@ -4,6 +4,10 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { isPlaceholderEvidenceIdentity } from "./evidence-validation.mjs";
+import {
+  collectReleaseReadinessAuditFailures,
+  releaseReadinessAuditPath,
+} from "./release-readiness-audit-checks.mjs";
 import { requiredAuthSmokeEndpoints } from "./smoke-endpoints.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
@@ -67,6 +71,7 @@ await requireFile("schemas/doctor-report.schema.json");
 await requireFile("scripts/evidence-commands.mjs");
 await requireFile("scripts/export-deploy-template.mjs");
 await requireFile("scripts/check-package-names.mjs");
+await requireFile("scripts/release-readiness-audit-checks.mjs");
 await requireFile("scripts/smoke-endpoints.mjs");
 await requireFile("scripts/smoke-local-tarballs.mjs");
 await requireFile("scripts/smoke-wrangler-dev.mjs");
@@ -108,10 +113,6 @@ await requireText(
   "docs/decisions/password-benchmark.md",
   "pnpm benchmark:password",
 );
-await requireText(
-  "docs/release-readiness-audit.md",
-  "cloudflare_auth_implementation_plan.md",
-);
 for (const text of [
   "Date rechecked:",
   "Wrangler environments",
@@ -134,69 +135,6 @@ for (const text of [
   "N=2^17, r=8, p=1",
 ]) {
   await requireText("docs/platform-assumptions.md", text);
-}
-for (const text of [
-  "## Completion Audit",
-  "## Non-Negotiable Rules Audit",
-  "Repositories never generate raw auth tokens",
-  "scripts/lint.mjs",
-  "interpolated D1 `prepare`/`exec` template SQL",
-  "tests/lint.test.ts",
-  "## V1 Exclusion Audit",
-  "role/permission framework",
-  "peppering",
-  "## Functional Specification Audit",
-  "Section 0 execution contract",
-  "Sections 1-4 product and user experience",
-  "Sections 5-8 architecture, repo, and packages",
-  "Sections 9-11 bindings, config, and Wrangler",
-  "Sections 12-13 D1 schema and repositories",
-  "Sections 14-17 tokens, passwords, identity, and cookies",
-  "Sections 18-20 HTTP, CSRF/CORS, and redirects",
-  "Sections 21-22 API contract and D1 atomicity",
-  "Sections 23-24 rate limiting and email",
-  "Sections 25-27 SDK, integrations, and CLI",
-  "Sections 28-29 security model and Turnstile",
-  "## Testing, CI, And Docs Plan Audit",
-  "Section 31.1 unit tests",
-  "Section 31.2 repository tests",
-  "Section 31.3 route tests",
-  "Section 31.4 concurrency/security tests",
-  "Section 31.5 CLI tests",
-  "Section 31.6 example tests",
-  "Section 32.1 CI command set",
-  "Section 32.2 examples workflow",
-  "Section 32.3 release workflow",
-  "Section 32.4 security automation",
-  "Section 33.1 README",
-  "Section 33.2 docs directory",
-  "Section 33.3 troubleshooting matrix",
-  "## Source Notes And README Draft Audit",
-  "Section 34 source notes",
-  "Section 35 README draft",
-  "docs/platform-assumptions.md",
-  "Package-owner-safe fallback wording",
-  "## Final Beta Definition Of Done Audit",
-  "Section 36 create-package quickstart command",
-  "Section 36 unscoped init command",
-  "Local magic link works without email setup.",
-  "Remote deploy works with documented Cloudflare setup.",
-  "Packages can be published with Changesets.",
-  "No known high-severity auth bug is open.",
-  "docs/metrics.md",
-  "runtime auth-event metrics docs",
-  "CF_AUTH_REQUIRE_ALPHA_EVIDENCE=1 pnpm verify:alpha-evidence",
-  "CF_AUTH_REQUIRE_BETA_EVIDENCE=1 pnpm verify:beta-evidence",
-  "CF_AUTH_REQUIRE_DEPLOY_BUTTON_EVIDENCE=1 pnpm verify:deploy-button-evidence",
-  "CF_AUTH_REQUIRE_PACKAGE_OWNERSHIP=1 pnpm verify:package-ownership",
-  "pnpm check:package-names",
-  "CF_AUTH_REQUIRE_SECURITY_TRACKER=1 pnpm verify:security-tracker",
-  "docs/api-report.md",
-  "docs/config-schema.md",
-  "docs/decisions/security-review.md",
-  "0.0.0",
-]) {
-  await requireText("docs/release-readiness-audit.md", text);
 }
 await requireReleaseReadinessAuditCoverage();
 await requireText("SECURITY.md", "secret scanning");
@@ -550,21 +488,17 @@ async function requireText(path, needle) {
 async function requireReleaseReadinessAuditCoverage() {
   let audit = "";
   try {
-    audit = await readFile("docs/release-readiness-audit.md", "utf8");
+    audit = await readFile(releaseReadinessAuditPath, "utf8");
   } catch {
-    failures.push("docs/release-readiness-audit.md: could not be read");
+    failures.push(`${releaseReadinessAuditPath}: could not be read`);
     return;
   }
-  for (let stage = 0; stage <= 12; stage += 1) {
-    if (!audit.includes(`Stage ${stage}`)) {
-      failures.push(`docs/release-readiness-audit.md: missing Stage ${stage}`);
-    }
-  }
-  for (let rule = 1; rule <= 28; rule += 1) {
-    if (!new RegExp(`\\|\\s*${rule}\\s*\\|`, "u").test(audit)) {
-      failures.push(`docs/release-readiness-audit.md: missing Rule ${rule}`);
-    }
-  }
+  failures.push(
+    ...collectReleaseReadinessAuditFailures(audit, {
+      missingTextMessage: (needle) =>
+        `${releaseReadinessAuditPath}: missing required release gate text: ${needle}`,
+    }),
+  );
 }
 
 async function requireReleaseApproval(path, label) {

@@ -31,12 +31,17 @@ const devVarsExample = await readRequiredText(
   join(output, ".dev.vars.example"),
   ".dev.vars.example",
 );
+const gitignore = await readRequiredText(
+  join(output, ".gitignore"),
+  ".gitignore",
+);
 
 if (packageJson && versionMatrix) checkPackageJson(packageJson);
 if (wrangler && versionMatrix) checkWrangler(wrangler);
 await checkIsolatedTree(output);
 checkReadme(readme);
 checkDevVarsExample(devVarsExample);
+checkGitignore(gitignore);
 
 if (process.env.CF_AUTH_DEPLOY_TEMPLATE_INSTALL === "1") {
   run("pnpm", ["--dir", output, "install", "--no-frozen-lockfile"]);
@@ -260,6 +265,20 @@ function checkDevVarsExample(text) {
     failures.push(
       ".dev.vars.example: must contain the exact AUTH_SECRET placeholder",
     );
+  }
+}
+
+function checkGitignore(text) {
+  for (const entry of [
+    "node_modules/",
+    ".wrangler/",
+    ".dev.vars",
+    ".env",
+    ".env.*",
+  ]) {
+    if (!text.split(/\r?\n/u).includes(entry)) {
+      failures.push(`.gitignore: missing ${entry}`);
+    }
   }
 }
 

@@ -1765,6 +1765,7 @@ await writeFile(dir + "/wrangler.jsonc", JSON.stringify({
 }, null, 2));
 await writeFile(dir + "/README.md", "https://deploy.workers.cloudflare.com/?url=https://github.com/acme/cloudflare-auth-template\\nAUTH_PUBLIC_ORIGIN\\nAUTH_SECRET\\nAUTH_EMAIL\\nnpx --package @cf-auth/cli@beta cf-auth rotate-secret --print\\n");
 await writeFile(dir + "/.dev.vars.example", "AUTH_SECRET=k1.REPLACE_WITH_32_BYTE_BASE64URL_SECRET\\n");
+await writeFile(dir + "/.gitignore", "node_modules/\\n.wrangler/\\n.dev.vars\\n.env\\n.env.*\\n*.log\\n");
 `,
   );
 }

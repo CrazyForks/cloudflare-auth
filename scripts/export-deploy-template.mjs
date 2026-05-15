@@ -188,6 +188,6 @@ The deploy script applies D1 migrations using the \`AUTH_DB\` binding before run
 async function writeGitignore(dir) {
   await writeFile(
     `${dir}/.gitignore`,
-    "node_modules/\n.wrangler/\n.dev.vars\n.env\n*.log\n",
+    "node_modules/\n.wrangler/\n.dev.vars\n.env\n.env.*\n*.log\n",
   );
 }

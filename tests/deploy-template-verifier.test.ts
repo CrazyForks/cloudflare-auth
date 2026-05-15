@@ -117,6 +117,16 @@ describe("deploy template verifier", () => {
     );
   });
 
+  it("rejects generated templates that do not ignore env secret variants", async () => {
+    const root = await deployTemplateFixture({
+      gitignore: "node_modules/\n.wrangler/\n.dev.vars\n.env\n*.log\n",
+    });
+    const result = runDeployTemplateVerifier(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(".gitignore: missing .env.*");
+  });
+
   it("rejects deploy scripts that run Wrangler before migrations", async () => {
     const pkg = packageJson();
     pkg.scripts.deploy = "wrangler deploy && pnpm db:migrations:apply";
@@ -136,6 +146,7 @@ async function deployTemplateFixture(
   options: {
     packageJson?: string;
     wranglerJson?: string;
+    gitignore?: string;
     extraExporterSource?: string;
   } = {},
 ) {
@@ -161,6 +172,9 @@ async function deployTemplateFixture(
         options.packageJson ?? `${JSON.stringify(packageJson(), null, 2)}\n`,
       wranglerJson:
         options.wranglerJson ?? `${JSON.stringify(wranglerJson(), null, 2)}\n`,
+      gitignore:
+        options.gitignore ??
+        "node_modules/\n.wrangler/\n.dev.vars\n.env\n.env.*\n*.log\n",
       extraExporterSource: options.extraExporterSource ?? "",
     }),
   );
@@ -230,6 +244,7 @@ function wranglerJson() {
 function exporterSource(input: {
   packageJson: string;
   wranglerJson: string;
+  gitignore: string;
   extraExporterSource: string;
 }) {
   return `import { mkdir, writeFile } from "node:fs/promises";
@@ -240,6 +255,7 @@ await writeFile(dir + "/package.json", ${JSON.stringify(input.packageJson)});
 await writeFile(dir + "/wrangler.jsonc", ${JSON.stringify(input.wranglerJson)});
 await writeFile(dir + "/README.md", "https://deploy.workers.cloudflare.com/?url=https://github.com/acme/cloudflare-auth-template\\nAUTH_PUBLIC_ORIGIN\\nAUTH_SECRET\\nAUTH_EMAIL\\nnpx --package @cf-auth/cli@beta cf-auth rotate-secret --print\\n");
 await writeFile(dir + "/.dev.vars.example", "AUTH_SECRET=k1.REPLACE_WITH_32_BYTE_BASE64URL_SECRET\\n");
+await writeFile(dir + "/.gitignore", ${JSON.stringify(input.gitignore)});
 ${input.extraExporterSource}
 `;
 }

@@ -133,6 +133,7 @@ Recent local verification has passed for:
 - `pnpm verify:migrations`
 - `pnpm verify:deploy-template`
 - `pnpm verify:examples`
+- `pnpm verify:release-audit`
 - `pnpm release:gates`
 - `pnpm audit --audit-level high`
 - `pnpm smoke:wrangler-dev`

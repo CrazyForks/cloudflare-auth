@@ -1088,6 +1088,7 @@ function verifyRootScripts() {
     "verify:examples",
     "verify:migrations",
     "verify:package-ownership",
+    "verify:release-audit",
     "verify:security-docs",
     "verify:security-tracker",
     "release:gates",

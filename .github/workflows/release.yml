@@ -54,6 +54,7 @@ jobs:
         env:
           CF_AUTH_REQUIRE_PACKAGE_OWNERSHIP: "1"
       - run: pnpm check:package-names
+      - run: pnpm verify:release-audit
       - run: pnpm verify:security-docs
       - run: pnpm verify:security-tracker
       - run: pnpm release:gates

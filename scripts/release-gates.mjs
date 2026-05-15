@@ -85,6 +85,7 @@ await requireFile("scripts/verify-docs-coverage.mjs");
 await requireFile("scripts/verify-examples.mjs");
 await requireFile("scripts/verify-migrations.mjs");
 await requireFile("scripts/verify-package-ownership.mjs");
+await requireFile("scripts/verify-release-readiness-audit.mjs");
 await requireFile("scripts/verify-security-docs.mjs");
 await requireFile("scripts/verify-security-release-tracker.mjs");
 await requireText("README.md", "SECURITY.md");
@@ -348,6 +349,7 @@ requireVerifier("scripts/verify-deploy-template.mjs");
 requireVerifier("scripts/verify-docs-coverage.mjs");
 requireVerifier("scripts/verify-examples.mjs");
 requireVerifier("scripts/verify-migrations.mjs");
+requireVerifier("scripts/verify-release-readiness-audit.mjs");
 requireVerifier("scripts/verify-security-docs.mjs");
 
 const stablePackages = packages.filter((pkg) =>

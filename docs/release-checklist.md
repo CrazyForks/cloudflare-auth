@@ -24,6 +24,7 @@ recorded before public beta or 1.0.
 - `pnpm verify:migrations`
 - `pnpm verify:examples`
 - `pnpm verify:package-ownership`
+- `pnpm verify:release-audit`
 - `pnpm verify:security-docs`
 - `pnpm verify:security-tracker`
 - `pnpm release:gates`

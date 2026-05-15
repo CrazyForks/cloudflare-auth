@@ -1003,6 +1003,7 @@ async function releaseGateFixture(options: ReleaseGateFixtureOptions) {
     "scripts/verify-examples.mjs",
     "scripts/verify-migrations.mjs",
     "scripts/verify-package-ownership.mjs",
+    "scripts/verify-release-readiness-audit.mjs",
     "scripts/verify-security-docs.mjs",
     "scripts/verify-security-release-tracker.mjs",
   ];
@@ -1300,6 +1301,7 @@ function rootPackageScripts() {
     "verify:examples": "node scripts/verify-examples.mjs",
     "verify:migrations": "node scripts/verify-migrations.mjs",
     "verify:package-ownership": "node scripts/verify-package-ownership.mjs",
+    "verify:release-audit": "node scripts/verify-release-readiness-audit.mjs",
     "verify:security-docs": "node scripts/verify-security-docs.mjs",
     "verify:security-tracker":
       "node scripts/verify-security-release-tracker.mjs",

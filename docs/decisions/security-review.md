@@ -29,9 +29,24 @@ high/critical auth security issue or advisory remains open.
 
 ## Decision Record
 
-Before 1.0, replace this section with one of:
+Before 1.0, replace this pending decision with one accepted decision format.
+Remove the leading bullet marker from each field name when recording the final
+decision; the release gate checks for the field names at the start of a line.
 
-- external review completed, including reviewer, date, scope, and unresolved findings
-- maintainer sign-off without external review, including date, rationale, and compensating controls
+External review completed:
+
+- Status: external-review-completed
+- Reviewer: non-placeholder reviewer or firm name
+- Date: YYYY-MM-DD
+- Scope: reviewed code, docs, threat model, and release evidence scope
+- Unresolved findings: none, or a release-accepted residual-risk summary
+
+Maintainer sign-off without external review:
+
+- Status: maintainer-signoff
+- Signed by: non-placeholder maintainer name or handle
+- Date: YYYY-MM-DD
+- Rationale: why 1.0 can release without an external review
+- Compensating controls: release gates, security policy, automation, and tracker evidence relied on
 
 Do not tag 1.0 while this decision is pending.

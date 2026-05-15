@@ -878,6 +878,26 @@ async function verifyReleaseControls() {
         "CF_AUTH_REQUIRE_SECURITY_TRACKER=1 pnpm verify:security-tracker",
       ],
     ],
+    [
+      "docs/api-report.md",
+      ["Release approval: release-approved by <approver> on <YYYY-MM-DD>"],
+    ],
+    [
+      "docs/config-schema.md",
+      ["Release approval: release-approved by <approver> on <YYYY-MM-DD>"],
+    ],
+    [
+      "docs/decisions/security-review.md",
+      [
+        "Status: external-review-completed",
+        "Reviewer:",
+        "Unresolved findings:",
+        "Status: maintainer-signoff",
+        "Signed by:",
+        "Rationale:",
+        "Compensating controls:",
+      ],
+    ],
   ]) {
     const text = await readFile(file, "utf8");
     for (const needle of needles) {

@@ -106,4 +106,8 @@ Defaults:
 
 `session.domain` must be a leading-dot parent domain such as `.example.com`.
 
-Breaking config changes require an upgrade-guide entry and public API report update. Change the release approval line to `release-approved` only after the 1.0 config review records the approver and date.
+Breaking config changes require an upgrade-guide entry and public API report
+update. Change the release approval line only after the 1.0 config review
+records a non-placeholder approver and ISO date. The stable release gate expects
+the top approval line to use this shape:
+`Release approval: release-approved by <approver> on <YYYY-MM-DD>`.

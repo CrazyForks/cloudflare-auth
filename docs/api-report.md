@@ -52,4 +52,8 @@ The endpoint contract is documented in `docs/api.md`. Magic-link, email-verifica
 
 ## Stability Notes
 
-The report is checked in before 1.0 readiness, but it is not release-approved until the 1.0 release checklist is complete. Change the release approval line to `release-approved` only after the release review records the approver and date.
+The report is checked in before 1.0 readiness, but it is not release-approved
+until the 1.0 release checklist is complete. Change the release approval line
+only after the release review records a non-placeholder approver and ISO date.
+The stable release gate expects the top approval line to use this shape:
+`Release approval: release-approved by <approver> on <YYYY-MM-DD>`.

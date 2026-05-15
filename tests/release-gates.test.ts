@@ -88,6 +88,21 @@ describe("release gates", () => {
     expect(result.stderr).toContain("## Final Beta Definition Of Done Audit");
   });
 
+  it("requires release readiness audit coverage for source notes and README draft", async () => {
+    const root = await releaseGateFixture({ deployButtonEvidence: true });
+    await replaceFixtureText(
+      root,
+      "docs/release-readiness-audit.md",
+      "## Source Notes And README Draft Audit",
+      "## Source Notes",
+    );
+    const result = runReleaseGates(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("docs/release-readiness-audit.md");
+    expect(result.stderr).toContain("## Source Notes And README Draft Audit");
+  });
+
   it("derives evidence example endpoint coverage from the smoke script", async () => {
     const root = await releaseGateFixture({ deployButtonEvidence: true });
     await writeFixtureFile(
@@ -1360,6 +1375,11 @@ function releaseReadinessAuditFixtureText() {
     "Section 33.1 README",
     "Section 33.2 docs directory",
     "Section 33.3 troubleshooting matrix",
+    "## Source Notes And README Draft Audit",
+    "Section 34 source notes",
+    "Section 35 README draft",
+    "docs/platform-assumptions.md",
+    "Package-owner-safe fallback wording",
     "## Final Beta Definition Of Done Audit",
     "Section 36 create-package quickstart command",
     "Section 36 unscoped init command",

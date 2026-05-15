@@ -141,6 +141,17 @@ green commands are not treated as proof for requirements they do not cover.
 | Section 33.2 docs directory             | Every required docs file exists, and `pnpm verify:docs-coverage` checks public commands, config keys, endpoints, package entrypoints, migration commands, production setup, and cross-links.                                                                                                                                                                                                              | Locally complete                                       |
 | Section 33.3 troubleshooting matrix     | `docs/troubleshooting.md`, `docs/deployment.md`, `docs/local-development.md`, `docs/cloudflare-email.md`, and CLI doctor tests cover the named errors and exact fixes.                                                                                                                                                                                                                                    | Locally complete                                       |
 
+## Source Notes And README Draft Audit
+
+Sections 34 and 35 are documentation inputs rather than runtime features. They
+still affect release readiness because stale platform assumptions or unsafe
+README package commands can make the public beta path invalid.
+
+| Plan requirement        | Concrete evidence                                                                                                                                                                                                                         | Status                                                              |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Section 34 source notes | `docs/platform-assumptions.md` records the volatile Cloudflare, npm, browser, and security assumptions rechecked for release readiness; `pnpm release:gates` requires it and checks the key source-backed assumptions.                    | Locally complete; must be rechecked before public beta and stable   |
+| Section 35 README draft | `README.md`, `pnpm package:check`, and `pnpm verify:docs-coverage` cover the Section 35 content shape while blocking public package commands that require unproven package ownership. Package-owner-safe fallback wording is intentional. | Locally complete; final command wording blocked on package evidence |
+
 ## Final Beta Definition Of Done Audit
 
 Section 36 of the implementation plan defines a separate public-beta checklist.

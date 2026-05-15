@@ -16,6 +16,14 @@ type ReleaseReadinessAuditChecks = {
       missingRuleMessage?: (rule: number) => string;
     },
   ): string[];
+  collectReleaseReadinessAuditTestReferenceFailures(
+    audit: string,
+    options?: {
+      root?: string;
+      path?: string;
+      missingTestMessage?: (testPath: string) => string;
+    },
+  ): string[];
   requiredReleaseReadinessAuditText: string[];
 };
 
@@ -63,6 +71,22 @@ describe("release readiness audit checks", () => {
     expect(failures).toContain("rule:1");
   });
 
+  it("reports missing referenced test files", async () => {
+    const checks = await loadChecks();
+    const fixture = await mkdtemp(join(tmpdir(), "cf-auth-release-audit-"));
+    await mkdir(join(fixture, "tests"));
+    await writeFile(join(fixture, "tests/routes.test.ts"), "");
+
+    expect(
+      checks.collectReleaseReadinessAuditTestReferenceFailures(
+        "Covered by `tests/routes.test.ts` and `tests/missing.test.ts`.",
+        { root: fixture },
+      ),
+    ).toEqual([
+      "docs/release-readiness-audit.md: referenced test file does not exist: tests/missing.test.ts",
+    ]);
+  });
+
   it("verifies release audit files from the command line", async () => {
     const checks = await loadChecks();
     const fixture = await writeAuditFixture(completeAuditText(checks));
@@ -105,6 +129,8 @@ function completeAuditText(checks: ReleaseReadinessAuditChecks) {
 async function writeAuditFixture(audit: string) {
   const fixture = await mkdtemp(join(tmpdir(), "cf-auth-release-audit-"));
   await mkdir(join(fixture, "docs"));
+  await mkdir(join(fixture, "tests"));
+  await writeFile(join(fixture, "tests/lint.test.ts"), "");
   await writeFile(join(fixture, "docs/release-readiness-audit.md"), audit);
   return fixture;
 }

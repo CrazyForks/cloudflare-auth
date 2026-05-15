@@ -1,3 +1,6 @@
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+
 export const releaseReadinessAuditPath = "docs/release-readiness-audit.md";
 
 export const requiredReleaseReadinessAuditText = [
@@ -125,6 +128,32 @@ export function collectReleaseReadinessAuditFailures(audit, options = {}) {
   for (let rule = 1; rule <= 28; rule += 1) {
     if (!new RegExp(`\\|\\s*${rule}\\s*\\|`, "u").test(audit)) {
       failures.push(missingRuleMessage(rule));
+    }
+  }
+
+  return failures;
+}
+
+export function collectReleaseReadinessAuditTestReferenceFailures(
+  audit,
+  options = {},
+) {
+  const {
+    root = process.cwd(),
+    path = releaseReadinessAuditPath,
+    missingTestMessage = (testPath) =>
+      `${path}: referenced test file does not exist: ${testPath}`,
+  } = options;
+  const failures = [];
+  const testReferences = new Set(
+    [...audit.matchAll(/`(tests\/[^`\s]+\.test\.ts)`/gu)].map(
+      (match) => match[1],
+    ),
+  );
+
+  for (const testPath of [...testReferences].sort()) {
+    if (!existsSync(join(root, testPath))) {
+      failures.push(missingTestMessage(testPath));
     }
   }
 

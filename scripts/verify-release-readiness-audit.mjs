@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 
 import {
   collectReleaseReadinessAuditFailures,
+  collectReleaseReadinessAuditTestReferenceFailures,
   releaseReadinessAuditPath,
 } from "./release-readiness-audit-checks.mjs";
 
@@ -13,7 +14,10 @@ try {
   process.exit(1);
 }
 
-const failures = collectReleaseReadinessAuditFailures(audit);
+const failures = [
+  ...collectReleaseReadinessAuditFailures(audit),
+  ...collectReleaseReadinessAuditTestReferenceFailures(audit),
+];
 if (failures.length > 0) {
   console.error(failures.join("\n"));
   process.exit(1);

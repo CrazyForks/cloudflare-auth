@@ -83,7 +83,7 @@ pnpm check:package-names
 
 The `version` values in `docs/package-ownership.json` must match the target
 package versions in `packages/*/package.json`. The verifier rejects placeholder
-`0.0.0` package versions.
+`0.0.0` and `0.0.0-*` package versions.
 
 Release package versions must use one of the supported implementation-plan
 channels:
@@ -93,8 +93,10 @@ channels:
 - stable: `1.0.0` or later without a prerelease suffix
 
 Do not publish other prerelease shapes such as `rc`, `next`, or unclassified
-`0.x` stable versions unless the implementation plan is updated and
-`pnpm release:gates` is changed with tests.
+`0.x` stable versions. Do not publish `0.0.0-alpha.*` or `0.0.0-beta.*`;
+those are placeholder-based prereleases, not release candidates. Change to a
+non-placeholder target version before publishing. Any change to these channels
+requires updating the implementation plan and `pnpm release:gates` with tests.
 
 For an already-published npm name, include `registryVersion` with the current
 registry version at review time. The registry check fails if that value is stale

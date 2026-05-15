@@ -1661,6 +1661,7 @@ function releaseReadinessAuditFixtureText() {
     "docs/config-schema.md",
     "docs/decisions/security-review.md",
     "0.0.0",
+    "0.0.0-*",
   ];
 }
 

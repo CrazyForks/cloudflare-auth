@@ -85,6 +85,7 @@ export const requiredReleaseReadinessAuditText = [
   "Config schema approval",
   "Security review decision",
   "Published package versions",
+  "0.0.0-*",
   "## Release Rule",
   "not ready for public beta or stable 1.0",
   "docs/metrics.md",

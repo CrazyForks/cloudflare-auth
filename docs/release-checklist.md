@@ -34,14 +34,15 @@ recorded before public beta or 1.0.
 - `pnpm publish:dry-run`
 
 The evidence verifier scripts are version-aware and may skip when placeholder
-`0.0.0` package versions are still checked in. A skipped verifier is not stage
-evidence. When proving one of the release blockers below, run the explicit
-`CF_AUTH_REQUIRE_*` command for that blocker.
+`0.0.0` package versions are still checked in. Placeholder-based prereleases
+such as `0.0.0-alpha.*` and `0.0.0-beta.*` are rejected, not skipped. A skipped
+verifier is not stage evidence. When proving one of the release blockers below,
+run the explicit `CF_AUTH_REQUIRE_*` command for that blocker.
 
 ## Prerelease
 
 - package names confirmed or fallback docs updated
-- package versions use a supported release channel from `docs/decisions/package-naming.md`: private alpha `x.y.z-alpha.*`, public beta `x.y.z-beta.*`, or stable `1.0.0` and later
+- package versions use a supported release channel from `docs/decisions/package-naming.md` and that channel is non-placeholder: private alpha `x.y.z-alpha.*`, public beta `x.y.z-beta.*`, or stable `1.0.0` and later; never `0.0.0-*`
 - platform assumptions rechecked in `docs/platform-assumptions.md`
 - npm publisher 2FA and package ownership verified before dispatching the release workflow
 - `CF_AUTH_REQUIRE_PACKAGE_OWNERSHIP=1 pnpm verify:package-ownership` passes before publishing prerelease or stable packages

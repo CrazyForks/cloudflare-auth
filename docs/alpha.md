@@ -12,8 +12,9 @@ CF_AUTH_REQUIRE_PACKAGE_OWNERSHIP=1 pnpm verify:package-ownership
 pnpm check:package-names
 ```
 
-Do not publish private-alpha packages from placeholder `0.0.0` versions or
-without redaction-safe package ownership evidence.
+Do not publish private-alpha packages from placeholder `0.0.0` or
+`0.0.0-*` versions, including `0.0.0-alpha.*`, or without redaction-safe
+package ownership evidence.
 
 ## Local Setup Script
 

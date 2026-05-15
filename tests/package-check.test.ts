@@ -518,6 +518,31 @@ describe("package checks", () => {
     );
   });
 
+  it("requires docs to reject placeholder prerelease versions", async () => {
+    const root = await packageCheckFixture();
+    await replaceFixtureText(
+      root,
+      "docs/decisions/package-naming.md",
+      "`0.0.0-alpha.*`",
+      "`0.0.0-preview.*`",
+    );
+    await replaceFixtureText(
+      root,
+      "docs/release-checklist.md",
+      "never `0.0.0-*`",
+      "never placeholder prereleases",
+    );
+    const result = runPackageCheck(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "docs/decisions/package-naming.md: missing 0.0.0-alpha.*",
+    );
+    expect(result.stderr).toContain(
+      "docs/release-checklist.md: missing never `0.0.0-*`",
+    );
+  });
+
   it("requires fallback scope availability docs to avoid treating E404 as ownership", async () => {
     const root = await packageCheckFixture();
     await replaceFixtureText(

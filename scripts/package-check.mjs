@@ -1156,6 +1156,7 @@ async function verifyReleaseControls() {
         "public beta: `x.y.z-beta.N`",
         "stable: `1.0.0` or later",
         "Do not publish other prerelease shapes",
+        "0.0.0-alpha.*",
       ],
     ],
     [
@@ -1172,6 +1173,7 @@ async function verifyReleaseControls() {
         "Changesets fixed package group",
         "dry-run publish summary artifact",
         "supported release channel",
+        "never `0.0.0-*`",
         "CF_AUTH_REQUIRE_ALPHA_EVIDENCE=1 pnpm verify:alpha-evidence",
         "CF_AUTH_REQUIRE_BETA_EVIDENCE=1 pnpm verify:beta-evidence",
         "CF_AUTH_REQUIRE_DEPLOY_BUTTON_EVIDENCE=1 pnpm verify:deploy-button-evidence",

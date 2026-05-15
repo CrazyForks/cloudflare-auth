@@ -980,6 +980,44 @@ describe("package checks", () => {
     expect(result.stderr).toContain("@cf-auth/cli@0.0.0");
   });
 
+  it("rejects placeholder prerelease publishable package versions", async () => {
+    for (const packageVersion of ["0.0.0-alpha.0", "0.0.0-beta.0"]) {
+      const root = await packageCheckFixture();
+      for (const packageDir of defaultPublishablePackageDirs) {
+        await updatePackageJson(root, `packages/${packageDir}/package.json`, {
+          privateValue: false,
+          version: packageVersion,
+        });
+      }
+
+      const result = runPackageCheck(root);
+
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain(
+        `@cf-auth/cli@${packageVersion}: release version must not use placeholder 0.0.0 base`,
+      );
+    }
+  });
+
+  it("rejects unsupported publishable package release channels", async () => {
+    for (const packageVersion of ["0.1.0", "1.0.0-rc.0"]) {
+      const root = await packageCheckFixture();
+      for (const packageDir of defaultPublishablePackageDirs) {
+        await updatePackageJson(root, `packages/${packageDir}/package.json`, {
+          privateValue: false,
+          version: packageVersion,
+        });
+      }
+
+      const result = runPackageCheck(root);
+
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain(
+        `@cf-auth/cli@${packageVersion}: release versions must use alpha, beta, or stable 1.0+`,
+      );
+    }
+  });
+
   it("rejects workspace dependency ranges in packed manifests", async () => {
     const root = await packageCheckFixture();
     await writeFakePackTools(root);

@@ -9,6 +9,11 @@ import {
   releaseReadinessAuditPath,
 } from "./release-readiness-audit-checks.mjs";
 import {
+  isPlaceholderPrerelease,
+  isPublishedReleaseVersion,
+  isSupportedReleaseVersion,
+} from "./release-version-policy.mjs";
+import {
   blockHasTrimmedLine,
   workflowInputBlock,
   workflowNamedStepBlock,
@@ -260,6 +265,7 @@ for (const dir of packageDirs) {
 }
 
 verifyFixedPackageVersions();
+verifyReleasePackageVersions();
 await verifyPackageNamingDocs();
 await verifyReadmeAndNonGoals();
 await verifyDocsManifest();
@@ -377,6 +383,24 @@ function verifyFixedPackageVersions() {
       .map((pkg) => `${pkg.name}@${pkg.version}`)
       .join(", ")}`,
   );
+}
+
+function verifyReleasePackageVersions() {
+  for (const pkg of publishablePackages) {
+    if (isPlaceholderPrerelease(pkg.version)) {
+      failures.push(
+        `${pkg.name}@${pkg.version}: release version must not use placeholder 0.0.0 base`,
+      );
+    }
+    if (
+      isPublishedReleaseVersion(pkg.version) &&
+      !isSupportedReleaseVersion(pkg.version)
+    ) {
+      failures.push(
+        `${pkg.name}@${pkg.version}: release versions must use alpha, beta, or stable 1.0+ channels from the implementation plan`,
+      );
+    }
+  }
 }
 
 function packagePath(value) {

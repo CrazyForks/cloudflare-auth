@@ -73,6 +73,21 @@ describe("release gates", () => {
     expect(result.stderr).toContain("Stage 12");
   });
 
+  it("requires release readiness audit coverage for functional spec sections", async () => {
+    const root = await releaseGateFixture({ deployButtonEvidence: true });
+    await replaceFixtureText(
+      root,
+      "docs/release-readiness-audit.md",
+      "## Functional Specification Audit",
+      "## Functional Notes",
+    );
+    const result = runReleaseGates(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("docs/release-readiness-audit.md");
+    expect(result.stderr).toContain("## Functional Specification Audit");
+  });
+
   it("requires release readiness audit coverage for testing and beta checklists", async () => {
     const root = await releaseGateFixture({ deployButtonEvidence: true });
     await replaceFixtureText(
@@ -1361,6 +1376,18 @@ function releaseReadinessAuditFixtureText() {
     "## V1 Exclusion Audit",
     "role/permission framework",
     "peppering",
+    "## Functional Specification Audit",
+    "Section 0 execution contract",
+    "Sections 1-4 product and user experience",
+    "Sections 5-8 architecture, repo, and packages",
+    "Sections 9-11 bindings, config, and Wrangler",
+    "Sections 12-13 D1 schema and repositories",
+    "Sections 14-17 tokens, passwords, identity, and cookies",
+    "Sections 18-20 HTTP, CSRF/CORS, and redirects",
+    "Sections 21-22 API contract and D1 atomicity",
+    "Sections 23-24 rate limiting and email",
+    "Sections 25-27 SDK, integrations, and CLI",
+    "Sections 28-29 security model and Turnstile",
     "## Testing, CI, And Docs Plan Audit",
     "Section 31.1 unit tests",
     "Section 31.2 repository tests",

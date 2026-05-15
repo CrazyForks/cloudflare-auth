@@ -1,4 +1,7 @@
-import { resolve } from "node:path";
+import { spawnSync } from "node:child_process";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { describe, expect, it } from "vitest";
@@ -53,6 +56,28 @@ describe("release readiness audit checks", () => {
     expect(failures).toContain("stage:0");
     expect(failures).toContain("rule:1");
   });
+
+  it("verifies release audit files from the command line", async () => {
+    const checks = await loadChecks();
+    const fixture = await writeAuditFixture(completeAuditText(checks));
+    const result = runReleaseAuditVerifier(fixture);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("release readiness audit verified");
+  });
+
+  it("returns nonzero for incomplete release audit files", async () => {
+    const checks = await loadChecks();
+    const fixture = await writeAuditFixture(
+      completeAuditText(checks).replace("Stage 12", "Stable 12"),
+    );
+    const result = runReleaseAuditVerifier(fixture);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "docs/release-readiness-audit.md: missing Stage 12",
+    );
+  });
 });
 
 async function loadChecks(): Promise<ReleaseReadinessAuditChecks> {
@@ -69,4 +94,22 @@ function completeAuditText(checks: ReleaseReadinessAuditChecks) {
     ...Array.from({ length: 13 }, (_, stage) => `Stage ${stage}`),
     ...Array.from({ length: 28 }, (_, index) => `| ${index + 1} |`),
   ].join("\n");
+}
+
+async function writeAuditFixture(audit: string) {
+  const fixture = await mkdtemp(join(tmpdir(), "cf-auth-release-audit-"));
+  await mkdir(join(fixture, "docs"));
+  await writeFile(join(fixture, "docs/release-readiness-audit.md"), audit);
+  return fixture;
+}
+
+function runReleaseAuditVerifier(cwd: string) {
+  return spawnSync(
+    process.execPath,
+    [resolve(process.cwd(), "scripts/verify-release-readiness-audit.mjs")],
+    {
+      cwd,
+      encoding: "utf8",
+    },
+  );
 }

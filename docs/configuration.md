@@ -121,8 +121,10 @@ rejected during config validation.
 
 `runtime.trustedHosts` entries are exact `host` or `host:port` values. Schemes,
 paths, queries, fragments, credentials, wildcards, whitespace, and trailing-dot
-hosts are rejected; accepted entries are normalized to lowercase host matching
-with default HTTPS port normalization.
+hosts are rejected. Ambiguous host spellings such as shortened or zero-padded
+IPv4 addresses and zero-padded ports are also rejected; accepted entries are
+normalized to lowercase host matching with explicit `:443` default HTTPS port
+normalization.
 
 Session cookie names must be valid HTTP token names. `session.domain` is only
 for explicit cross-subdomain cookies and must look like `.example.com`; plain

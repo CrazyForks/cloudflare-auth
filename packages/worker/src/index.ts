@@ -1522,7 +1522,21 @@ function normalizeTrustedHost(value: string): string | null {
     return null;
   }
   if (!url.hostname || url.hostname.endsWith(".")) return null;
-  return url.host;
+  const normalizedHost = url.host;
+  const lowerValue = value.toLowerCase();
+  if (lowerValue !== normalizedHost && lowerValue !== `${normalizedHost}:443`) {
+    return null;
+  }
+  if (!isCanonicalTrustedHostname(url.hostname)) return null;
+  return normalizedHost;
+}
+
+function isCanonicalTrustedHostname(hostname: string): boolean {
+  if (hostname === "localhost") return true;
+  if (hostname.startsWith("[") && hostname.endsWith("]")) return true;
+  return hostname
+    .split(".")
+    .every((label) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u.test(label));
 }
 
 function assertAuthConfigOrigins(config: AuthConfig): void {

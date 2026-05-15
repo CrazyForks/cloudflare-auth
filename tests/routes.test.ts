@@ -170,6 +170,12 @@ describe("auth HTTP runtime", () => {
       "example.com?debug=true",
       "example.com#fragment",
       "example.com.",
+      "-example.com",
+      "example-.com",
+      "example..com",
+      "127.1",
+      "127.000.000.001",
+      "localhost:0443",
       "bad host.example",
     ]) {
       expect(() =>
@@ -191,10 +197,15 @@ describe("auth HTTP runtime", () => {
         runtime: {
           mode: "production",
           publicOrigin: "https://example.com",
-          trustedHosts: ["EXAMPLE.com:443", "api.EXAMPLE.com:8443"],
+          trustedHosts: [
+            "EXAMPLE.com:443",
+            "api.EXAMPLE.com:8443",
+            "127.0.0.1:443",
+            "[::1]:443",
+          ],
         },
       }).runtime.trustedHosts,
-    ).toEqual(["example.com", "api.example.com:8443"]);
+    ).toEqual(["example.com", "api.example.com:8443", "127.0.0.1", "[::1]"]);
     expect(() =>
       defineAuthConfig({
         appName: "Bad Cookie",

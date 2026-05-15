@@ -113,6 +113,19 @@ describe("examples verifier", () => {
     expect(result.stderr).toContain("examples/hono-basic: pnpm test failed");
   });
 
+  it("rejects examples when frozen install fails", async () => {
+    const root = await examplesFixture({
+      failingPnpmScripts: ["install"],
+    });
+    const result = runExamplesVerifier(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("examples/hono-basic: pnpm install failed");
+    expect(result.stderr).toContain(
+      "templates/worker-basic: pnpm install failed",
+    );
+  });
+
   it("rejects local secret env files in examples and templates", async () => {
     const root = await examplesFixture();
     await writeFile(
@@ -333,7 +346,18 @@ async function writeFakePnpm(
     pnpm,
     `#!/usr/bin/env node
 const failingScripts = new Set(${failingScripts});
-const script = process.argv.at(-1);
+const args = process.argv.slice(2);
+let script = "";
+for (let i = 0; i < args.length; i += 1) {
+  if (args[i] === "--dir") {
+    i += 1;
+    continue;
+  }
+  if (!args[i].startsWith("-")) {
+    script = args[i];
+    break;
+  }
+}
 process.exit(failingScripts.has(script) ? 1 : 0);
 `,
   );

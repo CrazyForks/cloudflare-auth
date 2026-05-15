@@ -217,6 +217,14 @@ async function verifyBuildableProjects(root) {
     if (!pkg.scripts?.test) failures.push(`${dir}: missing test script`);
     if (!pkg.engines || pkg.engines.node !== versionMatrix.node)
       failures.push(`${dir}: engine mismatch`);
+    const install = spawnSync(
+      "pnpm",
+      ["--dir", dir, "install", "--frozen-lockfile"],
+      {
+        stdio: "inherit",
+      },
+    );
+    if (install.status !== 0) failures.push(`${dir}: pnpm install failed`);
     for (const script of ["build", "test"]) {
       const result = spawnSync("pnpm", ["--dir", dir, script], {
         stdio: "inherit",

@@ -8,6 +8,11 @@ import {
   isJsonObject,
   isPlaceholderEvidenceIdentity,
 } from "./evidence-validation.mjs";
+import {
+  isPlaceholderReleaseVersion,
+  isPublishedReleaseVersion,
+  isSupportedReleaseVersion,
+} from "./release-version-policy.mjs";
 
 const evidencePath =
   process.env.CF_AUTH_PACKAGE_OWNERSHIP_PATH ?? "docs/package-ownership.json";
@@ -137,6 +142,14 @@ function validateEvidence(value, rawText) {
     if (isPlaceholderReleaseVersion(pkg.version)) {
       failures.push(
         `${pkg.name}: package ownership evidence cannot target placeholder version 0.0.0`,
+      );
+    }
+    if (
+      isPublishedReleaseVersion(pkg.version) &&
+      !isSupportedReleaseVersion(pkg.version)
+    ) {
+      failures.push(
+        `${pkg.name}@${pkg.version}: release versions must use alpha, beta, or stable 1.0+ channels from the implementation plan`,
       );
     }
     const item = byName.get(pkg.name);
@@ -301,17 +314,6 @@ async function readJsonObject(path) {
     return null;
   }
   return parsed;
-}
-
-function isPublishedReleaseVersion(version) {
-  if (typeof version !== "string") return false;
-  const match = version.match(/^(\d+)\.(\d+)\.(\d+)(?:-[\w.-]+)?$/u);
-  if (!match) return false;
-  return version !== "0.0.0";
-}
-
-function isPlaceholderReleaseVersion(version) {
-  return typeof version === "string" && /^0\.0\.0(?:-.+)?$/u.test(version);
 }
 
 async function exists(path) {

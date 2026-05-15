@@ -2,6 +2,13 @@ import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { isJsonObject } from "./evidence-validation.mjs";
+import {
+  isPlaceholderPrerelease,
+  isPublishedReleaseVersion,
+  isPublicBeta,
+  isStableOneOrLater,
+  isSupportedReleaseVersion,
+} from "./release-version-policy.mjs";
 
 export async function readReleasePackageState() {
   const failures = [];
@@ -34,6 +41,14 @@ export async function readReleasePackageState() {
           `${path}: release version must not use placeholder 0.0.0 base`,
         );
       }
+      if (
+        isPublishedReleaseVersion(pkg.version) &&
+        !isSupportedReleaseVersion(pkg.version)
+      ) {
+        failures.push(
+          `${path}: release versions must use alpha, beta, or stable 1.0+ channels from the implementation plan`,
+        );
+      }
       versions.push(pkg.version);
     }
   }
@@ -44,18 +59,4 @@ export async function readReleasePackageState() {
     ),
     hasStable: versions.some((version) => isStableOneOrLater(version)),
   };
-}
-
-function isPublicBeta(version) {
-  return /^\d+\.\d+\.\d+-beta(?:[.-].*)?$/u.test(version);
-}
-
-function isPlaceholderPrerelease(version) {
-  return /^0\.0\.0-.+/u.test(version);
-}
-
-function isStableOneOrLater(version) {
-  const match = version.match(/^(\d+)\.(\d+)\.(\d+)(?:-.+)?$/);
-  if (!match || version.includes("-")) return false;
-  return Number(match[1]) >= 1;
 }

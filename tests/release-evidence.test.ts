@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -1331,6 +1331,26 @@ describe("release evidence verifiers", () => {
     }
   });
 
+  it("rejects unsupported package release channels in evidence gates", async () => {
+    for (const packageVersion of ["0.1.0", "1.0.0-rc.0"]) {
+      const cwd = await packageVersionFixture(packageVersion);
+
+      for (const script of [
+        "scripts/verify-alpha-evidence.mjs",
+        "scripts/verify-beta-evidence.mjs",
+        "scripts/verify-deploy-button-evidence.mjs",
+        "scripts/verify-security-release-tracker.mjs",
+      ]) {
+        const result = runScript(script, {}, cwd);
+
+        expect(result.status).toBe(1);
+        expect(result.stderr).toContain(
+          "release versions must use alpha, beta, or stable 1.0+",
+        );
+      }
+    }
+  });
+
   it("accepts beta evidence for clean quickstart and opt-in production smoke", async () => {
     const path = await writeEvidence("beta", validBetaEvidence());
     const result = runScript("scripts/verify-beta-evidence.mjs", {
@@ -2234,6 +2254,37 @@ describe("release evidence verifiers", () => {
       expect(result.status).toBe(1);
       expect(result.stderr).toContain("placeholder version 0.0.0");
     }
+  });
+
+  it("rejects package ownership evidence for unsupported release channels", async () => {
+    const cwd = await packageOwnershipFixture({
+      publishCfAuthShim: false,
+      staleCfAuthReservation: false,
+      publishCreatePackage: false,
+      staleCreateReservation: false,
+    });
+    await writeFile(
+      join(cwd, "packages", "cli", "package.json"),
+      `${JSON.stringify({ name: "@cf-auth/cli", version: "0.1.0" })}\n`,
+    );
+    const evidencePath = join(cwd, "docs", "package-ownership.json");
+    const evidence = JSON.parse(await readFile(evidencePath, "utf8"));
+    evidence.packages[0].version = "0.1.0";
+    await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);
+
+    const result = runScript(
+      "scripts/verify-package-ownership.mjs",
+      {
+        CF_AUTH_REQUIRE_PACKAGE_OWNERSHIP: "1",
+        CF_AUTH_PACKAGE_OWNERSHIP_PATH: evidencePath,
+      },
+      cwd,
+    );
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "@cf-auth/cli@0.1.0: release versions must use alpha, beta, or stable 1.0+",
+    );
   });
 
   it("rejects package ownership evidence without explicit package arrays", async () => {

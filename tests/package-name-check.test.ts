@@ -83,6 +83,20 @@ describe("package name registry checks", () => {
     }
   });
 
+  it("rejects unsupported publish version channels", async () => {
+    for (const packageVersion of ["0.1.0", "1.0.0-rc.0"]) {
+      const fixture = await packageNameFixture({
+        packageVersion,
+      });
+      const result = runPackageNameCheck(fixture.root);
+
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain(
+        `@cf-auth/cli@${packageVersion}: release versions must use alpha, beta, or stable 1.0+`,
+      );
+    }
+  });
+
   it("rejects stale reserved evidence after a shim becomes publishable", async () => {
     const fixture = await packageNameFixture({
       publishCfAuthShim: true,

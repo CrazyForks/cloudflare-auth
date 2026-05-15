@@ -1163,6 +1163,7 @@ async function releaseGateFixture(options: ReleaseGateFixtureOptions) {
     "scripts/export-deploy-template.mjs",
     "scripts/check-package-names.mjs",
     "scripts/release-readiness-audit-checks.mjs",
+    "scripts/release-version-policy.mjs",
     "scripts/smoke-endpoints.mjs",
     "scripts/smoke-local-tarballs.mjs",
     "scripts/smoke-wrangler-dev.mjs",

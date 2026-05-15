@@ -8,6 +8,14 @@ import {
   collectReleaseReadinessAuditFailures,
   releaseReadinessAuditPath,
 } from "./release-readiness-audit-checks.mjs";
+import {
+  isPlaceholderPrerelease,
+  isPrivateAlpha,
+  isPublishedReleaseVersion,
+  isPublicBeta,
+  isStableOneOrLater,
+  isSupportedReleaseVersion,
+} from "./release-version-policy.mjs";
 import { requiredAuthSmokeEndpoints } from "./smoke-endpoints.mjs";
 import {
   blockHasTrimmedLine,
@@ -77,6 +85,7 @@ await requireFile("scripts/evidence-commands.mjs");
 await requireFile("scripts/export-deploy-template.mjs");
 await requireFile("scripts/check-package-names.mjs");
 await requireFile("scripts/release-readiness-audit-checks.mjs");
+await requireFile("scripts/release-version-policy.mjs");
 await requireFile("scripts/smoke-endpoints.mjs");
 await requireFile("scripts/smoke-local-tarballs.mjs");
 await requireFile("scripts/smoke-wrangler-dev.mjs");
@@ -369,9 +378,7 @@ const betaPackages = packages.filter((pkg) => isPublicBeta(pkg.version));
 const unsupportedReleasePackages = packages.filter(
   (pkg) =>
     isPublishedReleaseVersion(pkg.version) &&
-    !isPrivateAlpha(pkg.version) &&
-    !isPublicBeta(pkg.version) &&
-    !isStableOneOrLater(pkg.version),
+    !isSupportedReleaseVersion(pkg.version),
 );
 const placeholderPrereleasePackages = packages.filter((pkg) =>
   isPlaceholderPrerelease(pkg.version),
@@ -850,34 +857,4 @@ async function requirePackageChangelogs(releasePackages) {
     await requireFile(changelog);
     await requireText(changelog, pkg.version);
   }
-}
-
-function isStableOneOrLater(version) {
-  if (typeof version !== "string") return false;
-  const match = version.match(/^(\d+)\.(\d+)\.(\d+)(?:-.+)?$/);
-  if (!match) return false;
-  if (version.includes("-")) return false;
-  return Number(match[1]) >= 1;
-}
-
-function isPublicBeta(version) {
-  if (typeof version !== "string") return false;
-  return /^\d+\.\d+\.\d+-beta(?:[.-].*)?$/u.test(version);
-}
-
-function isPrivateAlpha(version) {
-  if (typeof version !== "string") return false;
-  return /^\d+\.\d+\.\d+-alpha(?:[.-].*)?$/u.test(version);
-}
-
-function isPlaceholderPrerelease(version) {
-  if (typeof version !== "string") return false;
-  return /^0\.0\.0-.+/u.test(version);
-}
-
-function isPublishedReleaseVersion(version) {
-  if (typeof version !== "string") return false;
-  const match = version.match(/^(\d+)\.(\d+)\.(\d+)(?:-[\w.-]+)?$/u);
-  if (!match) return false;
-  return version !== "0.0.0";
 }

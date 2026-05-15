@@ -90,6 +90,20 @@ describe("examples verifier", () => {
       "templates/worker-basic: missing migrations/0003_sessions.sql",
     );
   });
+
+  it("rejects stale extra template migrations", async () => {
+    const root = await examplesFixture();
+    await writeFile(
+      join(root, "templates", "hono-basic", "migrations", "0003_removed.sql"),
+      "stale\n",
+    );
+    const result = runExamplesVerifier(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "templates/hono-basic: migration file list must match root migrations",
+    );
+  });
 });
 
 async function examplesFixture() {

@@ -74,6 +74,14 @@ for (const template of ["hono-basic", "worker-basic", "react-vite-worker"]) {
   const dir = join("templates", template);
   await requireFile(join(dir, "wrangler.jsonc"));
   await requireFile(join(dir, ".dev.vars.example"));
+  const templateMigrationFiles = (
+    await readdir(join(dir, "migrations")).catch(() => [])
+  )
+    .filter((file) => file.endsWith(".sql"))
+    .sort();
+  if (templateMigrationFiles.join("\n") !== rootMigrationFiles.join("\n")) {
+    failures.push(`${dir}: migration file list must match root migrations`);
+  }
   for (const [file, expected] of rootMigrations) {
     const actual = await readFile(join(dir, "migrations", file), "utf8").catch(
       () => null,

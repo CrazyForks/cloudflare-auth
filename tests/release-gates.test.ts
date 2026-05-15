@@ -1141,6 +1141,7 @@ interface ReleaseGateFixtureOptions {
 async function releaseGateFixture(options: ReleaseGateFixtureOptions) {
   const root = await mkdtemp(join(tmpdir(), "cf-auth-release-gates-"));
   await writeFakeNpm(root);
+  await writeFakePnpm(root);
   await writeRootPackage(root);
 
   const requiredFiles = [
@@ -2508,6 +2509,18 @@ process.exit(1);
   await mkdir(dirname(npmPath), { recursive: true });
   await writeFile(npmPath, `#!/usr/bin/env node\n${body}`);
   await chmod(npmPath, 0o755);
+}
+
+async function writeFakePnpm(root: string) {
+  const pnpmPath = join(root, "bin", "pnpm");
+  await mkdir(dirname(pnpmPath), { recursive: true });
+  await writeFile(
+    pnpmPath,
+    `#!/usr/bin/env node
+process.exit(0);
+`,
+  );
+  await chmod(pnpmPath, 0o755);
 }
 
 function validPackageEvidence(version: string) {

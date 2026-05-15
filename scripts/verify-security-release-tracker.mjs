@@ -106,10 +106,15 @@ function validateTracker(value, rawText) {
     requireString(advisory.id, `${path}.id`);
     requireString(advisory.severity, `${path}.severity`);
     requireString(advisory.status, `${path}.status`);
-    if (
-      ["high", "critical"].includes(String(advisory.severity).toLowerCase()) &&
-      String(advisory.status).toLowerCase() !== "resolved"
-    ) {
+    const severity =
+      typeof advisory.severity === "string"
+        ? advisory.severity.trim().toLowerCase()
+        : "";
+    const status =
+      typeof advisory.status === "string"
+        ? advisory.status.trim().toLowerCase()
+        : "";
+    if (["high", "critical"].includes(severity) && status !== "resolved") {
       failures.push(
         `${trackerPath}: ${path} is high/critical and must be resolved before stable 1.0`,
       );

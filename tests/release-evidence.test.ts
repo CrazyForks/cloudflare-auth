@@ -2070,6 +2070,24 @@ describe("release evidence verifiers", () => {
     expect(result.stderr).toContain("must be resolved before stable 1.0");
   });
 
+  it("rejects unresolved high or critical advisories with padded severity values", async () => {
+    const evidence = validSecurityTracker();
+    evidence.advisories[0]!.severity = " critical ";
+    evidence.advisories[0]!.status = "open";
+    const path = await writeEvidence(
+      "security-tracker-padded-critical-advisory",
+      evidence,
+    );
+    const result = runScript("scripts/verify-security-release-tracker.mjs", {
+      CF_AUTH_REQUIRE_SECURITY_TRACKER: "1",
+      CF_AUTH_SECURITY_TRACKER_PATH: path,
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("advisories[0]");
+    expect(result.stderr).toContain("must be resolved before stable 1.0");
+  });
+
   it("rejects security tracker URLs that are not scoped to one repository", async () => {
     const rootIssueEvidence = validSecurityTracker();
     rootIssueEvidence.issueSearchUrl =

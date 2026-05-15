@@ -14,6 +14,50 @@ describe("package name registry checks", () => {
     expect(result.stdout).toContain("@cf-auth/cli@0.1.0-beta.0");
   });
 
+  it("requires registry version evidence for existing publishable package names", async () => {
+    const fixture = await packageNameFixture({
+      cliRegistryOutput: JSON.stringify({
+        name: "@cf-auth/cli",
+        version: "0.1.0-alpha.0",
+      }),
+    });
+    const result = runPackageNameCheck(fixture.root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("@cf-auth/cli already exists on npm");
+    expect(result.stderr).toContain(
+      "registryVersion must record the current published version",
+    );
+  });
+
+  it("rejects stale publishable package registry versions", async () => {
+    const fixture = await packageNameFixture({
+      cliEvidenceRegistryVersion: "0.1.0-alpha.0",
+      cliRegistryOutput: JSON.stringify({
+        name: "@cf-auth/cli",
+        version: "0.1.0-beta.0",
+      }),
+    });
+    const result = runPackageNameCheck(fixture.root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "@cf-auth/cli registryVersion must match current npm version 0.1.0-beta.0",
+    );
+  });
+
+  it("rejects target package versions that already exist on npm", async () => {
+    const fixture = await packageNameFixture({
+      cliVersionExists: true,
+    });
+    const result = runPackageNameCheck(fixture.root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "@cf-auth/cli@0.1.0-beta.0: target version already exists on npm",
+    );
+  });
+
   it("rejects stale reserved package registry versions", async () => {
     const fixture = await packageNameFixture({
       cfAuthRegistryVersion: "1.0.1",
@@ -283,7 +327,9 @@ async function packageNameFixture(
     staleCfAuthReservation?: boolean;
     publishCreatePackage?: boolean;
     staleCreateReservation?: boolean;
+    cliEvidenceRegistryVersion?: string;
     cliRegistryOutput?: string;
+    cliVersionExists?: boolean;
   } = {},
 ) {
   const root = await mkdtemp(join(tmpdir(), "cf-auth-package-names-"));
@@ -307,6 +353,7 @@ async function packageNameFixture(
     ownershipConfirmed: boolean;
     publisherTwoFactorEnabled: boolean;
     provenancePublish: boolean;
+    registryVersion?: string;
   }> = publishable.map(([, name]) => ({
     name,
     registry: "https://registry.npmjs.org/",
@@ -315,6 +362,13 @@ async function packageNameFixture(
     publisherTwoFactorEnabled: true,
     provenancePublish: true,
   }));
+  if (options.cliEvidenceRegistryVersion !== undefined) {
+    const cliEvidence = packageEvidence.find(
+      (entry) => entry.name === "@cf-auth/cli",
+    );
+    if (cliEvidence)
+      cliEvidence.registryVersion = options.cliEvidenceRegistryVersion;
+  }
   if (options.publishCfAuthShim) {
     packageEvidence.push({
       name: "cf-auth",
@@ -400,6 +454,10 @@ if (!args.includes("--loglevel") || args[args.indexOf("--loglevel") + 1] !== "si
 }
 if (query === "@cf-auth/cli" && ${JSON.stringify(options.cliRegistryOutput !== undefined)}) {
   console.log(${JSON.stringify(options.cliRegistryOutput ?? "")});
+  process.exit(0);
+}
+if (query === "@cf-auth/cli@${options.packageVersion ?? "0.1.0-beta.0"}" && ${JSON.stringify(options.cliVersionExists === true)}) {
+  console.log(JSON.stringify(${JSON.stringify(options.packageVersion ?? "0.1.0-beta.0")}));
   process.exit(0);
 }
 if (query === "cf-auth") {

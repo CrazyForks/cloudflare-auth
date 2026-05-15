@@ -11,6 +11,7 @@ export function requireOnlyDocumentedCommands({
     return;
   }
   const commandList = commands;
+  const seen = new Set();
   for (const [index, command] of commandList.entries()) {
     const itemPath = `${path}[${index}]`;
     if (typeof command !== "string" || command.trim().length === 0) {
@@ -27,7 +28,13 @@ export function requireOnlyDocumentedCommands({
       failures.push(
         `${evidencePath}: ${itemPath} must be one of the documented ${label} commands`,
       );
+      continue;
     }
+    if (seen.has(command)) {
+      failures.push(`${evidencePath}: ${itemPath} duplicates ${command}`);
+      continue;
+    }
+    seen.add(command);
   }
 }
 

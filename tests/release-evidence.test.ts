@@ -201,6 +201,59 @@ describe("release evidence verifiers", () => {
     );
   });
 
+  it("rejects release evidence commands recorded more than once", async () => {
+    const alphaEvidence = validAlphaEvidence();
+    alphaEvidence.localSetups[0]!.commands = [
+      ...alphaEvidence.localSetups[0]!.commands,
+      "pnpm install",
+    ];
+    alphaEvidence.productionDeploys[0]!.commands = [
+      ...alphaEvidence.productionDeploys[0]!.commands,
+      "npx --package @cf-auth/cli@alpha cf-auth deploy --env production",
+    ];
+    const alphaPath = await writeEvidence(
+      "alpha-duplicate-commands",
+      alphaEvidence,
+    );
+    const alphaResult = runScript("scripts/verify-alpha-evidence.mjs", {
+      CF_AUTH_REQUIRE_ALPHA_EVIDENCE: "1",
+      CF_AUTH_ALPHA_EVIDENCE_PATH: alphaPath,
+    });
+
+    const betaEvidence = validBetaEvidence();
+    betaEvidence.manualQuickstart.commands = [
+      ...betaEvidence.manualQuickstart.commands,
+      "npm run dev",
+    ];
+    betaEvidence.productionSmoke.commands = [
+      ...betaEvidence.productionSmoke.commands,
+      "npx --package @cf-auth/cli@beta cf-auth deploy --env production",
+    ];
+    const betaPath = await writeEvidence(
+      "beta-duplicate-commands",
+      betaEvidence,
+    );
+    const betaResult = runScript("scripts/verify-beta-evidence.mjs", {
+      CF_AUTH_REQUIRE_BETA_EVIDENCE: "1",
+      CF_AUTH_BETA_EVIDENCE_PATH: betaPath,
+    });
+
+    expect(alphaResult.status).toBe(1);
+    expect(alphaResult.stderr).toContain(
+      "localSetups[0].commands[5] duplicates pnpm install",
+    );
+    expect(alphaResult.stderr).toContain(
+      "productionDeploys[0].commands[3] duplicates npx --package @cf-auth/cli@alpha cf-auth deploy --env production",
+    );
+    expect(betaResult.status).toBe(1);
+    expect(betaResult.stderr).toContain(
+      "manualQuickstart.commands[5] duplicates npm run dev",
+    );
+    expect(betaResult.stderr).toContain(
+      "productionSmoke.commands[3] duplicates npx --package @cf-auth/cli@beta cf-auth deploy --env production",
+    );
+  });
+
   it("rejects alpha evidence that reuses the same users for thresholds", async () => {
     const evidence = validAlphaEvidence();
     for (const setup of evidence.localSetups) setup.user = "alpha-user-1";

@@ -310,6 +310,9 @@ async function buildMigrateCommand(
       );
     }
   }
+  if (target.remote) {
+    assertRemoteAuthEnvironment(config, envName, "Remote migrations");
+  }
   const database = selectD1(config, envName);
   const status = parsed.flags.status ? "list" : "apply";
   const remoteFlag = target.remote ? "--remote" : "--local";
@@ -474,6 +477,13 @@ async function commandDoctor(
       status: "fail",
       message: "AUTH_ENV must be development, preview, or production",
       fix: "set vars.AUTH_ENV to development, preview, or production",
+    });
+  } else if (remoteTarget && vars.AUTH_ENV === "development") {
+    addCheck({
+      id: "auth_env",
+      status: "fail",
+      message: "Remote targets must not use AUTH_ENV=development",
+      fix: "set the selected Wrangler environment vars.AUTH_ENV to preview or production",
     });
   } else {
     addCheck({
@@ -2918,6 +2928,9 @@ async function d1CommandContext(
       `${remoteErrorPrefix} without --env requires top-level vars.AUTH_ENV=production.`,
     );
   }
+  if (target.remote) {
+    assertRemoteAuthEnvironment(config, envName, remoteErrorPrefix);
+  }
   const database = selectD1(config, envName);
   return {
     databaseName: database.database_name,
@@ -2952,6 +2965,19 @@ function displayD1ExecuteCommand(
   sqlDisplay: string,
 ): string {
   return `wrangler d1 execute ${context.databaseName} ${context.remote ? "--remote" : "--local"}${context.remote && context.envName ? ` --env ${context.envName}` : ""} --command ${sqlDisplay}`;
+}
+
+function assertRemoteAuthEnvironment(
+  config: WranglerConfig,
+  envName: string | undefined,
+  label: string,
+): void {
+  const selected = envName ? config.env?.[envName] : config;
+  if (isRecord(selected?.vars) && selected.vars.AUTH_ENV === "development") {
+    throw new Error(
+      `${label} must not target vars.AUTH_ENV=development. Set the selected Wrangler environment to preview or production.`,
+    );
+  }
 }
 
 function userWhereClause(identifier: string): string {

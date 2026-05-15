@@ -679,6 +679,29 @@ describe("CLI MVP", () => {
     );
   });
 
+  it("rejects named remote migrations with development AUTH_ENV", async () => {
+    const cwd = await tempDir();
+    await writeWrangler(cwd);
+    const wranglerPath = join(cwd, "wrangler.jsonc");
+    const config = JSON.parse(await readFile(wranglerPath, "utf8")) as {
+      env: { production: { vars: Record<string, string> } };
+    };
+    config.env.production.vars.AUTH_ENV = "development";
+    config.env.production.vars.AUTH_PUBLIC_ORIGIN = "http://localhost:8787";
+    await writeFile(wranglerPath, JSON.stringify(config, null, 2));
+
+    const errors: string[] = [];
+    const code = await runCli(["migrate", "--remote", "--env", "production"], {
+      cwd,
+      stderr: (line) => errors.push(line),
+    });
+
+    expect(code).toBe(1);
+    expect(errors.join("\n")).toContain(
+      "Remote migrations must not target vars.AUTH_ENV=development",
+    );
+  });
+
   it("parses Wrangler JSONC comments and trailing commas", async () => {
     const cwd = await tempDir();
     await mkdir(join(cwd, "migrations"), { recursive: true });
@@ -1053,6 +1076,30 @@ describe("CLI MVP", () => {
     expect(code).toBe(1);
     expect(errors.join("\n")).toContain(
       "Cloudflare Email binding AUTH_EMAIL is missing",
+    );
+  });
+
+  it("doctor rejects development AUTH_ENV in named remote targets", async () => {
+    const cwd = await tempDir();
+    await writeWrangler(cwd);
+    const wranglerPath = join(cwd, "wrangler.jsonc");
+    const config = JSON.parse(await readFile(wranglerPath, "utf8")) as {
+      env: { production: { vars: Record<string, string> } };
+    };
+    config.env.production.vars.AUTH_ENV = "development";
+    config.env.production.vars.AUTH_PUBLIC_ORIGIN = "http://localhost:8787";
+    await writeFile(wranglerPath, JSON.stringify(config));
+    const errors: string[] = [];
+
+    const code = await runCli(["doctor", "--env", "production"], {
+      cwd,
+      stderr: (line) => errors.push(line),
+      runCommand: remoteSecretRunner(),
+    });
+
+    expect(code).toBe(1);
+    expect(errors.join("\n")).toContain(
+      "Remote targets must not use AUTH_ENV=development",
     );
   });
 
@@ -2650,6 +2697,35 @@ export default app;
     expect(errors.join("\n")).toContain(
       "Deploy without --env requires top-level vars.AUTH_ENV=production",
     );
+  });
+
+  it("rejects named deploys that would run with development AUTH_ENV", async () => {
+    const cwd = await tempDir();
+    await writeWrangler(cwd);
+    const wranglerPath = join(cwd, "wrangler.jsonc");
+    const config = JSON.parse(await readFile(wranglerPath, "utf8")) as {
+      env: { production: { vars: Record<string, string> } };
+    };
+    config.env.production.vars.AUTH_ENV = "development";
+    config.env.production.vars.AUTH_PUBLIC_ORIGIN = "http://localhost:8787";
+    await writeFile(wranglerPath, JSON.stringify(config));
+    const calls: string[] = [];
+    const errors: string[] = [];
+
+    const code = await runCli(["deploy", "--env", "production"], {
+      cwd,
+      stderr: (line) => errors.push(line),
+      runCommand: (command, args) => {
+        calls.push([command, ...args].join(" "));
+        return remoteSecretRunner()(command, args);
+      },
+    });
+
+    expect(code).toBe(1);
+    expect(errors.join("\n")).toContain(
+      "Remote targets must not use AUTH_ENV=development",
+    );
+    expect(calls).not.toContain("wrangler deploy --env production");
   });
 
   it("applies a new remote auth secret without printing the secret", async () => {

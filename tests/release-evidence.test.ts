@@ -1956,6 +1956,25 @@ describe("release evidence verifiers", () => {
     expect(result.stderr).toContain("GitHub repository security advisory URL");
   });
 
+  it("rejects security tracker issue searches without explicit severity labels", async () => {
+    const evidence = validSecurityTracker();
+    evidence.issueSearchUrl =
+      "https://github.com/cf-auth-release/cloudflare-auth/issues?q=is%3Aissue%20is%3Aopen%20label%3Aauth%20high%20critical";
+    const path = await writeEvidence(
+      "security-tracker-unlabeled-severity-search",
+      evidence,
+    );
+    const result = runScript("scripts/verify-security-release-tracker.mjs", {
+      CF_AUTH_REQUIRE_SECURITY_TRACKER: "1",
+      CF_AUTH_SECURITY_TRACKER_PATH: path,
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "issueSearchUrl must search open high/critical auth issues with explicit labels",
+    );
+  });
+
   it("rejects security tracker evidence with insecure GitHub URLs", async () => {
     const evidence = validSecurityTracker();
     evidence.issueSearchUrl =

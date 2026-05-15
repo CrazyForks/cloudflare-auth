@@ -194,12 +194,35 @@ function requireIssueSearchUrl(value) {
     );
   }
   const query = (url.searchParams.get("q") ?? "").toLowerCase();
-  const requiredTerms = ["is:issue", "is:open", "auth", "high", "critical"];
-  if (!requiredTerms.every((term) => query.includes(term))) {
+  const terms = query.split(/\s+/u).filter(Boolean);
+  const labels = labelSearchTerms(terms);
+  const hasAuthLabel = labels.some((values) => values.includes("auth"));
+  const hasHighCriticalLabel = labels.some(
+    (values) => values.includes("high") && values.includes("critical"),
+  );
+  if (
+    !terms.includes("is:issue") ||
+    !terms.includes("is:open") ||
+    !hasAuthLabel ||
+    !hasHighCriticalLabel
+  ) {
     failures.push(
-      `${trackerPath}: issueSearchUrl must search open high/critical auth issues`,
+      `${trackerPath}: issueSearchUrl must search open high/critical auth issues with explicit labels`,
     );
   }
+}
+
+function labelSearchTerms(terms) {
+  return terms
+    .map((term) => {
+      const match = term.match(/^labels?:(.+)$/u);
+      if (!match) return [];
+      return match[1]
+        .split(",")
+        .map((value) => value.replace(/^["']|["']$/gu, "").trim())
+        .filter(Boolean);
+    })
+    .filter((values) => values.length > 0);
 }
 
 function requireAdvisorySearchUrl(value) {

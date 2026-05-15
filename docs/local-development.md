@@ -10,4 +10,7 @@ Development defaults:
 
 The dev outbox is per-isolate memory. It is not durable storage and returns `404` outside development mode.
 
-Terminal email is rejected in preview and production. If `terminalEmail({ outbox: true })` is configured, sent messages are also available from `/auth/dev/emails` while `AUTH_ENV=development`.
+Terminal email is rejected in preview and production. If the active
+development adapter is `terminalEmail({ outbox: true })`, including when it is
+selected through `byEnvironment(...)`, sent messages are also available from
+`/auth/dev/emails` while `AUTH_ENV=development`.

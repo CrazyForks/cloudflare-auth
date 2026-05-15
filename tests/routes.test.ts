@@ -11,6 +11,7 @@ import {
   createSqliteD1Database,
 } from "@cf-auth/testing";
 import {
+  byEnvironment,
   createAuthHandler,
   defineAuthConfig,
   terminalEmail,
@@ -372,6 +373,34 @@ describe("auth HTTP runtime", () => {
     );
     expect(localFallback?.status).toBe(200);
     await expect(localFallback?.json()).resolves.toEqual({ user: null });
+
+    const byEnvironmentFallback = await setup({
+      email: byEnvironment({
+        development: terminalEmail({ print() {} }),
+        preview: createMockEmailAdapter(),
+        production: createMockEmailAdapter(),
+      }),
+      runtime: {
+        mode: "from-env",
+        publicOrigin: "from-env",
+        trustedHosts: ["localhost:8787"],
+      },
+    });
+    const {
+      AUTH_PUBLIC_ORIGIN: _byEnvironmentPublicOrigin,
+      ...byEnvironmentEnvWithoutOrigin
+    } = byEnvironmentFallback.env;
+    const byEnvironmentResponse = await byEnvironmentFallback.handler.fetch(
+      new Request(`${origin}/auth/user`, {
+        headers: { "CF-Ray": "ray-by-environment-fallback" },
+      }),
+      byEnvironmentEnvWithoutOrigin,
+      byEnvironmentFallback.ctx,
+    );
+    expect(byEnvironmentResponse?.status).toBe(200);
+    await expect(byEnvironmentResponse?.json()).resolves.toEqual({
+      user: null,
+    });
 
     const untrustedFallback = await terminalFallback.handler.fetch(
       new Request("https://example.com/auth/user", {

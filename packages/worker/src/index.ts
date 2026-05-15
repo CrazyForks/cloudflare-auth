@@ -1764,6 +1764,7 @@ export function byEnvironment<Env = unknown>(adapters: {
   }
   return {
     kind: "by-environment",
+    adapters,
     sendMagicLink(input, runtime) {
       return select(runtime).sendMagicLink(input, runtime);
     },
@@ -1773,7 +1774,7 @@ export function byEnvironment<Env = unknown>(adapters: {
     sendPasswordReset(input, runtime) {
       return select(runtime).sendPasswordReset(input, runtime);
     },
-  };
+  } as AuthEmailAdapter<Env> & { adapters: typeof adapters };
 }
 
 function assertTurnstileEndpoints(endpoints: readonly string[]): void {
@@ -3559,11 +3560,25 @@ function canUseDevelopmentRequestOriginFallback(
   config: AuthConfig,
   requestUrl: URL,
 ): boolean {
+  const developmentEmail = selectedEmailAdapter(config.email, "development");
   return (
-    config.email.kind === "terminal" &&
+    developmentEmail.kind === "terminal" &&
     ["localhost", "127.0.0.1"].includes(requestUrl.hostname) &&
     config.runtime.trustedHosts.includes(requestUrl.host)
   );
+}
+
+function selectedEmailAdapter(
+  adapter: AuthEmailAdapter,
+  mode: AuthRuntimeMode,
+): AuthEmailAdapter {
+  if (adapter.kind !== "by-environment") return adapter;
+  const adapters = (
+    adapter as AuthEmailAdapter & {
+      adapters?: Partial<Record<AuthRuntimeMode, AuthEmailAdapter>>;
+    }
+  ).adapters;
+  return adapters?.[mode] ?? adapter;
 }
 
 function clearSessionCookieHeaders(cookie: RuntimeContext["cookie"]): string[] {

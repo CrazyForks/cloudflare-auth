@@ -227,6 +227,7 @@ await verifyToolchainDocs();
 await verifyTroubleshootingDocs();
 await verifyRootScripts();
 await verifyCiControls();
+await verifyWorkflowToolchainControls();
 await verifyReleaseControls();
 
 if (failures.length) {
@@ -1185,6 +1186,42 @@ async function verifyCiControls() {
   }
 }
 
+async function verifyWorkflowToolchainControls() {
+  const matrix = await readJsonObject("scripts/version-matrix.json");
+  if (
+    !matrix ||
+    typeof matrix.pnpm !== "string" ||
+    typeof matrix.node !== "string"
+  ) {
+    return;
+  }
+  const nodeVersion = workflowNodeVersion(matrix.node);
+  for (const file of [
+    ".github/workflows/ci.yml",
+    ".github/workflows/release.yml",
+    ".github/workflows/examples.yml",
+    ".github/workflows/wrangler-dev-smoke.yml",
+    ".github/workflows/published-quickstart-smoke.yml",
+    ".github/workflows/cloudflare-production-smoke.yml",
+  ]) {
+    const text = await readFile(file, "utf8");
+    if (!text.includes("pnpm/action-setup@v5")) {
+      failures.push(`${file}: missing pnpm/action-setup@v5`);
+    }
+    if (!text.includes(`version: ${matrix.pnpm}`)) {
+      failures.push(
+        `${file}: pnpm/action-setup version must be ${matrix.pnpm}`,
+      );
+    }
+    if (!text.includes("actions/setup-node@v6")) {
+      failures.push(`${file}: missing actions/setup-node@v6`);
+    }
+    if (!text.includes(`node-version: ${nodeVersion}`)) {
+      failures.push(`${file}: node-version must be ${nodeVersion}`);
+    }
+  }
+}
+
 function verifyRootScripts() {
   for (const script of [
     "format:check",
@@ -1231,6 +1268,10 @@ function verifyRootScripts() {
       failures.push(`package.json: publish:dry-run missing ${needle}`);
     }
   }
+}
+
+function workflowNodeVersion(nodeEngine) {
+  return String(nodeEngine).replace(/^>=\s*/u, "");
 }
 
 async function verifyToolchainDocs() {

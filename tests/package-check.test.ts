@@ -665,6 +665,31 @@ describe("package checks", () => {
     );
   });
 
+  it("requires workflow toolchain versions to match the version matrix", async () => {
+    const root = await packageCheckFixture();
+    await replaceFixtureText(
+      root,
+      ".github/workflows/ci.yml",
+      "node-version: 22.12.0",
+      "node-version: 20.0.0",
+    );
+    await replaceFixtureText(
+      root,
+      ".github/workflows/release.yml",
+      "version: 11.1.1",
+      "version: 10.0.0",
+    );
+    const result = runPackageCheck(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      ".github/workflows/ci.yml: node-version must be 22.12.0",
+    );
+    expect(result.stderr).toContain(
+      ".github/workflows/release.yml: pnpm/action-setup version must be 11.1.1",
+    );
+  });
+
   it("requires npm auth token wiring for publication", async () => {
     const root = await packageCheckFixture();
     await replaceFixtureText(

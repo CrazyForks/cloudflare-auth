@@ -14,7 +14,10 @@ import {
   isReservedEvidenceHostname,
 } from "./evidence-validation.mjs";
 import { readReleasePackageState } from "./release-package-state.mjs";
-import { requiredAuthSmokeEndpoints } from "./smoke-endpoints.mjs";
+import {
+  requiredAuthSmokeEndpoints,
+  requireSmokedEndpointEvidence,
+} from "./smoke-endpoints.mjs";
 
 const evidencePath =
   process.env.CF_AUTH_DEPLOY_BUTTON_EVIDENCE_PATH ??
@@ -120,9 +123,12 @@ function validateEvidence(value, rawText) {
     }
   }
 
-  const smokedEndpoints = Array.isArray(value.smokedEndpoints)
-    ? value.smokedEndpoints
-    : [];
+  const smokedEndpoints = requireSmokedEndpointEvidence({
+    evidencePath,
+    failures,
+    value: value.smokedEndpoints,
+    path: "smokedEndpoints",
+  });
   for (const endpoint of requiredSmokeEndpoints) {
     if (!smokedEndpoints.includes(endpoint)) {
       failures.push(

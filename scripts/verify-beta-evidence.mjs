@@ -22,7 +22,10 @@ import {
   isReservedEvidenceHostname,
 } from "./evidence-validation.mjs";
 import { readReleasePackageState } from "./release-package-state.mjs";
-import { requiredAuthSmokeEndpoints } from "./smoke-endpoints.mjs";
+import {
+  requiredAuthSmokeEndpoints,
+  requireSmokedEndpointEvidence,
+} from "./smoke-endpoints.mjs";
 
 const evidencePath =
   process.env.CF_AUTH_BETA_EVIDENCE_PATH ?? "docs/beta-evidence.json";
@@ -233,10 +236,13 @@ function validateProductionSmoke(value) {
       }),
     });
   }
+  const smokedEndpoints = requireSmokedEndpointEvidence({
+    evidencePath,
+    failures,
+    value: value.smokedEndpoints,
+    path: `${path}.smokedEndpoints`,
+  });
   for (const endpoint of requiredSmokeEndpoints) {
-    const smokedEndpoints = Array.isArray(value.smokedEndpoints)
-      ? value.smokedEndpoints
-      : [];
     if (!smokedEndpoints.includes(endpoint)) {
       failures.push(
         `${evidencePath}: ${path}.smokedEndpoints must include ${endpoint}`,

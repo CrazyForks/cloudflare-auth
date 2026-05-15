@@ -1043,6 +1043,53 @@ describe("release evidence verifiers", () => {
     expect(result.stderr).toContain("/auth/session/refresh");
   });
 
+  it("rejects beta production smoke evidence with malformed smoke endpoints", async () => {
+    const evidence = validBetaEvidence();
+    (evidence.productionSmoke.smokedEndpoints as unknown[]).push(
+      1,
+      " /auth/profile",
+      "/api/auth/user",
+    );
+    const path = await writeEvidence(
+      "beta-malformed-smoke-endpoints",
+      evidence,
+    );
+    const result = runScript("scripts/verify-beta-evidence.mjs", {
+      CF_AUTH_REQUIRE_BETA_EVIDENCE: "1",
+      CF_AUTH_BETA_EVIDENCE_PATH: path,
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "productionSmoke.smokedEndpoints[4] must be a non-empty string",
+    );
+    expect(result.stderr).toContain(
+      "productionSmoke.smokedEndpoints[5] must not include leading or trailing whitespace",
+    );
+    expect(result.stderr).toContain(
+      "productionSmoke.smokedEndpoints[6] must be an exact /auth/... endpoint path",
+    );
+  });
+
+  it("rejects beta production smoke evidence without a smoke endpoint array", async () => {
+    const evidence = validBetaEvidence();
+    (evidence.productionSmoke as Record<string, unknown>).smokedEndpoints =
+      "/auth/signup";
+    const path = await writeEvidence(
+      "beta-non-array-smoke-endpoints",
+      evidence,
+    );
+    const result = runScript("scripts/verify-beta-evidence.mjs", {
+      CF_AUTH_REQUIRE_BETA_EVIDENCE: "1",
+      CF_AUTH_BETA_EVIDENCE_PATH: path,
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "productionSmoke.smokedEndpoints must be an array",
+    );
+  });
+
   it("rejects beta manual quickstart evidence without command proof", async () => {
     const evidence = validBetaEvidence();
     evidence.manualQuickstart.commands = [];
@@ -1379,6 +1426,50 @@ describe("release evidence verifiers", () => {
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("smokedEndpoints");
     expect(result.stderr).toContain("/auth/session/refresh");
+  });
+
+  it("rejects deploy button evidence with malformed smoke endpoints", async () => {
+    const evidence = validDeployButtonEvidence();
+    (evidence.smokedEndpoints as unknown[]).push(
+      false,
+      " /auth/profile",
+      "/api/auth/user",
+    );
+    const path = await writeEvidence(
+      "deploy-button-malformed-smoke-endpoints",
+      evidence,
+    );
+    const result = runScript("scripts/verify-deploy-button-evidence.mjs", {
+      CF_AUTH_REQUIRE_DEPLOY_BUTTON_EVIDENCE: "1",
+      CF_AUTH_DEPLOY_BUTTON_EVIDENCE_PATH: path,
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "smokedEndpoints[4] must be a non-empty string",
+    );
+    expect(result.stderr).toContain(
+      "smokedEndpoints[5] must not include leading or trailing whitespace",
+    );
+    expect(result.stderr).toContain(
+      "smokedEndpoints[6] must be an exact /auth/... endpoint path",
+    );
+  });
+
+  it("rejects deploy button evidence without a smoke endpoint array", async () => {
+    const evidence = validDeployButtonEvidence();
+    (evidence as Record<string, unknown>).smokedEndpoints = "/auth/signup";
+    const path = await writeEvidence(
+      "deploy-button-non-array-smoke-endpoints",
+      evidence,
+    );
+    const result = runScript("scripts/verify-deploy-button-evidence.mjs", {
+      CF_AUTH_REQUIRE_DEPLOY_BUTTON_EVIDENCE: "1",
+      CF_AUTH_DEPLOY_BUTTON_EVIDENCE_PATH: path,
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("smokedEndpoints must be an array");
   });
 
   it("rejects deploy button evidence with raw emails, IPs, and user agents", async () => {

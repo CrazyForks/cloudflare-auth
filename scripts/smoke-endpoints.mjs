@@ -6,6 +6,7 @@ const defaultSmokeEndpointSource = new URL(
   import.meta.url,
 );
 const authEndpointPattern = /\/auth\/[A-Za-z0-9/-]+/gu;
+const exactAuthEndpointPattern = /^\/auth\/[A-Za-z0-9/-]+$/u;
 
 export async function requiredAuthSmokeEndpoints(
   source = defaultSmokeEndpointSource,
@@ -31,6 +32,41 @@ export async function requiredAuthSmokeEndpoints(
   }
 
   return [...endpoints].sort();
+}
+
+export function requireSmokedEndpointEvidence({
+  evidencePath,
+  failures,
+  value,
+  path,
+}) {
+  if (!Array.isArray(value)) {
+    failures.push(`${evidencePath}: ${path} must be an array`);
+    return [];
+  }
+
+  const endpoints = [];
+  for (const [index, endpoint] of value.entries()) {
+    const itemPath = `${path}[${index}]`;
+    if (typeof endpoint !== "string" || endpoint.trim().length === 0) {
+      failures.push(`${evidencePath}: ${itemPath} must be a non-empty string`);
+      continue;
+    }
+    if (endpoint.trim() !== endpoint) {
+      failures.push(
+        `${evidencePath}: ${itemPath} must not include leading or trailing whitespace`,
+      );
+      continue;
+    }
+    if (!exactAuthEndpointPattern.test(endpoint)) {
+      failures.push(
+        `${evidencePath}: ${itemPath} must be an exact /auth/... endpoint path`,
+      );
+      continue;
+    }
+    endpoints.push(endpoint);
+  }
+  return endpoints;
 }
 
 function stringLikeNodeText(node) {

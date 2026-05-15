@@ -84,6 +84,7 @@ function validateEvidence(value, rawText) {
   validateManualQuickstart(value.manualQuickstart);
   validateProductionSmoke(value.productionSmoke);
   validateDeployButton(value.deployButton);
+  requireMatchingPackageTags(value);
 
   if (containsSensitiveEvidence(rawText)) {
     failures.push(
@@ -216,6 +217,22 @@ function validateDeployButton(value) {
   if (value.evidenceVerifierPassed !== true) {
     failures.push(
       `${evidencePath}: ${path}.evidenceVerifierPassed must be true`,
+    );
+  }
+}
+
+function requireMatchingPackageTags(value) {
+  const entries = [
+    ["publishedQuickstart.packageTag", value.publishedQuickstart?.packageTag],
+    ["manualQuickstart.packageTag", value.manualQuickstart?.packageTag],
+    ["productionSmoke.packageTag", value.productionSmoke?.packageTag],
+  ].filter((entry) => typeof entry[1] === "string");
+  const tags = new Set(entries.map((entry) => entry[1]));
+  if (tags.size > 1) {
+    failures.push(
+      `${evidencePath}: packageTag values must match across published quickstart, manual quickstart, and production smoke evidence (${entries
+        .map(([path, tag]) => `${path}=${tag}`)
+        .join(", ")})`,
     );
   }
 }

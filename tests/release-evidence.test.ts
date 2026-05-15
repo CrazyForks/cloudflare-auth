@@ -945,6 +945,32 @@ describe("release evidence verifiers", () => {
     expect(result.stderr).toContain("productionSmoke.packageTag");
   });
 
+  it("rejects beta evidence with mismatched package tags", async () => {
+    const evidence = validBetaEvidence();
+    evidence.publishedQuickstart.packageTag = "0.1.0-beta.0";
+    evidence.manualQuickstart.packageTag = "0.1.0-beta.1";
+    evidence.manualQuickstart.commands = evidence.manualQuickstart.commands.map(
+      (command) =>
+        command.replace("@cf-auth/cli@beta", "@cf-auth/cli@0.1.0-beta.1"),
+    );
+    evidence.productionSmoke.packageTag = "0.1.0-beta.2";
+    evidence.productionSmoke.commands = evidence.productionSmoke.commands.map(
+      (command) =>
+        command.replace("@cf-auth/cli@beta", "@cf-auth/cli@0.1.0-beta.2"),
+    );
+    const path = await writeEvidence("beta-mismatched-package-tags", evidence);
+    const result = runScript("scripts/verify-beta-evidence.mjs", {
+      CF_AUTH_REQUIRE_BETA_EVIDENCE: "1",
+      CF_AUTH_BETA_EVIDENCE_PATH: path,
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("packageTag values must match");
+    expect(result.stderr).toContain("publishedQuickstart.packageTag");
+    expect(result.stderr).toContain("manualQuickstart.packageTag");
+    expect(result.stderr).toContain("productionSmoke.packageTag");
+  });
+
   it("rejects beta evidence without GitHub Actions workflow proof", async () => {
     const evidence = validBetaEvidence();
     evidence.publishedQuickstart.workflowRunUrl =

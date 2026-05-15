@@ -120,8 +120,13 @@ export function isPlaceholderEvidenceIdentity(value) {
     .toLowerCase()
     .replaceAll("_", "-")
     .replace(/\s+/gu, "-");
+  if (/^<[^<>]+>$/u.test(normalized)) {
+    return true;
+  }
   if (
     [
+      "approver",
+      "release-approver",
       "maintainer",
       "maintainer-name",
       "release-reviewer",

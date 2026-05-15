@@ -6,6 +6,11 @@ import {
   containsRawUserAgent,
 } from "./evidence-redaction.mjs";
 import {
+  documentedLocalSetupCommands,
+  documentedProductionDeployCommands,
+  requireOnlyDocumentedCommands,
+} from "./evidence-commands.mjs";
+import {
   isFutureIsoDateString,
   isIsoDateString,
   isJsonObject,
@@ -135,6 +140,14 @@ function validateEvidence(value, rawText) {
       "@cf-auth/cli@alpha",
       `${path}.commands`,
     );
+    requireOnlyDocumentedCommands({
+      evidencePath,
+      failures,
+      commands: setup.commands,
+      path: `${path}.commands`,
+      allowedPatterns: documentedLocalSetupCommands("alpha"),
+      label: "alpha",
+    });
   }
 
   if (setupMinutes.length > 0 && median(setupMinutes) >= 10) {
@@ -182,6 +195,16 @@ function validateEvidence(value, rawText) {
       "@cf-auth/cli@alpha",
       `${path}.commands`,
     );
+    requireOnlyDocumentedCommands({
+      evidencePath,
+      failures,
+      commands: deploy.commands,
+      path: `${path}.commands`,
+      allowedPatterns: documentedProductionDeployCommands("alpha", {
+        doctorReport: true,
+      }),
+      label: "alpha",
+    });
   }
 
   for (const [index, item] of failuresSeen.entries()) {

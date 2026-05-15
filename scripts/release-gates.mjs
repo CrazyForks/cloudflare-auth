@@ -64,6 +64,7 @@ await requireFile("docs/public-beta.md");
 await requireFile("docs/release-readiness-audit.md");
 await requireFile("docs/security-release-tracker.example.json");
 await requireFile("schemas/doctor-report.schema.json");
+await requireFile("scripts/evidence-commands.mjs");
 await requireFile("scripts/export-deploy-template.mjs");
 await requireFile("scripts/check-package-names.mjs");
 await requireFile("scripts/smoke-endpoints.mjs");

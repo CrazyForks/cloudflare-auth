@@ -35,6 +35,28 @@ describe("release evidence verifiers", () => {
     expect(result.stderr).toContain("cf-auth deploy --env production");
   });
 
+  it("rejects alpha evidence with maintainer-supplied commands outside the docs", async () => {
+    const evidence = validAlphaEvidence();
+    evidence.localSetups[0]!.commands = [
+      ...evidence.localSetups[0]!.commands,
+      "pnpm install && ./maintainer-fix.sh",
+    ];
+    evidence.productionDeploys[0]!.commands = [
+      ...evidence.productionDeploys[0]!.commands,
+      "npx --package @cf-auth/cli@alpha cf-auth deploy --env production --skip-doctor",
+    ];
+    const path = await writeEvidence("alpha-undocumented-command", evidence);
+    const result = runScript("scripts/verify-alpha-evidence.mjs", {
+      CF_AUTH_REQUIRE_ALPHA_EVIDENCE: "1",
+      CF_AUTH_ALPHA_EVIDENCE_PATH: path,
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("localSetups[0].commands[4]");
+    expect(result.stderr).toContain("productionDeploys[0].commands[3]");
+    expect(result.stderr).toContain("documented alpha commands");
+  });
+
   it("rejects alpha evidence that reuses the same users for thresholds", async () => {
     const evidence = validAlphaEvidence();
     for (const setup of evidence.localSetups) setup.user = "alpha-user-1";
@@ -926,6 +948,29 @@ describe("release evidence verifiers", () => {
 
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("@cf-auth/cli@beta");
+  });
+
+  it("rejects beta evidence with commands outside the documented paths", async () => {
+    const evidence = validBetaEvidence();
+    evidence.manualQuickstart.commands = [
+      ...evidence.manualQuickstart.commands,
+      "pnpm install && ./maintainer-fix.sh",
+    ];
+    evidence.productionSmoke.commands = [
+      ...evidence.productionSmoke.commands,
+      "npx --package @cf-auth/cli@beta cf-auth deploy --env production --skip-doctor",
+    ];
+    const path = await writeEvidence("beta-undocumented-command", evidence);
+    const result = runScript("scripts/verify-beta-evidence.mjs", {
+      CF_AUTH_REQUIRE_BETA_EVIDENCE: "1",
+      CF_AUTH_BETA_EVIDENCE_PATH: path,
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("manualQuickstart.commands[4]");
+    expect(result.stderr).toContain("public-beta quickstart commands");
+    expect(result.stderr).toContain("productionSmoke.commands[3]");
+    expect(result.stderr).toContain("public-beta production smoke commands");
   });
 
   it("rejects beta evidence that uses a non-beta package tag", async () => {

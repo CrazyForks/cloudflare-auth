@@ -941,6 +941,7 @@ async function releaseGateFixture(options: ReleaseGateFixtureOptions) {
     "docs/release-readiness-audit.md",
     "docs/security-release-tracker.example.json",
     "schemas/doctor-report.schema.json",
+    "scripts/evidence-commands.mjs",
     "scripts/export-deploy-template.mjs",
     "scripts/check-package-names.mjs",
     "scripts/smoke-endpoints.mjs",

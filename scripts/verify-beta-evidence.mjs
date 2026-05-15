@@ -6,6 +6,11 @@ import {
   containsRawUserAgent,
 } from "./evidence-redaction.mjs";
 import {
+  documentedLocalSetupCommands,
+  documentedProductionDeployCommands,
+  requireOnlyDocumentedCommands,
+} from "./evidence-commands.mjs";
+import {
   isFutureIsoDateString,
   isIsoDateString,
   isJsonObject,
@@ -148,6 +153,14 @@ function validateManualQuickstart(value) {
       `@cf-auth/cli@${value.packageTag}`,
       `${path}.commands`,
     );
+    requireOnlyDocumentedCommands({
+      evidencePath,
+      failures,
+      commands: value.commands,
+      path: `${path}.commands`,
+      allowedPatterns: documentedLocalSetupCommands(value.packageTag),
+      label: "public-beta quickstart",
+    });
   }
 }
 
@@ -189,6 +202,16 @@ function validateProductionSmoke(value) {
       `@cf-auth/cli@${value.packageTag}`,
       `${path}.commands`,
     );
+    requireOnlyDocumentedCommands({
+      evidencePath,
+      failures,
+      commands: value.commands,
+      path: `${path}.commands`,
+      allowedPatterns: documentedProductionDeployCommands(value.packageTag, {
+        doctorReport: false,
+      }),
+      label: "public-beta production smoke",
+    });
   }
   for (const endpoint of requiredSmokeEndpoints) {
     const smokedEndpoints = Array.isArray(value.smokedEndpoints)

@@ -37,6 +37,7 @@ const reservedPackages = workspacePackageIdentities
   .filter((pkg) => pkg !== null)
   .sort((a, b) => String(a.name).localeCompare(String(b.name)));
 const reservedPackageNames = new Set(reservedPackages.map((pkg) => pkg.name));
+const reservedPackageNamesRequiringRegistryVersion = new Set(["cf-auth"]);
 const requireEvidence =
   process.env.CF_AUTH_REQUIRE_PACKAGE_OWNERSHIP === "1" ||
   packages.some((pkg) => isPublishedReleaseVersion(pkg.version));
@@ -184,7 +185,16 @@ function validateEvidence(value, rawText) {
         `${evidencePath}: ${path}.publishableAfterOwnershipConfirmed must be true`,
       );
     }
-    if (
+    if (reservedPackageNamesRequiringRegistryVersion.has(item.name)) {
+      if (
+        typeof item.registryVersion !== "string" ||
+        item.registryVersion.trim().length === 0
+      ) {
+        failures.push(
+          `${evidencePath}: ${path}.registryVersion must be a non-empty string for already-published reserved package names`,
+        );
+      }
+    } else if (
       "registryVersion" in item &&
       (typeof item.registryVersion !== "string" ||
         item.registryVersion.trim().length === 0)

@@ -318,7 +318,7 @@ describe("release evidence verifiers", () => {
       "verifiedBy must be a non-empty string",
     );
     expect(packageResult.stderr).toContain(
-      "reservedPackages[0].registryVersion must be a non-empty string when present",
+      "reservedPackages[0].registryVersion must be a non-empty string for already-published reserved package names",
     );
     expect(securityTrackerResult.status).toBe(1);
     expect(securityTrackerResult.stderr).toContain(
@@ -1503,6 +1503,44 @@ describe("release evidence verifiers", () => {
 
     expect(result.status).toBe(0);
     expect(result.stdout).toContain("package ownership evidence verified");
+  });
+
+  it("requires registryVersion for already-published reserved package names", async () => {
+    const cwd = await packageOwnershipFixture({
+      publishCfAuthShim: false,
+      staleCfAuthReservation: false,
+      publishCreatePackage: false,
+      staleCreateReservation: false,
+    });
+    const evidence = packageOwnershipFixtureEvidence({
+      publishCfAuthShim: false,
+      staleCfAuthReservation: false,
+      publishCreatePackage: false,
+      staleCreateReservation: false,
+    });
+    delete (evidence.reservedPackages[0] as Record<string, unknown>)
+      .registryVersion;
+    await writeFile(
+      join(cwd, "docs", "package-ownership.json"),
+      `${JSON.stringify(evidence, null, 2)}\n`,
+    );
+    const result = runScript(
+      "scripts/verify-package-ownership.mjs",
+      {
+        CF_AUTH_REQUIRE_PACKAGE_OWNERSHIP: "1",
+        CF_AUTH_PACKAGE_OWNERSHIP_PATH: join(
+          cwd,
+          "docs",
+          "package-ownership.json",
+        ),
+      },
+      cwd,
+    );
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "reservedPackages[0].registryVersion must be a non-empty string for already-published reserved package names",
+    );
   });
 
   it("rejects malformed package manifests before package ownership release checks", async () => {

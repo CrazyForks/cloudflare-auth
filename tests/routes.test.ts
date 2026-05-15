@@ -1892,6 +1892,80 @@ describe("auth HTTP runtime", () => {
     ).toBe("https://preview-ui.example.com");
   });
 
+  it("keeps request-origin and redirect-origin allowlists separate", async () => {
+    const redirectOnlyPolicy = await setup({
+      runtime: {
+        mode: "from-env",
+        publicOrigin: "from-env",
+        trustedHosts: ["api.example.com"],
+      },
+      redirects: {
+        allowedOrigins: ["https://app.example.com"],
+        allowedPreviewOrigins: [],
+      },
+      security: {
+        allowedRequestOrigins: [],
+        allowedPreviewRequestOrigins: [],
+      },
+    });
+    const redirectOnlyPreflight = await redirectOnlyPolicy.handler.fetch(
+      new Request("https://api.example.com/auth/signup", {
+        method: "OPTIONS",
+        headers: { Origin: "https://app.example.com" },
+      }),
+      {
+        ...redirectOnlyPolicy.env,
+        AUTH_ENV: "production",
+        AUTH_PUBLIC_ORIGIN: "https://api.example.com",
+      },
+      redirectOnlyPolicy.ctx,
+    );
+    expect(redirectOnlyPreflight?.status).toBe(403);
+    expect(
+      redirectOnlyPreflight?.headers.get("Access-Control-Allow-Origin"),
+    ).toBeNull();
+
+    const requestOnlyPolicy = await setup({
+      runtime: {
+        mode: "from-env",
+        publicOrigin: "from-env",
+        trustedHosts: ["api.example.com"],
+      },
+      redirects: {
+        allowedOrigins: [],
+        allowedPreviewOrigins: [],
+      },
+      security: {
+        allowedRequestOrigins: ["https://app.example.com"],
+        allowedPreviewRequestOrigins: [],
+      },
+    });
+    const requestOnlyRedirect = await requestOnlyPolicy.handler.fetch(
+      new Request("https://api.example.com/auth/magic-link/request", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Origin: "https://api.example.com",
+        },
+        body: JSON.stringify({
+          email: "request-only-redirect@example.com",
+          redirectTo: "https://app.example.com/dashboard",
+        }),
+      }),
+      {
+        ...requestOnlyPolicy.env,
+        AUTH_ENV: "production",
+        AUTH_PUBLIC_ORIGIN: "https://api.example.com",
+      },
+      requestOnlyPolicy.ctx,
+    );
+    await requestOnlyPolicy.flushDeferred();
+    expect(requestOnlyRedirect?.status).toBe(400);
+    await expect(requestOnlyRedirect?.json()).resolves.toMatchObject({
+      error: { code: "unsafe_redirect" },
+    });
+  });
+
   it("parses supported content types with parameters", async () => {
     const { authFetch, email } = await setup();
     const signup = await authFetch("/auth/signup", {

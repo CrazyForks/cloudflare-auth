@@ -540,6 +540,98 @@ describe("release evidence verifiers", () => {
     );
   });
 
+  it("rejects slash placeholder identities in release evidence", async () => {
+    const alphaEvidence = validAlphaEvidence();
+    alphaEvidence.localSetups[0]!.user = "n/a";
+    alphaEvidence.productionDeploys[0]!.user = "not applicable";
+    const alphaPath = await writeEvidence(
+      "alpha-slash-placeholder-identity",
+      alphaEvidence,
+    );
+    const alphaResult = runScript("scripts/verify-alpha-evidence.mjs", {
+      CF_AUTH_REQUIRE_ALPHA_EVIDENCE: "1",
+      CF_AUTH_ALPHA_EVIDENCE_PATH: alphaPath,
+    });
+
+    const betaEvidence = validBetaEvidence();
+    betaEvidence.reviewedBy = "N/A";
+    betaEvidence.manualQuickstart.maintainer = "not applicable";
+    const betaPath = await writeEvidence(
+      "beta-slash-placeholder-identity",
+      betaEvidence,
+    );
+    const betaResult = runScript("scripts/verify-beta-evidence.mjs", {
+      CF_AUTH_REQUIRE_BETA_EVIDENCE: "1",
+      CF_AUTH_BETA_EVIDENCE_PATH: betaPath,
+    });
+
+    const deployButtonEvidence = validDeployButtonEvidence();
+    deployButtonEvidence.verifiedBy = "n/a";
+    const deployButtonPath = await writeEvidence(
+      "deploy-button-slash-placeholder-identity",
+      deployButtonEvidence,
+    );
+    const deployButtonResult = runScript(
+      "scripts/verify-deploy-button-evidence.mjs",
+      {
+        CF_AUTH_REQUIRE_DEPLOY_BUTTON_EVIDENCE: "1",
+        CF_AUTH_DEPLOY_BUTTON_EVIDENCE_PATH: deployButtonPath,
+      },
+    );
+
+    const packageEvidence = validPackageEvidence();
+    packageEvidence.verifiedBy = "n/a";
+    const packagePath = await writeEvidence(
+      "package-ownership-slash-placeholder-identity",
+      packageEvidence,
+    );
+    const packageResult = runScript("scripts/verify-package-ownership.mjs", {
+      CF_AUTH_REQUIRE_PACKAGE_OWNERSHIP: "1",
+      CF_AUTH_PACKAGE_OWNERSHIP_PATH: packagePath,
+    });
+
+    const securityTracker = validSecurityTracker();
+    securityTracker.reviewedBy = "not applicable";
+    const securityTrackerPath = await writeEvidence(
+      "security-tracker-slash-placeholder-identity",
+      securityTracker,
+    );
+    const securityTrackerResult = runScript(
+      "scripts/verify-security-release-tracker.mjs",
+      {
+        CF_AUTH_REQUIRE_SECURITY_TRACKER: "1",
+        CF_AUTH_SECURITY_TRACKER_PATH: securityTrackerPath,
+      },
+    );
+
+    expect(alphaResult.status).toBe(1);
+    expect(alphaResult.stderr).toContain(
+      "localSetups[0].user must not be a placeholder identity",
+    );
+    expect(alphaResult.stderr).toContain(
+      "productionDeploys[0].user must not be a placeholder identity",
+    );
+    expect(betaResult.status).toBe(1);
+    expect(betaResult.stderr).toContain(
+      "reviewedBy must not be a placeholder identity",
+    );
+    expect(betaResult.stderr).toContain(
+      "manualQuickstart.maintainer must not be a placeholder identity",
+    );
+    expect(deployButtonResult.status).toBe(1);
+    expect(deployButtonResult.stderr).toContain(
+      "verifiedBy must not be a placeholder identity",
+    );
+    expect(packageResult.status).toBe(1);
+    expect(packageResult.stderr).toContain(
+      "verifiedBy must not be a placeholder identity",
+    );
+    expect(securityTrackerResult.status).toBe(1);
+    expect(securityTrackerResult.stderr).toContain(
+      "reviewedBy must not be a placeholder identity",
+    );
+  });
+
   it("rejects whitespace-only required release evidence strings", async () => {
     const alphaEvidence = validAlphaEvidence();
     alphaEvidence.localSetups[0]!.user = "   ";

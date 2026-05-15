@@ -119,6 +119,7 @@ export function isPlaceholderEvidenceIdentity(value) {
     .trim()
     .toLowerCase()
     .replaceAll("_", "-")
+    .replace(/[\\/]+/gu, "-")
     .replace(/\s+/gu, "-");
   if (/^<[^<>]+>$/u.test(normalized)) {
     return true;
@@ -135,7 +136,9 @@ export function isPlaceholderEvidenceIdentity(value) {
       "external-reviewer",
       "todo",
       "tbd",
+      "na",
       "n-a",
+      "not-applicable",
       "none",
     ].includes(normalized)
   ) {

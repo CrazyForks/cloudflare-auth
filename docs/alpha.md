@@ -2,6 +2,19 @@
 
 Private alpha validates that a developer can start from a clean directory, complete local auth, and deploy to production using only documented commands.
 
+## Package Preflight
+
+Before publishing or sharing any `@cf-auth/cli@alpha` package, maintainers must
+confirm package ownership and npm publisher hardening:
+
+```bash
+CF_AUTH_REQUIRE_PACKAGE_OWNERSHIP=1 pnpm verify:package-ownership
+pnpm check:package-names
+```
+
+Do not publish private-alpha packages from placeholder `0.0.0` versions or
+without redaction-safe package ownership evidence.
+
 ## Local Setup Script
 
 Run from an empty working directory:

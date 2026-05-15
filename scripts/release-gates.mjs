@@ -168,6 +168,11 @@ await requireText(
   "CF_AUTH_REQUIRE_ALPHA_EVIDENCE=1 pnpm verify:alpha-evidence",
 );
 await requireText(
+  "docs/alpha.md",
+  "CF_AUTH_REQUIRE_PACKAGE_OWNERSHIP=1 pnpm verify:package-ownership",
+);
+await requireText("docs/alpha.md", "pnpm check:package-names");
+await requireText(
   "docs/decisions/package-naming.md",
   "CF_AUTH_REQUIRE_PACKAGE_OWNERSHIP=1 pnpm verify:package-ownership",
 );

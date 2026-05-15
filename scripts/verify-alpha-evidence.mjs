@@ -1,10 +1,6 @@
 import { access, readFile } from "node:fs/promises";
 
-import {
-  containsIpLiteral,
-  containsRawSecretMaterial,
-  containsRawUserAgent,
-} from "./evidence-redaction.mjs";
+import { containsSensitiveEvidence } from "./evidence-redaction.mjs";
 import {
   documentedLocalSetupCommandOrder,
   documentedLocalSetupCommands,
@@ -260,7 +256,7 @@ function validateEvidence(value, rawText) {
     }
   }
 
-  if (containsSensitiveAlphaEvidence(rawText)) {
+  if (containsSensitiveEvidence(rawText)) {
     failures.push(
       `${evidencePath}: must not include raw secrets, tokens, cookies, emails, IPs, user agents, or Cloudflare API tokens`,
     );
@@ -345,19 +341,6 @@ function median(values) {
   return sorted.length % 2 === 0
     ? ((sorted[mid - 1] ?? 0) + (sorted[mid] ?? 0)) / 2
     : (sorted[mid] ?? 0);
-}
-
-function containsSensitiveAlphaEvidence(text) {
-  return (
-    containsRawSecretMaterial(text) ||
-    /\bcfauth\.(?:ses|magic|verify|reset)\.[A-Za-z0-9_-]{1,32}\.[A-Za-z0-9_-]{20,}/u.test(
-      text,
-    ) ||
-    /\b(?:__Host-|__Secure-)?cfauth-session=/u.test(text) ||
-    /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/iu.test(text) ||
-    containsIpLiteral(text) ||
-    containsRawUserAgent(text)
-  );
 }
 
 function containsPlaceholderAlphaEvidence(text) {

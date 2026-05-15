@@ -19,6 +19,19 @@ export function containsRawSecretMaterial(text) {
   );
 }
 
+export function containsSensitiveEvidence(text) {
+  return (
+    containsRawSecretMaterial(text) ||
+    /\bcfauth\.(?:ses|magic|verify|reset)\.[A-Za-z0-9_-]{1,32}\.[A-Za-z0-9_-]{20,}/u.test(
+      text,
+    ) ||
+    /\b(?:__Host-|__Secure-)?cfauth-session=/u.test(text) ||
+    /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/iu.test(text) ||
+    containsIpLiteral(text) ||
+    containsRawUserAgent(text)
+  );
+}
+
 export function containsIpLiteral(text) {
   if (/\b(?:\d{1,3}\.){3}\d{1,3}\b/u.test(text)) return true;
   const candidates =

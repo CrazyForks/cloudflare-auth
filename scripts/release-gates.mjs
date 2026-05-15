@@ -743,9 +743,11 @@ async function requireUpgradeFixtures() {
     }
     if (
       typeof beta.version !== "string" ||
-      !/^\d+\.\d+\.\d+(?:-[\w.-]+)?$/u.test(beta.version)
+      !/^\d+\.\d+\.\d+-beta(?:[.-].*)?$/u.test(beta.version)
     ) {
-      failures.push(`${path}.version must be a package version string`);
+      failures.push(
+        `${path}.version must be a beta prerelease package version`,
+      );
     }
     if (!Number.isSafeInteger(beta.schemaVersion) || beta.schemaVersion <= 0) {
       failures.push(`${path}.schemaVersion must be a positive integer`);

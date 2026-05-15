@@ -796,7 +796,7 @@ process.exit(1);
           betaVersions: [
             { version: "1.0.0-beta.0" },
             {
-              version: "not-a-version",
+              version: "1.0.0",
               schemaVersion: 1,
               fixture: "../outside",
             },

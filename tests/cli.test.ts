@@ -1883,6 +1883,39 @@ export default app;
     expect(output.join("\n")).not.toContain("token_hash");
   });
 
+  it("escapes recovery helper identifiers before embedding them in D1 SQL", async () => {
+    const cwd = await tempDir();
+    await writeWrangler(cwd);
+    const calls: Array<{ args: string[]; sql: string }> = [];
+
+    const disableCode = await runCli(
+      ["users", "disable", "O'Hara@example.com", "--local"],
+      {
+        cwd,
+        runCommand: (_command, args) => {
+          calls.push({ args, sql: args.at(-1) ?? "" });
+          return { status: 0, stdout: "", stderr: "" };
+        },
+      },
+    );
+    const revokeCode = await runCli(
+      ["sessions", "revoke", "--user", "usr_' OR 1=1 --", "--local"],
+      {
+        cwd,
+        runCommand: (_command, args) => {
+          calls.push({ args, sql: args.at(-1) ?? "" });
+          return { status: 0, stdout: "", stderr: "" };
+        },
+      },
+    );
+
+    expect(disableCode).toBe(0);
+    expect(revokeCode).toBe(0);
+    expect(calls[0]?.sql).toContain("normalized_email = 'o''hara@example.com'");
+    expect(calls[1]?.sql).toContain("id = 'usr_'' OR 1=1 --'");
+    expect(calls[1]?.sql).not.toContain("id = 'usr_' OR 1=1 --'");
+  });
+
   it("rejects malformed D1 JSON for session recovery lists", async () => {
     const cwd = await tempDir();
     await writeWrangler(cwd);

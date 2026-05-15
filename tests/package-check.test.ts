@@ -145,6 +145,22 @@ describe("package checks", () => {
     );
   });
 
+  it("requires release readiness audit coverage for testing and beta checklists", async () => {
+    const root = await packageCheckFixture();
+    await replaceFixtureText(
+      root,
+      "docs/release-readiness-audit.md",
+      "## Testing, CI, And Docs Plan Audit",
+      "## Verification Notes",
+    );
+    const result = runPackageCheck(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "docs/release-readiness-audit.md: missing ## Testing, CI, And Docs Plan Audit",
+    );
+  });
+
   it("requires release readiness audit coverage for every non-negotiable rule", async () => {
     const root = await packageCheckFixture();
     await replaceFixtureText(

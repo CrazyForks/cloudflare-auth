@@ -73,6 +73,21 @@ describe("release gates", () => {
     expect(result.stderr).toContain("Stage 12");
   });
 
+  it("requires release readiness audit coverage for testing and beta checklists", async () => {
+    const root = await releaseGateFixture({ deployButtonEvidence: true });
+    await replaceFixtureText(
+      root,
+      "docs/release-readiness-audit.md",
+      "## Final Beta Definition Of Done Audit",
+      "## Beta Notes",
+    );
+    const result = runReleaseGates(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("docs/release-readiness-audit.md");
+    expect(result.stderr).toContain("## Final Beta Definition Of Done Audit");
+  });
+
   it("derives evidence example endpoint coverage from the smoke script", async () => {
     const root = await releaseGateFixture({ deployButtonEvidence: true });
     await writeFixtureFile(
@@ -1331,6 +1346,27 @@ function releaseReadinessAuditFixtureText() {
     "## V1 Exclusion Audit",
     "role/permission framework",
     "peppering",
+    "## Testing, CI, And Docs Plan Audit",
+    "Section 31.1 unit tests",
+    "Section 31.2 repository tests",
+    "Section 31.3 route tests",
+    "Section 31.4 concurrency/security tests",
+    "Section 31.5 CLI tests",
+    "Section 31.6 example tests",
+    "Section 32.1 CI command set",
+    "Section 32.2 examples workflow",
+    "Section 32.3 release workflow",
+    "Section 32.4 security automation",
+    "Section 33.1 README",
+    "Section 33.2 docs directory",
+    "Section 33.3 troubleshooting matrix",
+    "## Final Beta Definition Of Done Audit",
+    "Section 36 create-package quickstart command",
+    "Section 36 unscoped init command",
+    "Local magic link works without email setup.",
+    "Remote deploy works with documented Cloudflare setup.",
+    "Packages can be published with Changesets.",
+    "No known high-severity auth bug is open.",
     "scripts/lint.mjs",
     "interpolated D1 `prepare`/`exec` template SQL",
     "tests/lint.test.ts",

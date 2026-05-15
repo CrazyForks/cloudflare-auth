@@ -88,7 +88,7 @@ describe("release evidence verifiers", () => {
     });
 
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain("localSetups[0].commands[4]");
+    expect(result.stderr).toContain("localSetups[0].commands[5]");
     expect(result.stderr).toContain("productionDeploys[0].commands[3]");
     expect(result.stderr).toContain("documented alpha commands");
   });
@@ -1003,7 +1003,7 @@ describe("release evidence verifiers", () => {
     });
 
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain("manualQuickstart.commands[4]");
+    expect(result.stderr).toContain("manualQuickstart.commands[5]");
     expect(result.stderr).toContain("public-beta quickstart commands");
     expect(result.stderr).toContain("productionSmoke.commands[3]");
     expect(result.stderr).toContain("public-beta production smoke commands");
@@ -2056,6 +2056,7 @@ function validAlphaEvidence() {
       setupMinutes: 8,
       commands: [
         "npx --package @cf-auth/cli@alpha cf-auth init my-app --template hono-basic",
+        "cd my-app",
         "pnpm install",
         "npx --package @cf-auth/cli@alpha cf-auth migrate --local",
         "npm run dev",
@@ -2105,6 +2106,7 @@ function validBetaEvidence() {
       packageTag: "beta",
       commands: [
         "npx --package @cf-auth/cli@beta cf-auth init my-app --template hono-basic",
+        "cd my-app",
         "pnpm install",
         "npx --package @cf-auth/cli@beta cf-auth migrate --local",
         "npm run dev",

@@ -1037,6 +1037,7 @@ async function releaseGateFixture(options: ReleaseGateFixtureOptions) {
       [
         '"commands"',
         "cf-auth init",
+        "cd my-app",
         "cf-auth migrate --local",
         "pnpm install",
         "npm run dev",
@@ -1073,6 +1074,7 @@ async function releaseGateFixture(options: ReleaseGateFixtureOptions) {
         '"optInCloudflareAccountFixture"',
         '"commands"',
         "cf-auth init",
+        "cd my-app",
         "cf-auth migrate --local",
         "pnpm install",
         "npm run dev",
@@ -2184,6 +2186,7 @@ function validAlphaEvidence() {
       setupMinutes: 8,
       commands: [
         "npx --package @cf-auth/cli@alpha cf-auth init my-app --template hono-basic",
+        "cd my-app",
         "pnpm install",
         "npx --package @cf-auth/cli@alpha cf-auth migrate --local",
         "npm run dev",
@@ -2264,6 +2267,7 @@ function validBetaEvidence() {
       packageTag: "beta",
       commands: [
         "npx --package @cf-auth/cli@beta cf-auth init my-app --template hono-basic",
+        "cd my-app",
         "pnpm install",
         "npx --package @cf-auth/cli@beta cf-auth migrate --local",
         "npm run dev",

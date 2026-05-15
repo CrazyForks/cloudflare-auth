@@ -128,6 +128,7 @@ function validateEvidence(value, rawText) {
       }
     }
     requireCommandContains(setup.commands, "cf-auth init", `${path}.commands`);
+    requireCommandContains(setup.commands, "cd my-app", `${path}.commands`);
     requireCommandContains(
       setup.commands,
       "cf-auth migrate --local",

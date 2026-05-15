@@ -140,6 +140,7 @@ function validateManualQuickstart(value) {
     }
   }
   requireCommandContains(value.commands, "cf-auth init", `${path}.commands`);
+  requireCommandContains(value.commands, "cd my-app", `${path}.commands`);
   requireCommandContains(value.commands, "pnpm install", `${path}.commands`);
   requireCommandContains(
     value.commands,

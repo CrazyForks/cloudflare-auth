@@ -17,6 +17,7 @@
     "packageTag": "beta",
     "commands": [
       "npx --package @cf-auth/cli@beta cf-auth init my-app --template hono-basic",
+      "cd my-app",
       "pnpm install",
       "npx --package @cf-auth/cli@beta cf-auth migrate --local",
       "npm run dev"

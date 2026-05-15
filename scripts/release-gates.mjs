@@ -195,6 +195,7 @@ await requireText(
 await requireText("docs/alpha.md", "doctor --report");
 await requireText("docs/alpha-evidence.example.json", '"commands"');
 await requireText("docs/alpha-evidence.example.json", "cf-auth init");
+await requireText("docs/alpha-evidence.example.json", "cd my-app");
 await requireText(
   "docs/alpha-evidence.example.json",
   "cf-auth migrate --local",
@@ -241,6 +242,7 @@ await requireText(
 );
 await requireText("docs/beta-evidence.example.json", '"commands"');
 await requireText("docs/beta-evidence.example.json", "cf-auth init");
+await requireText("docs/beta-evidence.example.json", "cd my-app");
 await requireText("docs/beta-evidence.example.json", "cf-auth migrate --local");
 await requireText("docs/beta-evidence.example.json", "pnpm install");
 await requireText("docs/beta-evidence.example.json", "npm run dev");

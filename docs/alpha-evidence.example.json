@@ -7,6 +7,7 @@
       "setupMinutes": 8,
       "commands": [
         "npx --package @cf-auth/cli@alpha cf-auth init my-app --template hono-basic",
+        "cd my-app",
         "pnpm install",
         "npx --package @cf-auth/cli@alpha cf-auth migrate --local",
         "npm run dev"

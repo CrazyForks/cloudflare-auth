@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       package_tag:
-        description: "Optional npm dist-tag or version to smoke, for example beta. Empty uses local package tarballs."
+        description: "Optional beta npm dist-tag or x.y.z-beta.* prerelease version to smoke. Empty uses local package tarballs."
         required: false
         type: string
 

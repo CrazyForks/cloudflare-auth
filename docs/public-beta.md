@@ -29,8 +29,9 @@ The checked-in opt-in workflow for the production account gate is
 Worker/D1 fixture, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`,
 `CF_AUTH_PRODUCTION_SMOKE_DATABASE_ID`, `CF_AUTH_PRODUCTION_SMOKE_ORIGIN`, and
 the `CF_AUTH_PRODUCTION_SMOKE=1` safety flag. Set workflow input `package_tag`
-to `beta` to verify published beta packages; leave it empty to verify local
-tarballs from the current checkout.
+to the `beta` dist-tag or a concrete `x.y.z-beta.*` prerelease version to
+verify published beta packages; leave it empty to verify local tarballs from
+the current checkout.
 
 - the template repository is public and contains no workspace-only dependency references
 - `SECURITY.md` is linked from the README and includes supported versions, reporting channel, and response window

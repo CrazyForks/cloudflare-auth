@@ -450,6 +450,31 @@ describe("package checks", () => {
     );
   });
 
+  it("requires beta-only smoke package tag descriptions", async () => {
+    const root = await packageCheckFixture();
+    await replaceFixtureText(
+      root,
+      ".github/workflows/published-quickstart-smoke.yml",
+      "Beta npm dist-tag or x.y.z-beta.* prerelease version to smoke.",
+      "npm dist-tag or version to smoke, for example beta.",
+    );
+    await replaceFixtureText(
+      root,
+      ".github/workflows/cloudflare-production-smoke.yml",
+      "Optional beta npm dist-tag or x.y.z-beta.* prerelease version to smoke. Empty uses local package tarballs.",
+      "Optional npm dist-tag or version to smoke, for example beta. Empty uses local package tarballs.",
+    );
+    const result = runPackageCheck(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      ".github/workflows/published-quickstart-smoke.yml: missing Beta npm dist-tag or x.y.z-beta.* prerelease version to smoke.",
+    );
+    expect(result.stderr).toContain(
+      ".github/workflows/cloudflare-production-smoke.yml: missing Optional beta npm dist-tag or x.y.z-beta.* prerelease version to smoke. Empty uses local package tarballs.",
+    );
+  });
+
   it("rejects invalid changesets config JSON", async () => {
     const root = await packageCheckFixture();
     await writeFile(join(root, ".changeset", "config.json"), "not json\n");

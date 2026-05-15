@@ -1092,6 +1092,7 @@ async function verifyReleaseControls() {
   for (const needle of [
     "workflow_dispatch:",
     "package_tag:",
+    "Optional beta npm dist-tag or x.y.z-beta.* prerelease version to smoke. Empty uses local package tarballs.",
     "pnpm smoke:cloudflare-production",
     'CF_AUTH_PRODUCTION_SMOKE: "1"',
     "CF_AUTH_PRODUCTION_SMOKE_PACKAGE_TAG",
@@ -1116,6 +1117,7 @@ async function verifyReleaseControls() {
   for (const needle of [
     "workflow_dispatch:",
     "package_tag:",
+    "Beta npm dist-tag or x.y.z-beta.* prerelease version to smoke.",
     "required: true",
     "default: beta",
     "pnpm smoke:published-quickstart",

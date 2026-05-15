@@ -95,7 +95,7 @@ The script creates a temporary app, runs `doctor --env production`, applies
 remote migrations, requires a clean second `doctor --env production`, deploys
 with `cf-auth deploy --env production`, and exercises deployed `POST
 /auth/signup`, `POST /auth/login`, `POST /auth/logout`, and `GET /auth/user`. Set
-`CF_AUTH_PRODUCTION_SMOKE_PACKAGE_TAG=beta` to verify published beta packages
-instead of local tarballs.
+`CF_AUTH_PRODUCTION_SMOKE_PACKAGE_TAG=beta` or a concrete `x.y.z-beta.*`
+prerelease version to verify published beta packages instead of local tarballs.
 
 The Deploy to Cloudflare button readiness checklist is tracked in `docs/deploy-to-cloudflare.md`.

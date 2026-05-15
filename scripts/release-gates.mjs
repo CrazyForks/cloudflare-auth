@@ -3,6 +3,7 @@ import { access, readdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { isPlaceholderEvidenceIdentity } from "./evidence-validation.mjs";
 import { requiredAuthSmokeEndpoints } from "./smoke-endpoints.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
@@ -383,8 +384,27 @@ async function requireText(path, needle) {
 
 async function requireReleaseApproval(path, label) {
   const text = await requireText(path, "Release approval:");
-  if (!/^Release approval:\s*release-approved\b/im.test(text)) {
+  const match = text.match(
+    /^Release approval:\s*release-approved\s+by\s+(.+?)\s+on\s+(\S+)\s*$/im,
+  );
+  if (!match) {
     failures.push(`${path}: ${label} must be release-approved before 1.0`);
+    failures.push(
+      `${path}: ${label} release approval must include non-placeholder approver and ISO date`,
+    );
+    return;
+  }
+  const approver = match[1]?.trim() ?? "";
+  const approvalDate = match[2]?.trim() ?? "";
+  if (isPlaceholderEvidenceIdentity(approver)) {
+    failures.push(
+      `${path}: ${label} release approver must not be a placeholder`,
+    );
+  }
+  if (!isIsoDateOnly(approvalDate)) {
+    failures.push(
+      `${path}: ${label} release approval date must be a valid ISO date`,
+    );
   }
 }
 
@@ -449,17 +469,86 @@ function isRecord(value) {
 }
 
 async function requireSecurityReviewDecision() {
-  const text = await requireText(
-    "docs/decisions/security-review.md",
-    "Status:",
-  );
-  if (
-    !/^Status:\s*(external-review-completed|maintainer-signoff)\b/im.test(text)
-  ) {
+  const decisionPath = "docs/decisions/security-review.md";
+  const text = await requireText(decisionPath, "Status:");
+  const status = text
+    .match(/^Status:\s*(external-review-completed|maintainer-signoff)\b/im)?.[1]
+    ?.toLowerCase();
+  if (!status) {
     failures.push(
-      "docs/decisions/security-review.md: security review decision must be completed before 1.0",
+      `${decisionPath}: security review decision must be completed before 1.0`,
+    );
+    return;
+  }
+  const decisionDate = releaseFieldValue(text, "Date");
+  if (!decisionDate || !isIsoDateOnly(decisionDate)) {
+    failures.push(
+      `${decisionPath}: security review decision must include a valid ISO date`,
     );
   }
+  if (status === "external-review-completed") {
+    const reviewer = requireReleaseField(
+      text,
+      decisionPath,
+      "external review decision",
+      "Reviewer",
+    );
+    for (const field of ["Scope", "Unresolved findings"]) {
+      requireReleaseField(
+        text,
+        decisionPath,
+        "external review decision",
+        field,
+      );
+    }
+    if (reviewer && isPlaceholderEvidenceIdentity(reviewer)) {
+      failures.push(
+        `${decisionPath}: external review reviewer must not be a placeholder`,
+      );
+    }
+  } else {
+    const signer = requireReleaseField(
+      text,
+      decisionPath,
+      "maintainer sign-off",
+      "Signed by",
+    );
+    if (signer && isPlaceholderEvidenceIdentity(signer)) {
+      failures.push(
+        `${decisionPath}: maintainer sign-off signer must not be a placeholder`,
+      );
+    }
+    for (const field of ["Rationale", "Compensating controls"]) {
+      requireReleaseField(text, decisionPath, "maintainer sign-off", field);
+    }
+  }
+}
+
+function requireReleaseField(text, path, context, field) {
+  const value = releaseFieldValue(text, field);
+  if (!value) {
+    failures.push(`${path}: ${context} must include ${field}:`);
+  }
+  return value;
+}
+
+function releaseFieldValue(text, field) {
+  return text.match(new RegExp(`^${field}:\\s*(.+?)\\s*$`, "im"))?.[1]?.trim();
+}
+
+function isIsoDateOnly(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(value);
+  if (!match) return false;
+  const [, yearText, monthText, dayText] = match;
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
 }
 
 async function requireUpgradeFixtures() {

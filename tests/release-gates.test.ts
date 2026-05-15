@@ -638,6 +638,56 @@ process.exit(1);
     );
   });
 
+  it("rejects incomplete or placeholder stable release signoffs", async () => {
+    const root = await releaseGateFixture({
+      deployButtonEvidence: true,
+      packageVersion: "1.0.0",
+      stableEvidence: true,
+    });
+    await writeFixtureFile(
+      root,
+      "docs/api-report.md",
+      "Release approval: release-approved\n",
+    );
+    await writeFixtureFile(
+      root,
+      "docs/config-schema.md",
+      configSchemaFixtureText(
+        "Release approval: release-approved by release-reviewer on 2026-05-14",
+      ),
+    );
+    await writeFixtureFile(
+      root,
+      "docs/decisions/security-review.md",
+      [
+        "Status: maintainer-signoff",
+        "Signed by: maintainer",
+        "Date: 2026-02-30",
+      ].join("\n"),
+    );
+    const result = runReleaseGates(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "docs/api-report.md: Public API report release approval must include non-placeholder approver and ISO date",
+    );
+    expect(result.stderr).toContain(
+      "docs/config-schema.md: Config schema release approver must not be a placeholder",
+    );
+    expect(result.stderr).toContain(
+      "docs/decisions/security-review.md: security review decision must include a valid ISO date",
+    );
+    expect(result.stderr).toContain(
+      "docs/decisions/security-review.md: maintainer sign-off signer must not be a placeholder",
+    );
+    expect(result.stderr).toContain(
+      "docs/decisions/security-review.md: maintainer sign-off must include Rationale:",
+    );
+    expect(result.stderr).toContain(
+      "docs/decisions/security-review.md: maintainer sign-off must include Compensating controls:",
+    );
+  });
+
   it("rejects malformed stable beta upgrade fixture manifests", async () => {
     const root = await releaseGateFixture({
       deployButtonEvidence: true,
@@ -1688,19 +1738,25 @@ async function writeStableEvidence(root: string) {
   await writeFixtureFile(
     root,
     "docs/api-report.md",
-    "Release approval: release-approved by maintainer on 2026-05-14\n",
+    "Release approval: release-approved by release-captain-ada on 2026-05-14\n",
   );
   await writeFixtureFile(
     root,
     "docs/config-schema.md",
     configSchemaFixtureText(
-      "Release approval: release-approved by maintainer on 2026-05-14",
+      "Release approval: release-approved by release-captain-ada on 2026-05-14",
     ),
   );
   await writeFixtureFile(
     root,
     "docs/decisions/security-review.md",
-    "Status: maintainer-signoff\n",
+    [
+      "Status: maintainer-signoff",
+      "Signed by: release-captain-ada",
+      "Date: 2026-05-14",
+      "Rationale: Stable release proceeds without external review after local security gates passed.",
+      "Compensating controls: public security policy, dependency review, CodeQL, npm audit, and release tracker gates.",
+    ].join("\n"),
   );
   await writeFixtureFile(
     root,

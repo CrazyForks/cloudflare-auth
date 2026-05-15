@@ -1683,6 +1683,70 @@ export default defineAuthConfig({
     );
   });
 
+  it("doctor scopes byEnvironment email checks to the selected target", async () => {
+    const cwd = await tempDir();
+    await writeWrangler(cwd);
+    const wrangler = JSON.parse(
+      await readFile(join(cwd, "wrangler.jsonc"), "utf8"),
+    ) as {
+      env: Record<string, unknown>;
+    };
+    wrangler.env.preview = {
+      vars: {
+        AUTH_ENV: "preview",
+        AUTH_PUBLIC_ORIGIN: "https://preview.example.com",
+      },
+      d1_databases: [
+        {
+          binding: "AUTH_DB",
+          database_name: "app-auth-preview",
+          database_id: "preview-id",
+        },
+      ],
+    };
+    await writeFile(
+      join(cwd, "wrangler.jsonc"),
+      JSON.stringify(wrangler, null, 2),
+    );
+    await writeAuthSource(
+      cwd,
+      `import { byEnvironment, defineAuthConfig, terminalEmail } from "@cf-auth/worker";
+import { cloudflareEmail } from "@cf-auth/email-cloudflare";
+
+export default defineAuthConfig({
+  appName: "My App",
+  basePath: "/auth",
+  email: byEnvironment({
+    development: terminalEmail({ outbox: true }),
+    preview: terminalEmail({ outbox: true }),
+    production: cloudflareEmail({ binding: "AUTH_EMAIL", from: "auth@example.com" })
+  })
+});
+`,
+    );
+    const productionOutput: string[] = [];
+    const productionCode = await runCli(["doctor", "--env", "production"], {
+      cwd,
+      stdout: (line) => productionOutput.push(line),
+      runCommand: remoteSecretRunner(),
+    });
+    expect(productionCode).toBe(0);
+    expect(productionOutput.join("\n")).toContain(
+      "Production email adapter source does not use terminal email",
+    );
+
+    const previewErrors: string[] = [];
+    const previewCode = await runCli(["doctor", "--env", "preview"], {
+      cwd,
+      stderr: (line) => previewErrors.push(line),
+      runCommand: remoteSecretRunner(),
+    });
+    expect(previewCode).toBe(1);
+    expect(previewErrors.join("\n")).toContain(
+      "Terminal email/dev outbox is configured for a remote target",
+    );
+  });
+
   it("doctor does not require AUTH_EMAIL for custom production email adapters", async () => {
     const cwd = await tempDir();
     await writeWrangler(cwd);

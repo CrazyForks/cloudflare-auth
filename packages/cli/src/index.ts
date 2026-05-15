@@ -513,7 +513,7 @@ async function commandDoctor(
   if (cookieCheck) addCheck(cookieCheck);
   const packageCheck = await checkPackageVersions(cwd, remoteTarget);
   if (packageCheck) addCheck(packageCheck);
-  const authSource = await inspectAuthSource(cwd);
+  const authSource = await inspectAuthSource(cwd, vars.AUTH_ENV);
   for (const check of checkAuthSource(authSource, vars, remoteTarget)) {
     addCheck(check);
   }
@@ -1815,7 +1815,10 @@ interface AuthSourceInspection {
   dynamicRedirectProperties: string[];
 }
 
-async function inspectAuthSource(cwd: string): Promise<AuthSourceInspection> {
+async function inspectAuthSource(
+  cwd: string,
+  authMode?: string,
+): Promise<AuthSourceInspection> {
   const sourceFiles = await readSourceFiles(join(cwd, "src"));
   const rootConfigFiles = await readRootAuthConfigFiles(cwd);
   const configFile =
@@ -1853,12 +1856,7 @@ async function inspectAuthSource(cwd: string): Promise<AuthSourceInspection> {
     "byEnvironment",
   );
   const remoteEmailText = byEnvironmentEmailText
-    ? [
-        extractPropertyExpression(byEnvironmentEmailText, "preview"),
-        extractPropertyExpression(byEnvironmentEmailText, "production"),
-      ]
-        .filter(Boolean)
-        .join("\n")
+    ? emailSourceForAuthMode(byEnvironmentEmailText, authMode)
     : configText;
   return {
     sourceFileCount: sourceFiles.length,
@@ -1952,6 +1950,26 @@ async function inspectAuthSource(cwd: string): Promise<AuthSourceInspection> {
       ).dynamic.map(() => "allowedPreviewOrigins"),
     ],
   };
+}
+
+function emailSourceForAuthMode(
+  byEnvironmentEmailText: string,
+  authMode?: string,
+): string {
+  if (isAuthMode(authMode)) {
+    return (
+      extractPropertyExpression(byEnvironmentEmailText, authMode) ??
+      byEnvironmentEmailText
+    );
+  }
+  return (
+    [
+      extractPropertyExpression(byEnvironmentEmailText, "preview"),
+      extractPropertyExpression(byEnvironmentEmailText, "production"),
+    ]
+      .filter(Boolean)
+      .join("\n") || byEnvironmentEmailText
+  );
 }
 
 function sourceUsesCloudflareEmail(source: AuthSourceInspection): boolean {

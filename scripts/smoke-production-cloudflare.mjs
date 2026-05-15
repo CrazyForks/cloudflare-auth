@@ -322,12 +322,10 @@ async function exerciseDeployedAuth(origin) {
     throw new Error(`signup failed: ${signup.status} ${await signup.text()}`);
   }
   const signupCookie = signup.headers.get("Set-Cookie") ?? "";
-  if (
-    !/__Host-cfauth-session=|__Secure-cfauth-session=|cfauth-session=/u.test(
-      signupCookie,
-    )
-  ) {
-    throw new Error("signup did not set a Cloudflare Auth session cookie");
+  if (!signupCookie.includes("__Host-cfauth-session=")) {
+    throw new Error(
+      "signup did not set a host-only Cloudflare Auth session cookie",
+    );
   }
 
   const login = await jsonPost(`${origin}/auth/login`, {
@@ -338,12 +336,10 @@ async function exerciseDeployedAuth(origin) {
     throw new Error(`login failed: ${login.status} ${await login.text()}`);
   }
   const loginCookie = login.headers.get("Set-Cookie") ?? "";
-  if (
-    !/__Host-cfauth-session=|__Secure-cfauth-session=|cfauth-session=/u.test(
-      loginCookie,
-    )
-  ) {
-    throw new Error("login did not set a Cloudflare Auth session cookie");
+  if (!loginCookie.includes("__Host-cfauth-session=")) {
+    throw new Error(
+      "login did not set a host-only Cloudflare Auth session cookie",
+    );
   }
   const cookie = loginCookie.split(";")[0];
   const user = await fetch(`${origin}/auth/user`, {

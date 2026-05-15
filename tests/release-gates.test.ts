@@ -69,6 +69,20 @@ describe("release gates", () => {
     expect(result.stdout).toContain("release gates passed");
   });
 
+  it("requires production smoke to assert host-only production cookies", async () => {
+    const root = await releaseGateFixture({ deployButtonEvidence: true });
+    await writeFixtureFile(
+      root,
+      "scripts/smoke-production-cloudflare.mjs",
+      "if (!cookie.includes('cfauth-session=')) throw new Error('missing');\n",
+    );
+    const result = runReleaseGates(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("scripts/smoke-production-cloudflare.mjs");
+    expect(result.stderr).toContain("__Host-cfauth-session=");
+  });
+
   it("rejects non-object root package manifests", async () => {
     const root = await releaseGateFixture({ deployButtonEvidence: true });
     await writeFixtureFile(root, "package.json", "null\n");
@@ -697,6 +711,7 @@ async function releaseGateFixture(options: ReleaseGateFixtureOptions) {
     "scripts/export-deploy-template.mjs",
     "scripts/check-package-names.mjs",
     "scripts/smoke-endpoints.mjs",
+    "scripts/smoke-production-cloudflare.mjs",
     "scripts/verify-alpha-evidence.mjs",
     "scripts/verify-beta-evidence.mjs",
     "scripts/verify-deploy-button-evidence.mjs",
@@ -810,6 +825,7 @@ async function releaseGateFixture(options: ReleaseGateFixtureOptions) {
       ],
     ],
     [".github/workflows/wrangler-dev-smoke.yml", ["pnpm smoke:wrangler-dev"]],
+    ["scripts/smoke-production-cloudflare.mjs", ["__Host-cfauth-session="]],
     [
       ".github/workflows/release.yml",
       [

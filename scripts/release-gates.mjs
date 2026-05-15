@@ -64,6 +64,7 @@ await requireFile("schemas/doctor-report.schema.json");
 await requireFile("scripts/export-deploy-template.mjs");
 await requireFile("scripts/check-package-names.mjs");
 await requireFile("scripts/smoke-endpoints.mjs");
+await requireFile("scripts/smoke-production-cloudflare.mjs");
 await requireFile("scripts/verify-alpha-evidence.mjs");
 await requireFile("scripts/verify-beta-evidence.mjs");
 await requireFile("scripts/verify-deploy-button-evidence.mjs");
@@ -205,6 +206,10 @@ await requireText("docs/deploy-button-evidence.example.json", '"packageTag"');
 await requireText(
   ".github/workflows/wrangler-dev-smoke.yml",
   "pnpm smoke:wrangler-dev",
+);
+await requireText(
+  "scripts/smoke-production-cloudflare.mjs",
+  "__Host-cfauth-session=",
 );
 await requireText(".github/workflows/release.yml", "package_names_confirmed");
 await requireText(

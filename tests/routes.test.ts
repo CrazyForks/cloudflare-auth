@@ -723,7 +723,14 @@ describe("auth HTTP runtime", () => {
       method: "POST",
       headers: { Cookie: cookie },
     });
-    expect(logout.headers.get("Set-Cookie")).toContain("Max-Age=0");
+    const clearedCookie = logout.headers.get("Set-Cookie") ?? "";
+    expect(clearedCookie).toContain("cfauth-session=;");
+    expect(clearedCookie).toContain("Path=/");
+    expect(clearedCookie).toContain("HttpOnly");
+    expect(clearedCookie).toContain("SameSite=Lax");
+    expect(clearedCookie).toContain("Max-Age=0");
+    expect(clearedCookie).not.toContain("Secure");
+    expect(clearedCookie).not.toContain("Domain=");
     const loggedOut = await authFetch("/auth/user", {
       headers: { Cookie: cookie },
     });

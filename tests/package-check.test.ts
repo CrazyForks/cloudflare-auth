@@ -114,6 +114,22 @@ describe("package checks", () => {
     );
   });
 
+  it("requires troubleshooting docs to keep raw Wrangler commands secondary", async () => {
+    const root = await packageCheckFixture();
+    await replaceFixtureText(
+      root,
+      "docs/troubleshooting.md",
+      "Use `cf-auth` commands first.",
+      "Use either tool.",
+    );
+    const result = runPackageCheck(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "docs/troubleshooting.md: missing Wrangler fallback note",
+    );
+  });
+
   it("blocks unavailable package commands in package READMEs", async () => {
     const root = await packageCheckFixture();
     await writeFile(

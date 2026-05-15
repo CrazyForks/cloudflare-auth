@@ -644,6 +644,18 @@ async function verifyBenchmarkDocs() {
 
 async function verifyTroubleshootingDocs() {
   const troubleshooting = await readFile("docs/troubleshooting.md", "utf8");
+  for (const needle of [
+    "Use `cf-auth` commands first",
+    "Raw `wrangler` commands",
+    "secondary diagnostic steps",
+    "`cf-auth doctor`",
+  ]) {
+    if (!troubleshooting.includes(needle)) {
+      failures.push(
+        `docs/troubleshooting.md: missing Wrangler fallback note ${needle}`,
+      );
+    }
+  }
   for (const [problem, fix] of [
     ["Missing D1 binding", "AUTH_DB"],
     ["Missing D1 binding", "cf-auth init --repair"],

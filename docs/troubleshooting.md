@@ -1,5 +1,9 @@
 # Troubleshooting
 
+Use `cf-auth` commands first. Raw `wrangler` commands in this matrix are
+secondary diagnostic steps for login, version, and secret setup when
+`cf-auth doctor` points you there.
+
 | Problem                                        | Fix                                                                                                                                                                  |
 | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Scoped CLI fallback fails                      | Ensure the `@cf-auth/cli` package is published and use `npx --package @cf-auth/cli@latest cf-auth`.                                                                  |

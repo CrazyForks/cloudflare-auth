@@ -477,6 +477,22 @@ describe("package checks", () => {
     );
   });
 
+  it("requires package-name checks in the every-release checklist", async () => {
+    const root = await packageCheckFixture();
+    await replaceFixtureText(
+      root,
+      "docs/release-checklist.md",
+      "- `pnpm check:package-names`\n- `pnpm verify:release-audit`",
+      "- `pnpm verify:release-audit`",
+    );
+    const result = runPackageCheck(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "docs/release-checklist.md: Every Release missing pnpm check:package-names",
+    );
+  });
+
   it("derives release workflow coverage from verifier scripts", async () => {
     const root = await packageCheckFixture();
     const packagePath = join(root, "package.json");

@@ -857,6 +857,46 @@ async function verifyReleaseControls() {
     "pnpm changeset publish --provenance",
   ]);
 
+  const releaseChecklist = await readFile("docs/release-checklist.md", "utf8");
+  const everyReleaseChecklist = markdownSection(
+    releaseChecklist,
+    "Every Release",
+  );
+  for (const needle of [
+    "pnpm install --frozen-lockfile",
+    "pnpm format:check",
+    "pnpm lint",
+    "pnpm typecheck",
+    "pnpm test",
+    "pnpm test:workers",
+    "pnpm build",
+    "pnpm package:check",
+    "pnpm version-matrix:check",
+    "pnpm audit --audit-level high",
+    "pnpm verify:alpha-evidence",
+    "pnpm verify:deploy-button-evidence",
+    "pnpm verify:beta-evidence",
+    "pnpm verify:deploy-template",
+    "pnpm verify:docs-coverage",
+    "pnpm verify:migrations",
+    "pnpm verify:examples",
+    "pnpm verify:package-ownership",
+    "pnpm check:package-names",
+    "pnpm verify:release-audit",
+    "pnpm verify:security-docs",
+    "pnpm verify:security-tracker",
+    "pnpm release:gates",
+    "CF_AUTH_TARBALL_INSTALL=1 pnpm smoke:tarballs",
+    "pnpm benchmark:password",
+    "pnpm publish:dry-run",
+  ]) {
+    if (!everyReleaseChecklist.includes(needle)) {
+      failures.push(
+        `docs/release-checklist.md: Every Release missing ${needle}`,
+      );
+    }
+  }
+
   const productionSmokeWorkflow = await readFile(
     ".github/workflows/cloudflare-production-smoke.yml",
     "utf8",
@@ -1039,6 +1079,16 @@ function requireOrderedText(file, text, needles) {
     previousIndex = index;
     previousNeedle = needle;
   }
+}
+
+function markdownSection(text, heading) {
+  const marker = `## ${heading}`;
+  const start = text.indexOf(marker);
+  if (start === -1) return "";
+  const next = text.slice(start + marker.length).search(/\n## /u);
+  return next === -1
+    ? text.slice(start)
+    : text.slice(start, start + marker.length + next);
 }
 
 async function verifyCiControls() {

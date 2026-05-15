@@ -1271,6 +1271,39 @@ describe("release evidence verifiers", () => {
     );
   });
 
+  it("rejects package manifests without nonblank identities before package ownership checks", async () => {
+    const cwd = await packageOwnershipFixture({
+      publishCfAuthShim: false,
+      staleCfAuthReservation: false,
+      publishCreatePackage: false,
+      staleCreateReservation: false,
+    });
+    await writeFile(
+      join(cwd, "packages", "cli", "package.json"),
+      `${JSON.stringify({ name: "   ", version: "   " })}\n`,
+    );
+    const result = runScript(
+      "scripts/verify-package-ownership.mjs",
+      {
+        CF_AUTH_REQUIRE_PACKAGE_OWNERSHIP: "1",
+        CF_AUTH_PACKAGE_OWNERSHIP_PATH: join(
+          cwd,
+          "docs",
+          "package-ownership.json",
+        ),
+      },
+      cwd,
+    );
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "packages/cli/package.json: name must be a non-empty string",
+    );
+    expect(result.stderr).toContain(
+      "packages/cli/package.json: version must be a non-empty string",
+    );
+  });
+
   it("rejects package ownership evidence for placeholder package versions", async () => {
     const path = await writeEvidence(
       "package-ownership-placeholder",

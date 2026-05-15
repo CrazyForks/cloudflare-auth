@@ -17,26 +17,24 @@ const evidencePath =
   process.env.CF_AUTH_PACKAGE_OWNERSHIP_PATH ?? "docs/package-ownership.json";
 const failures = [];
 const workspacePackages = await workspacePackageManifests();
-const packages = workspacePackages
-  .filter((entry) => !entry.pkg.private)
-  .map((entry) => ({
-    dir: entry.dir,
-    name: entry.pkg.name,
-    version: entry.pkg.version,
-  }))
+const workspacePackageIdentities = workspacePackages.map((entry) => ({
+  entry,
+  identity: workspacePackageIdentity(entry),
+}));
+const packages = workspacePackageIdentities
+  .filter(({ entry }) => !entry.pkg.private)
+  .map(({ identity }) => identity)
+  .filter((pkg) => pkg !== null)
   .sort((a, b) => String(a.name).localeCompare(String(b.name)));
-const reservedPackages = workspacePackages
+const reservedPackages = workspacePackageIdentities
   .filter(
-    (entry) =>
+    ({ entry }) =>
       entry.pkg.private === true &&
       (entry.pkg.name === "cf-auth" ||
         entry.pkg.name === "create-cloudflare-auth"),
   )
-  .map((entry) => ({
-    dir: entry.dir,
-    name: entry.pkg.name,
-    version: entry.pkg.version,
-  }))
+  .map(({ identity }) => identity)
+  .filter((pkg) => pkg !== null)
   .sort((a, b) => String(a.name).localeCompare(String(b.name)));
 const reservedPackageNames = new Set(reservedPackages.map((pkg) => pkg.name));
 const requireEvidence =
@@ -270,10 +268,26 @@ async function workspacePackageManifests() {
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
     const dir = join("packages", entry.name);
-    const pkg = await readJsonObject(join(dir, "package.json"));
-    if (pkg) output.push({ dir, pkg });
+    const path = join(dir, "package.json");
+    const pkg = await readJsonObject(path);
+    if (pkg) output.push({ dir, path, pkg });
   }
   return output;
+}
+
+function workspacePackageIdentity(entry) {
+  const name = entry.pkg.name;
+  const version = entry.pkg.version;
+  let valid = true;
+  if (typeof name !== "string" || name.trim().length === 0) {
+    failures.push(`${entry.path}: name must be a non-empty string`);
+    valid = false;
+  }
+  if (typeof version !== "string" || version.trim().length === 0) {
+    failures.push(`${entry.path}: version must be a non-empty string`);
+    valid = false;
+  }
+  return valid ? { dir: entry.dir, name, version } : null;
 }
 
 async function readJsonObject(path) {

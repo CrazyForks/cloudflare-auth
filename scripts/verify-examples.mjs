@@ -8,9 +8,12 @@ const failures = [];
 const packageVersions = await readPackageVersions();
 const versionMatrix = await readJsonObject("scripts/version-matrix.json");
 if (!versionMatrix) fail();
+const rootMigrationFiles = (await readdir("migrations"))
+  .filter((file) => file.endsWith(".sql"))
+  .sort();
 const rootMigrations = new Map(
   await Promise.all(
-    ["0001_initial.sql", "0002_indexes.sql"].map(async (file) => [
+    rootMigrationFiles.map(async (file) => [
       file,
       await readFile(join("migrations", file), "utf8"),
     ]),

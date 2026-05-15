@@ -73,6 +73,23 @@ describe("examples verifier", () => {
       "templates/worker-basic: must not include .env.local",
     );
   });
+
+  it("requires every root migration in templates", async () => {
+    const root = await examplesFixture();
+    await writeFile(join(root, "migrations", "0003_sessions.sql"), "0003\n");
+    const result = runExamplesVerifier(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "templates/hono-basic: missing migrations/0003_sessions.sql",
+    );
+    expect(result.stderr).toContain(
+      "templates/react-vite-worker: missing migrations/0003_sessions.sql",
+    );
+    expect(result.stderr).toContain(
+      "templates/worker-basic: missing migrations/0003_sessions.sql",
+    );
+  });
 });
 
 async function examplesFixture() {

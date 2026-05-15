@@ -2779,7 +2779,7 @@ async function commandClean(
       display,
     ].join("\n");
   }
-  const result = runCheckedCommand(command, cwd, runner);
+  const result = runRedactedD1Command(command, display, cwd, runner);
   return `${result}\ncleanup completed`;
 }
 
@@ -2890,19 +2890,29 @@ function runRedactedRecoveryCommand(
   cwd: string,
   runner: CommandRunner,
 ): string {
+  return runRedactedD1Command(
+    command,
+    "wrangler d1 execute <redacted recovery SQL>",
+    cwd,
+    runner,
+  );
+}
+
+function runRedactedD1Command(
+  command: { command: string; args: string[] },
+  display: string,
+  cwd: string,
+  runner: CommandRunner,
+): string {
   const result = runner(command.command, command.args, { cwd });
   if (result.status !== 0) {
-    throw new Error(
-      "Command failed: wrangler d1 execute <redacted recovery SQL>",
-    );
+    throw new Error(`Command failed: ${display}`);
   }
   const output = [result.stdout.trim(), result.stderr.trim()]
     .filter(Boolean)
     .join("\n");
   const redacted = redactCliOutput(output);
-  return redacted
-    ? `wrangler d1 execute <redacted recovery SQL>\n${redacted}`
-    : "wrangler d1 execute <redacted recovery SQL>";
+  return redacted ? `${display}\n${redacted}` : display;
 }
 
 interface D1CommandContext {

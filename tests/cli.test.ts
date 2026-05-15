@@ -2227,9 +2227,11 @@ export default app;
     expect(dryRun.join("\n")).not.toContain("DELETE FROM");
 
     const calls: Array<{ args: string[]; sql: string }> = [];
+    const cleanOutput: string[] = [];
     const verboseErrors: string[] = [];
     const cleanCode = await runCli(["clean", "--local"], {
       cwd,
+      stdout: (line) => cleanOutput.push(line),
       runCommand: (_command, args) => {
         calls.push({
           args,
@@ -2252,6 +2254,10 @@ export default app;
     expect(calls[0]?.sql).toContain("DELETE FROM verification_tokens");
     expect(calls[0]?.sql).toContain("DELETE FROM rate_limits");
     expect(calls[0]?.sql).toContain("DELETE FROM auth_events");
+    expect(cleanOutput.join("\n")).toContain(
+      "wrangler d1 execute app-auth-dev --local --command <redacted cleanup SQL>",
+    );
+    expect(cleanOutput.join("\n")).not.toContain("DELETE FROM");
 
     const verboseCode = await runCli(["clean", "--local", "--verbose"], {
       cwd,

@@ -839,6 +839,14 @@ describe("package checks", () => {
         publisherTwoFactorEnabled: true,
         provenancePublish: true,
       },
+      {
+        name: "create-cloudflare-auth",
+        registry: "https://registry.npmjs.org/",
+        version: "0.1.0-beta.0",
+        ownershipConfirmed: true,
+        publisherTwoFactorEnabled: true,
+        provenancePublish: true,
+      },
     );
     evidence.reservedPackages.push(
       {
@@ -861,6 +869,9 @@ describe("package checks", () => {
     );
     expect(result.stderr).toContain(
       "docs/package-ownership.json: @cf-auth/unknown must match a publishable workspace package",
+    );
+    expect(result.stderr).toContain(
+      "docs/package-ownership.json: create-cloudflare-auth must match a publishable workspace package",
     );
     expect(result.stderr).toContain(
       "docs/package-ownership.json: reservedPackages[0].name must be a non-empty string",

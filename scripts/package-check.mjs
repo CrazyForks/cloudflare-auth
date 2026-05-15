@@ -37,9 +37,6 @@ const expectedPackages = new Map([
   ["testing", { name: "@cf-auth/testing" }],
   ["worker", { name: "@cf-auth/worker" }],
 ]);
-const expectedPackageNames = new Set(
-  [...expectedPackages.values()].map((pkg) => pkg.name),
-);
 const v1Exclusions = [
   "OAuth/social login",
   "SAML/enterprise SSO",
@@ -58,6 +55,21 @@ const packageDirs = (await readdir("packages", { withFileTypes: true }))
   .filter((entry) => entry.isDirectory())
   .map((entry) => join("packages", entry.name))
   .sort();
+const packageManifests = new Map();
+for (const dir of packageDirs) {
+  packageManifests.set(dir, await readJsonObject(join(dir, "package.json")));
+}
+const currentPublishablePackageNames = new Set();
+for (const pkg of packageManifests.values()) {
+  if (
+    pkg &&
+    pkg.private !== true &&
+    typeof pkg.name === "string" &&
+    pkg.name.trim().length > 0
+  ) {
+    currentPublishablePackageNames.add(pkg.name);
+  }
+}
 const packDir = await mkdtemp(join(tmpdir(), "cf-auth-package-check-"));
 
 const publishablePackageNames = [];
@@ -77,7 +89,7 @@ for (const expectedDir of expectedPackages.keys()) {
 
 for (const dir of packageDirs) {
   const expected = expectedPackages.get(basename(dir));
-  const pkg = await readJsonObject(join(dir, "package.json"));
+  const pkg = packageManifests.get(dir);
   if (!pkg) continue;
   if (!pkg.name) failures.push(`${dir}: missing name`);
   if (!expected) {
@@ -407,7 +419,7 @@ async function readOwnershipEvidence() {
         `docs/package-ownership.json: duplicate package evidence for ${item.name}`,
       );
     }
-    if (!expectedPackageNames.has(item.name)) {
+    if (!currentPublishablePackageNames.has(item.name)) {
       failures.push(
         `docs/package-ownership.json: ${item.name} must match a publishable workspace package`,
       );

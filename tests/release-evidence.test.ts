@@ -757,6 +757,16 @@ describe("release evidence verifiers", () => {
     );
   });
 
+  it("requires alpha evidence before beta package versions", async () => {
+    const cwd = await packageVersionFixture("0.1.0-beta.0");
+    const result = runScript("scripts/verify-alpha-evidence.mjs", {}, cwd);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "private-alpha evidence is required before public beta or stable release",
+    );
+  });
+
   it("accepts beta evidence for clean quickstart and opt-in production smoke", async () => {
     const path = await writeEvidence("beta", validBetaEvidence());
     const result = runScript("scripts/verify-beta-evidence.mjs", {
@@ -1155,6 +1165,28 @@ describe("release evidence verifiers", () => {
     expect(result.stderr).toContain(
       "Deploy to Cloudflare button evidence is required",
     );
+  });
+
+  it("requires deploy button evidence before beta package versions", async () => {
+    const cwd = await packageVersionFixture("0.1.0-beta.0");
+    const result = runScript(
+      "scripts/verify-deploy-button-evidence.mjs",
+      {},
+      cwd,
+    );
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "Deploy to Cloudflare button evidence is required",
+    );
+  });
+
+  it("requires package ownership evidence for alpha package versions", async () => {
+    const cwd = await packageVersionFixture("0.1.0-alpha.0");
+    const result = runScript("scripts/verify-package-ownership.mjs", {}, cwd);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("package ownership evidence is required");
   });
 
   it("rejects malformed package manifests before release evidence requirement checks", async () => {

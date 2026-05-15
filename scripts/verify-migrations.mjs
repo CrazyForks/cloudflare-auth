@@ -50,6 +50,18 @@ if (!files.includes("0001_initial.sql"))
   failures.push("missing 0001_initial.sql");
 if (!files.includes("0002_indexes.sql"))
   failures.push("missing 0002_indexes.sql");
+const versions = files
+  .map((file) => file.match(/^(\d{4})_[a-z0-9_]+\.sql$/u)?.[1])
+  .filter(Boolean);
+for (const [index, version] of versions.entries()) {
+  const expected = String(index + 1).padStart(4, "0");
+  if (version !== expected) {
+    failures.push(
+      `migration versions must be contiguous; expected ${expected}, found ${version}`,
+    );
+    break;
+  }
+}
 
 if (failures.length) {
   console.error(failures.join("\n"));

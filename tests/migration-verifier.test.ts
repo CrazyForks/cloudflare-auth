@@ -66,6 +66,31 @@ describe("migration verifier", () => {
     );
   });
 
+  it("rejects non-contiguous migration versions", async () => {
+    const root = await migrationFixture({
+      secondMigration: migrationSql({
+        body: "CREATE INDEX sessions_id_idx ON sessions(id);",
+      }),
+      extraMigrations: [
+        [
+          "0004_skip.sql",
+          migrationSql({
+            body: "CREATE INDEX users_id_idx ON users(id);",
+            version: "0004",
+            name: "skip",
+            schemaVersion: "4",
+          }),
+        ],
+      ],
+    });
+    const result = runMigrationVerifier(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "migration versions must be contiguous; expected 0003, found 0004",
+    );
+  });
+
   it("rejects mismatched auth_schema_migrations versions", async () => {
     const root = await migrationFixture({
       secondMigration: migrationSql({

@@ -144,7 +144,7 @@ function validateEvidence(value, rawText) {
 }
 
 function requireString(value, path) {
-  if (typeof value !== "string" || value.length === 0) {
+  if (typeof value !== "string" || value.trim().length === 0) {
     failures.push(`${evidencePath}: ${path} must be a non-empty string`);
   }
 }

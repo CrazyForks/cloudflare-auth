@@ -189,7 +189,7 @@ function validateEvidence(value, rawText) {
     if (
       "registryVersion" in item &&
       (typeof item.registryVersion !== "string" ||
-        item.registryVersion.length === 0)
+        item.registryVersion.trim().length === 0)
     ) {
       failures.push(
         `${evidencePath}: ${path}.registryVersion must be a non-empty string when present`,
@@ -225,7 +225,7 @@ function requireObject(value, path) {
 }
 
 function requireString(value, path) {
-  if (typeof value !== "string" || value.length === 0) {
+  if (typeof value !== "string" || value.trim().length === 0) {
     failures.push(`${evidencePath}: ${path} must be a non-empty string`);
   }
 }

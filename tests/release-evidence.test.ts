@@ -143,6 +143,88 @@ describe("release evidence verifiers", () => {
     );
   });
 
+  it("rejects whitespace-only required release evidence strings", async () => {
+    const alphaEvidence = validAlphaEvidence();
+    alphaEvidence.localSetups[0]!.user = "   ";
+    const alphaPath = await writeEvidence("alpha-blank-string", alphaEvidence);
+    const alphaResult = runScript("scripts/verify-alpha-evidence.mjs", {
+      CF_AUTH_REQUIRE_ALPHA_EVIDENCE: "1",
+      CF_AUTH_ALPHA_EVIDENCE_PATH: alphaPath,
+    });
+
+    const betaEvidence = validBetaEvidence();
+    betaEvidence.reviewedBy = "   ";
+    const betaPath = await writeEvidence("beta-blank-string", betaEvidence);
+    const betaResult = runScript("scripts/verify-beta-evidence.mjs", {
+      CF_AUTH_REQUIRE_BETA_EVIDENCE: "1",
+      CF_AUTH_BETA_EVIDENCE_PATH: betaPath,
+    });
+
+    const deployButtonEvidence = validDeployButtonEvidence();
+    deployButtonEvidence.verifiedBy = "   ";
+    const deployButtonPath = await writeEvidence(
+      "deploy-button-blank-string",
+      deployButtonEvidence,
+    );
+    const deployButtonResult = runScript(
+      "scripts/verify-deploy-button-evidence.mjs",
+      {
+        CF_AUTH_REQUIRE_DEPLOY_BUTTON_EVIDENCE: "1",
+        CF_AUTH_DEPLOY_BUTTON_EVIDENCE_PATH: deployButtonPath,
+      },
+    );
+
+    const packageEvidence = validPackageEvidence();
+    packageEvidence.verifiedBy = "   ";
+    packageEvidence.reservedPackages[0]!.registryVersion = "   ";
+    const packagePath = await writeEvidence(
+      "package-ownership-blank-string",
+      packageEvidence,
+    );
+    const packageResult = runScript("scripts/verify-package-ownership.mjs", {
+      CF_AUTH_REQUIRE_PACKAGE_OWNERSHIP: "1",
+      CF_AUTH_PACKAGE_OWNERSHIP_PATH: packagePath,
+    });
+
+    const securityTracker = validSecurityTracker();
+    securityTracker.reviewedBy = "   ";
+    const securityTrackerPath = await writeEvidence(
+      "security-tracker-blank-string",
+      securityTracker,
+    );
+    const securityTrackerResult = runScript(
+      "scripts/verify-security-release-tracker.mjs",
+      {
+        CF_AUTH_REQUIRE_SECURITY_TRACKER: "1",
+        CF_AUTH_SECURITY_TRACKER_PATH: securityTrackerPath,
+      },
+    );
+
+    expect(alphaResult.status).toBe(1);
+    expect(alphaResult.stderr).toContain(
+      "localSetups[0].user must be a non-empty string",
+    );
+    expect(betaResult.status).toBe(1);
+    expect(betaResult.stderr).toContain(
+      "reviewedBy must be a non-empty string",
+    );
+    expect(deployButtonResult.status).toBe(1);
+    expect(deployButtonResult.stderr).toContain(
+      "verifiedBy must be a non-empty string",
+    );
+    expect(packageResult.status).toBe(1);
+    expect(packageResult.stderr).toContain(
+      "verifiedBy must be a non-empty string",
+    );
+    expect(packageResult.stderr).toContain(
+      "reservedPackages[0].registryVersion must be a non-empty string when present",
+    );
+    expect(securityTrackerResult.status).toBe(1);
+    expect(securityTrackerResult.stderr).toContain(
+      "reviewedBy must be a non-empty string",
+    );
+  });
+
   it("rejects alpha local setup evidence without command proof", async () => {
     const evidence = validAlphaEvidence();
     evidence.localSetups[0]!.commands = [];

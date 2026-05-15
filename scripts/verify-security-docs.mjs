@@ -95,12 +95,25 @@ for (const text of [
 }
 
 for (const text of [
+  "Operational Metric Map",
+  "password_login_success",
+  "password_login_failed",
   "dummy_password_verification",
+  "signup_failed",
+  "duplicate email or username attempts",
+  "magic_link_request",
+  "email_verification_request",
+  "password_reset_request",
   "rate_limit_hit",
   "email_send_failed",
+  "magic_link_consume_success",
+  "email_verification_consume_success",
+  "password_reset_confirm_success",
+  "invalid_or_replayed",
   "config_error",
   "malformed_token",
   "invalid_or_expired",
+  "session_revoked",
   "disabled_user",
   "GROUP BY reason",
 ]) {

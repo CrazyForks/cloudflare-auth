@@ -26,6 +26,22 @@ Useful event types include:
 - `email_send_failed`
 - `config_error`
 
+## Operational Metric Map
+
+| Metric from the security plan                          | Event evidence                                                                                                     |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| successful and failed password logins                  | `password_login_success`, `password_login_failed`                                                                  |
+| dummy verification path count                          | `dummy_password_verification`                                                                                      |
+| signup attempts and duplicate signup attempts          | `signup_success`, `signup_failed`; duplicate email or username attempts surface as `signup_failed` create failures |
+| magic-link, verification, and reset email requests     | `magic_link_request`, `email_verification_request`, `password_reset_request`                                       |
+| email send failures                                    | `email_send_failed`                                                                                                |
+| rate-limit hits                                        | `rate_limit_hit`                                                                                                   |
+| token consume success outcomes                         | `magic_link_consume_success`, `email_verification_consume_success`, `password_reset_confirm_success`               |
+| token replay, expired, malformed, and revoked outcomes | consume-failure events grouped by redacted `metadata_json.reason` values                                           |
+| password reset successes and session revocations       | `password_reset_confirm_success`, `session_revoked`                                                                |
+| disabled-user authentication attempts                  | `disabled_user_auth_attempt` and consume failures with reason `disabled_user`                                      |
+| config/runtime failures                                | `config_error`                                                                                                     |
+
 Example aggregate query:
 
 ```sql
@@ -61,7 +77,8 @@ GROUP BY event_type;
 
 Token consume failure reasons are stored in redacted `metadata_json`. Useful
 values include `malformed_token`, `token_hash_failed`, `invalid_token`,
-`invalid_or_expired`, `disabled_user`, and `user_missing`.
+`invalid_or_expired`, `invalid_or_replayed`, `disabled_user`, `user_missing`,
+and revoked token outcomes that fail the active-token predicate.
 
 ```sql
 SELECT json_extract(metadata_json, '$.reason') AS reason, count(*) AS count

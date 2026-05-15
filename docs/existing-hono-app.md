@@ -36,7 +36,7 @@ import { getAuthUser, requireUser, requireVerifiedUser } from "@cf-auth/hono";
 
 app.get("/api/me", requireUser(), (c) => c.json({ user: getAuthUser(c) }));
 
-app.post("/api/billing", requireVerifiedUser(), async (c) => {
+app.post("/api/verified-action", requireVerifiedUser(), async (c) => {
   const user = getAuthUser(c);
   return c.json({ userId: user?.id });
 });

@@ -120,6 +120,22 @@ describe("package checks", () => {
     );
   });
 
+  it("requires release readiness audit to mention SQL interpolation lint coverage", async () => {
+    const root = await packageCheckFixture();
+    await replaceFixtureText(
+      root,
+      "docs/release-readiness-audit.md",
+      "interpolated D1 `prepare`/`exec` template SQL",
+      "D1 SQL templates",
+    );
+    const result = runPackageCheck(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "docs/release-readiness-audit.md: missing interpolated D1 `prepare`/`exec` template SQL",
+    );
+  });
+
   it("requires public non-goal summaries to include every v1 exclusion", async () => {
     const root = await packageCheckFixture();
     await replaceFixtureText(

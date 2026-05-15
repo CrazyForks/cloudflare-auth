@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -22,6 +22,9 @@ const runCli: typeof runCliRaw = (args, io = {}) =>
 const generatedPackageVersion = JSON.parse(
   await readFile("packages/cli/package.json", "utf8"),
 ).version as string;
+const rootMigrationFiles = (await readdir("migrations"))
+  .filter((file) => file.endsWith(".sql"))
+  .sort();
 
 describe("CLI MVP", () => {
   it("rejects non-v1 command aliases from the implementation plan", async () => {
@@ -107,9 +110,11 @@ describe("CLI MVP", () => {
     expect(wrangler).toContain('"migrations_dir": "migrations"');
     expect(wrangler).toContain('"observability"');
     expect(wrangler).toContain('"head_sampling_rate": 1');
-    expect(
-      await readFile(join(app, "migrations", "0001_initial.sql"), "utf8"),
-    ).toBe(await readFile("migrations/0001_initial.sql", "utf8"));
+    for (const file of rootMigrationFiles) {
+      await expect(
+        readFile(join(app, "migrations", file), "utf8"),
+      ).resolves.toBe(await readFile(join("migrations", file), "utf8"));
+    }
     expect(output.join("\n")).toContain("Initialized Cloudflare Auth");
   });
 
@@ -123,12 +128,11 @@ describe("CLI MVP", () => {
     } finally {
       process.chdir(originalCwd);
     }
-    await expect(
-      readFile(
-        join(cwd, "standalone", "migrations", "0002_indexes.sql"),
-        "utf8",
-      ),
-    ).resolves.toBe(await readFile("migrations/0002_indexes.sql", "utf8"));
+    for (const file of rootMigrationFiles) {
+      await expect(
+        readFile(join(cwd, "standalone", "migrations", file), "utf8"),
+      ).resolves.toBe(await readFile(join("migrations", file), "utf8"));
+    }
   });
 
   it("uses Worker-safe names in generated Wrangler config", async () => {

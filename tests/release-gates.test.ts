@@ -83,6 +83,26 @@ describe("release gates", () => {
     expect(result.stderr).toContain("__Host-cfauth-session=");
   });
 
+  it("requires production smoke to reject workspace dependencies", async () => {
+    const root = await releaseGateFixture({ deployButtonEvidence: true });
+    await writeFixtureFile(
+      root,
+      "scripts/smoke-production-cloudflare.mjs",
+      [
+        'if (!cookie.includes("__Host-cfauth-session=")) throw new Error("missing");',
+        'const packageSpecs = { "@cf-auth/hono": packageTag, "@cf-auth/worker": packageTag, "@cf-auth/cli": packageTag };',
+      ].join("\n"),
+    );
+    const result = runReleaseGates(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("scripts/smoke-production-cloudflare.mjs");
+    expect(result.stderr).toContain(
+      'assertNoWorkspaceDependencies(pkg, "production smoke package.json")',
+    );
+    expect(result.stderr).toContain('"@cf-auth/email-cloudflare": packageTag');
+  });
+
   it("rejects non-object root package manifests", async () => {
     const root = await releaseGateFixture({ deployButtonEvidence: true });
     await writeFixtureFile(root, "package.json", "null\n");
@@ -825,7 +845,14 @@ async function releaseGateFixture(options: ReleaseGateFixtureOptions) {
       ],
     ],
     [".github/workflows/wrangler-dev-smoke.yml", ["pnpm smoke:wrangler-dev"]],
-    ["scripts/smoke-production-cloudflare.mjs", ["__Host-cfauth-session="]],
+    [
+      "scripts/smoke-production-cloudflare.mjs",
+      [
+        "__Host-cfauth-session=",
+        'assertNoWorkspaceDependencies(pkg, "production smoke package.json")',
+        '"@cf-auth/email-cloudflare": packageTag',
+      ],
+    ],
     [
       ".github/workflows/release.yml",
       [

@@ -211,6 +211,14 @@ await requireText(
   "scripts/smoke-production-cloudflare.mjs",
   "__Host-cfauth-session=",
 );
+await requireText(
+  "scripts/smoke-production-cloudflare.mjs",
+  'assertNoWorkspaceDependencies(pkg, "production smoke package.json")',
+);
+await requireText(
+  "scripts/smoke-production-cloudflare.mjs",
+  '"@cf-auth/email-cloudflare": packageTag',
+);
 await requireText(".github/workflows/release.yml", "package_names_confirmed");
 await requireText(
   ".github/workflows/release.yml",

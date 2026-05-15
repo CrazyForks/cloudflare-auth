@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import {
+  assertNoWorkspaceDependencies,
   getObjectSection,
   parsePnpmPackOutput,
   readJsonObject,
@@ -103,6 +104,7 @@ async function writeSmokePackageJson(appDir, packageTag) {
   const packageSpecs = packageTag
     ? {
         "@cf-auth/core": packageTag,
+        "@cf-auth/email-cloudflare": packageTag,
         "@cf-auth/hono": packageTag,
         "@cf-auth/worker": packageTag,
         "@cf-auth/cli": packageTag,
@@ -118,6 +120,8 @@ async function writeSmokePackageJson(appDir, packageTag) {
   );
   dependencies["@cf-auth/hono"] = packageSpecs["@cf-auth/hono"];
   dependencies["@cf-auth/worker"] = packageSpecs["@cf-auth/worker"];
+  dependencies["@cf-auth/email-cloudflare"] =
+    packageSpecs["@cf-auth/email-cloudflare"];
   dependencies.hono = "4.12.18";
   const devDependencies = getObjectSection(
     pkg,
@@ -144,10 +148,13 @@ async function writeSmokePackageJson(appDir, packageTag) {
       { create: true },
     );
     overrides["@cf-auth/core"] = packageSpecs["@cf-auth/core"];
+    overrides["@cf-auth/email-cloudflare"] =
+      packageSpecs["@cf-auth/email-cloudflare"];
     overrides["@cf-auth/hono"] = packageSpecs["@cf-auth/hono"];
     overrides["@cf-auth/worker"] = packageSpecs["@cf-auth/worker"];
     overrides["@cf-auth/cli"] = packageSpecs["@cf-auth/cli"];
   }
+  assertNoWorkspaceDependencies(pkg, "production smoke package.json");
   await writeFile(
     join(appDir, "package.json"),
     JSON.stringify(pkg, null, 2) + "\n",
@@ -155,7 +162,7 @@ async function writeSmokePackageJson(appDir, packageTag) {
 }
 
 async function localPackageSpecs() {
-  const packageDirs = ["core", "worker", "hono", "cli"];
+  const packageDirs = ["core", "email-cloudflare", "worker", "hono", "cli"];
   const packDir = join(
     await mkdtemp(join(tmpdir(), "cf-auth-production-packs-")),
     "packs",

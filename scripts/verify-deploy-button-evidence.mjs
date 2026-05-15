@@ -247,6 +247,15 @@ function requireDeployButtonUrl(templateRepositoryUrl, deployButtonUrl, path) {
       `${evidencePath}: ${path} must target https://deploy.workers.cloudflare.com/`,
     );
   }
+  if (
+    parsedDeployButtonUrl.username ||
+    parsedDeployButtonUrl.password ||
+    parsedDeployButtonUrl.hash
+  ) {
+    failures.push(
+      `${evidencePath}: ${path} must not include URL credentials or fragments`,
+    );
+  }
   const params = [...parsedDeployButtonUrl.searchParams.keys()];
   if (params.length !== 1 || params[0] !== "url") {
     failures.push(

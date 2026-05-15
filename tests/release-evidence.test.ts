@@ -1531,6 +1531,24 @@ describe("release evidence verifiers", () => {
     expect(result.stderr).toContain("only the url parameter");
   });
 
+  it("rejects deploy button URLs with credentials or fragments", async () => {
+    const evidence = validDeployButtonEvidence();
+    evidence.deployButtonUrl =
+      "https://release-token@deploy.workers.cloudflare.com/?url=https://github.com/cf-auth-release/cloudflare-auth-template#deploy";
+    const path = await writeEvidence(
+      "deploy-button-non-exact-button-url",
+      evidence,
+    );
+    const result = runScript("scripts/verify-deploy-button-evidence.mjs", {
+      CF_AUTH_REQUIRE_DEPLOY_BUTTON_EVIDENCE: "1",
+      CF_AUTH_DEPLOY_BUTTON_EVIDENCE_PATH: path,
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("deployButtonUrl");
+    expect(result.stderr).toContain("URL credentials or fragments");
+  });
+
   it("rejects deploy button evidence with placeholder repositories and reserved origins", async () => {
     const evidence = validDeployButtonEvidence();
     evidence.templateRepositoryUrl =

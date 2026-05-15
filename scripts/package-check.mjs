@@ -1431,7 +1431,7 @@ function verifyRootScripts() {
   }
   const testScript = rootPackage.scripts?.test ?? "";
   if (
-    !testScript.includes("vitest run") ||
+    !/^\s*vitest\s+run(?:\s|$)/u.test(testScript) ||
     !testScript.includes("--no-file-parallelism")
   ) {
     failures.push(

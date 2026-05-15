@@ -681,7 +681,7 @@ describe("package checks", () => {
       root,
       "package.json",
       "vitest run --no-file-parallelism",
-      "node scripts/custom-test-runner.mjs --no-file-parallelism",
+      "echo vitest run --no-file-parallelism",
     );
     const result = runPackageCheck(root);
 

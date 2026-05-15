@@ -18,6 +18,7 @@ import {
   isReservedEvidenceHostname,
 } from "./evidence-validation.mjs";
 import { readReleasePackageState } from "./release-package-state.mjs";
+import { isPublicBeta } from "./release-version-policy.mjs";
 import {
   requiredAuthSmokeEndpoints,
   requireSmokedEndpointEvidence,
@@ -307,7 +308,7 @@ function rejectPlaceholderIdentity(value, path) {
 function requireBetaPackageTag(value, path) {
   requireString(value, path);
   if (typeof value !== "string") return;
-  if (value === "beta" || /^\d+\.\d+\.\d+-beta(?:[.-].*)?$/u.test(value)) {
+  if (value === "beta" || isPublicBeta(value)) {
     return;
   }
   failures.push(`${evidencePath}: ${path} must be beta or a beta prerelease`);

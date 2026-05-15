@@ -1568,6 +1568,31 @@ describe("release evidence verifiers", () => {
     expect(result.stderr).toContain("productionSmoke.packageTag");
   });
 
+  it("rejects beta evidence that uses a bare beta prerelease package tag", async () => {
+    const evidence = validBetaEvidence();
+    evidence.publishedQuickstart.packageTag = "0.1.0-beta";
+    evidence.manualQuickstart.packageTag = "0.1.0-beta";
+    evidence.manualQuickstart.commands = evidence.manualQuickstart.commands.map(
+      (command) =>
+        command.replace("@cf-auth/cli@beta", "@cf-auth/cli@0.1.0-beta"),
+    );
+    evidence.productionSmoke.packageTag = "0.1.0-beta";
+    evidence.productionSmoke.commands = evidence.productionSmoke.commands.map(
+      (command) =>
+        command.replace("@cf-auth/cli@beta", "@cf-auth/cli@0.1.0-beta"),
+    );
+    const path = await writeEvidence("beta-bare-prerelease-tag", evidence);
+    const result = runScript("scripts/verify-beta-evidence.mjs", {
+      CF_AUTH_REQUIRE_BETA_EVIDENCE: "1",
+      CF_AUTH_BETA_EVIDENCE_PATH: path,
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("publishedQuickstart.packageTag");
+    expect(result.stderr).toContain("manualQuickstart.packageTag");
+    expect(result.stderr).toContain("productionSmoke.packageTag");
+  });
+
   it("rejects beta evidence with mismatched package tags", async () => {
     const evidence = validBetaEvidence();
     evidence.publishedQuickstart.packageTag = "0.1.0-beta.0";
@@ -1722,6 +1747,22 @@ describe("release evidence verifiers", () => {
     const evidence = validDeployButtonEvidence();
     evidence.packageTag = "latest";
     const path = await writeEvidence("deploy-button-latest-tag", evidence);
+    const result = runScript("scripts/verify-deploy-button-evidence.mjs", {
+      CF_AUTH_REQUIRE_DEPLOY_BUTTON_EVIDENCE: "1",
+      CF_AUTH_DEPLOY_BUTTON_EVIDENCE_PATH: path,
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("packageTag");
+  });
+
+  it("rejects deploy button evidence that uses a bare beta prerelease package tag", async () => {
+    const evidence = validDeployButtonEvidence();
+    evidence.packageTag = "0.1.0-beta";
+    const path = await writeEvidence(
+      "deploy-button-bare-prerelease-tag",
+      evidence,
+    );
     const result = runScript("scripts/verify-deploy-button-evidence.mjs", {
       CF_AUTH_REQUIRE_DEPLOY_BUTTON_EVIDENCE: "1",
       CF_AUTH_DEPLOY_BUTTON_EVIDENCE_PATH: path,

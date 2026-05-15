@@ -136,6 +136,71 @@ describe("release evidence verifiers", () => {
     );
   });
 
+  it("rejects release evidence commands recorded out of documented order", async () => {
+    const alphaEvidence = validAlphaEvidence();
+    const alphaLocalCommands = alphaEvidence.localSetups[0]!.commands;
+    alphaEvidence.localSetups[0]!.commands = [
+      alphaLocalCommands[1]!,
+      alphaLocalCommands[0]!,
+      alphaLocalCommands[2]!,
+      alphaLocalCommands[3]!,
+      alphaLocalCommands[4]!,
+    ];
+    const alphaDeployCommands = alphaEvidence.productionDeploys[0]!.commands;
+    alphaEvidence.productionDeploys[0]!.commands = [
+      alphaDeployCommands[1]!,
+      alphaDeployCommands[0]!,
+      alphaDeployCommands[2]!,
+    ];
+    const alphaPath = await writeEvidence(
+      "alpha-out-of-order-commands",
+      alphaEvidence,
+    );
+    const alphaResult = runScript("scripts/verify-alpha-evidence.mjs", {
+      CF_AUTH_REQUIRE_ALPHA_EVIDENCE: "1",
+      CF_AUTH_ALPHA_EVIDENCE_PATH: alphaPath,
+    });
+
+    const betaEvidence = validBetaEvidence();
+    const betaManualCommands = betaEvidence.manualQuickstart.commands;
+    betaEvidence.manualQuickstart.commands = [
+      betaManualCommands[1]!,
+      betaManualCommands[0]!,
+      betaManualCommands[2]!,
+      betaManualCommands[3]!,
+      betaManualCommands[4]!,
+    ];
+    const betaSmokeCommands = betaEvidence.productionSmoke.commands;
+    betaEvidence.productionSmoke.commands = [
+      betaSmokeCommands[1]!,
+      betaSmokeCommands[0]!,
+      betaSmokeCommands[2]!,
+    ];
+    const betaPath = await writeEvidence(
+      "beta-out-of-order-commands",
+      betaEvidence,
+    );
+    const betaResult = runScript("scripts/verify-beta-evidence.mjs", {
+      CF_AUTH_REQUIRE_BETA_EVIDENCE: "1",
+      CF_AUTH_BETA_EVIDENCE_PATH: betaPath,
+    });
+
+    expect(alphaResult.status).toBe(1);
+    expect(alphaResult.stderr).toContain(
+      "localSetups[0].commands: cd my-app must appear after cf-auth init",
+    );
+    expect(alphaResult.stderr).toContain(
+      "productionDeploys[0].commands: cf-auth migrate --remote --env production must appear after cf-auth doctor --report --env production",
+    );
+    expect(betaResult.status).toBe(1);
+    expect(betaResult.stderr).toContain(
+      "manualQuickstart.commands: cd my-app must appear after cf-auth init",
+    );
+    expect(betaResult.stderr).toContain(
+      "productionSmoke.commands: cf-auth migrate --remote --env production must appear after cf-auth doctor --env production",
+    );
+  });
+
   it("rejects alpha evidence that reuses the same users for thresholds", async () => {
     const evidence = validAlphaEvidence();
     for (const setup of evidence.localSetups) setup.user = "alpha-user-1";

@@ -6,8 +6,11 @@ import {
   containsRawUserAgent,
 } from "./evidence-redaction.mjs";
 import {
+  documentedLocalSetupCommandOrder,
   documentedLocalSetupCommands,
+  documentedProductionDeployCommandOrder,
   documentedProductionDeployCommands,
+  requireDocumentedCommandOrder,
   requireOnlyDocumentedCommands,
 } from "./evidence-commands.mjs";
 import {
@@ -149,6 +152,13 @@ function validateEvidence(value, rawText) {
       allowedPatterns: documentedLocalSetupCommands("alpha"),
       label: "alpha",
     });
+    requireDocumentedCommandOrder({
+      evidencePath,
+      failures,
+      commands: setup.commands,
+      path: `${path}.commands`,
+      expected: documentedLocalSetupCommandOrder(),
+    });
   }
 
   if (setupMinutes.length > 0 && median(setupMinutes) >= 10) {
@@ -205,6 +215,15 @@ function validateEvidence(value, rawText) {
         doctorReport: true,
       }),
       label: "alpha",
+    });
+    requireDocumentedCommandOrder({
+      evidencePath,
+      failures,
+      commands: deploy.commands,
+      path: `${path}.commands`,
+      expected: documentedProductionDeployCommandOrder({
+        doctorReport: true,
+      }),
     });
   }
 

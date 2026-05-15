@@ -6,8 +6,11 @@ import {
   containsRawUserAgent,
 } from "./evidence-redaction.mjs";
 import {
+  documentedLocalSetupCommandOrder,
   documentedLocalSetupCommands,
+  documentedProductionDeployCommandOrder,
   documentedProductionDeployCommands,
+  requireDocumentedCommandOrder,
   requireOnlyDocumentedCommands,
 } from "./evidence-commands.mjs";
 import {
@@ -162,6 +165,13 @@ function validateManualQuickstart(value) {
       allowedPatterns: documentedLocalSetupCommands(value.packageTag),
       label: "public-beta quickstart",
     });
+    requireDocumentedCommandOrder({
+      evidencePath,
+      failures,
+      commands: value.commands,
+      path: `${path}.commands`,
+      expected: documentedLocalSetupCommandOrder(),
+    });
   }
 }
 
@@ -212,6 +222,15 @@ function validateProductionSmoke(value) {
         doctorReport: false,
       }),
       label: "public-beta production smoke",
+    });
+    requireDocumentedCommandOrder({
+      evidencePath,
+      failures,
+      commands: value.commands,
+      path: `${path}.commands`,
+      expected: documentedProductionDeployCommandOrder({
+        doctorReport: false,
+      }),
     });
   }
   for (const endpoint of requiredSmokeEndpoints) {

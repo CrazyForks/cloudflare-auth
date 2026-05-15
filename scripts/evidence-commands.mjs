@@ -31,6 +31,46 @@ export function requireOnlyDocumentedCommands({
   }
 }
 
+export function requireDocumentedCommandOrder({
+  evidencePath,
+  failures,
+  commands,
+  path,
+  expected,
+}) {
+  if (!Array.isArray(commands)) {
+    return;
+  }
+  if (commands.some((command) => !isValidCommandString(command))) {
+    return;
+  }
+
+  let previousIndex = -1;
+  let previousLabel = "";
+  for (const item of expected) {
+    const descriptor = normalizeExpectedCommand(item);
+    const nextIndex = commands.findIndex(
+      (command, index) =>
+        index > previousIndex && commandMatches(command, descriptor),
+    );
+    if (nextIndex !== -1) {
+      previousIndex = nextIndex;
+      previousLabel = descriptor.label;
+      continue;
+    }
+
+    const earlierIndex = commands.findIndex((command) =>
+      commandMatches(command, descriptor),
+    );
+    if (earlierIndex !== -1 && previousLabel.length > 0) {
+      failures.push(
+        `${evidencePath}: ${path}: ${descriptor.label} must appear after ${previousLabel}`,
+      );
+    }
+    return;
+  }
+}
+
 export function documentedLocalSetupCommands(packageTag) {
   const appName = "[A-Za-z0-9][A-Za-z0-9_-]*(?:\\.[A-Za-z0-9][A-Za-z0-9_-]*)*";
   return [
@@ -39,6 +79,16 @@ export function documentedLocalSetupCommands(packageTag) {
     /^pnpm install$/u,
     npxCfAuthCommand(packageTag, "migrate --local"),
     /^npm run dev$/u,
+  ];
+}
+
+export function documentedLocalSetupCommandOrder() {
+  return [
+    "cf-auth init",
+    "cd my-app",
+    "pnpm install",
+    "cf-auth migrate --local",
+    "npm run dev",
   ];
 }
 
@@ -58,6 +108,19 @@ export function documentedProductionDeployCommands(
   ];
 }
 
+export function documentedProductionDeployCommandOrder({ doctorReport }) {
+  return [
+    doctorReport
+      ? {
+          label: "cf-auth doctor --report --env production",
+          includes: ["cf-auth doctor", "--report", "--env production"],
+        }
+      : "cf-auth doctor --env production",
+    "cf-auth migrate --remote --env production",
+    "cf-auth deploy --env production",
+  ];
+}
+
 function npxCfAuthCommand(packageTag, commandPattern) {
   return new RegExp(
     `^npx --package @cf-auth/cli@${escapeRegex(packageTag)} cf-auth ${commandPattern}$`,
@@ -67,4 +130,23 @@ function npxCfAuthCommand(packageTag, commandPattern) {
 
 function escapeRegex(value) {
   return String(value).replace(/[\\^$.*+?()[\]{}|]/gu, "\\$&");
+}
+
+function isValidCommandString(command) {
+  return (
+    typeof command === "string" &&
+    command.trim().length > 0 &&
+    command.trim() === command
+  );
+}
+
+function normalizeExpectedCommand(item) {
+  if (typeof item === "string") {
+    return { label: item, includes: [item] };
+  }
+  return item;
+}
+
+function commandMatches(command, descriptor) {
+  return descriptor.includes.every((part) => command.includes(part));
 }

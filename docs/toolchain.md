@@ -14,7 +14,7 @@ package artifacts are tested against one known set of versions.
 | Vitest                           | `4.1.6`                                              |
 | Zod                              | `4.4.3`                                              |
 | Changesets                       | `2.31.0`                                             |
-| Workers compatibility date       | `2026-05-14`                                         |
+| Workers compatibility date       | `2026-05-15`                                         |
 | Workers compatibility date floor | `2024-09-23`                                         |
 
 Run `pnpm version-matrix:check` after changing any of these versions. Update

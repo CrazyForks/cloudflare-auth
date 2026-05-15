@@ -213,7 +213,7 @@ async function writeSmokeWranglerConfig(appDir, input) {
     name: input.workerName,
     main: "src/index.ts",
     account_id: input.accountId,
-    compatibility_date: "2026-05-14",
+    compatibility_date: "2026-05-15",
     compatibility_flags: ["nodejs_compat"],
     observability: {
       enabled: true,

@@ -272,7 +272,7 @@ describe("release gates", () => {
       JSON.stringify(
         {
           $schema: "./node_modules/wrangler/config-schema.json",
-          compatibility_date: "2026-05-14",
+          compatibility_date: "2026-05-15",
           compatibility_flags: ["nodejs_compat"],
           vars: {
             AUTH_ENV: "development",
@@ -1927,7 +1927,7 @@ async function writeExamplesFixtures(root: string) {
       JSON.stringify(
         {
           $schema: "./node_modules/wrangler/config-schema.json",
-          compatibility_date: "2026-05-14",
+          compatibility_date: "2026-05-15",
           compatibility_flags: ["nodejs_compat"],
           observability: { enabled: true, head_sampling_rate: 1 },
           vars: {
@@ -2010,7 +2010,7 @@ async function writeDeployTemplateFixtures(root: string) {
       typescript: "6.0.3",
       vitest: "4.1.6",
       wrangler: "4.90.1",
-      workersCompatibilityDate: "2026-05-14",
+      workersCompatibilityDate: "2026-05-15",
       workersCompatibilityDateFloor: "2024-09-23",
     }),
   );
@@ -2069,7 +2069,7 @@ await writeFile(dir + "/package.json", JSON.stringify({
 }, null, 2));
 await writeFile(dir + "/wrangler.jsonc", JSON.stringify({
   $schema: "./node_modules/wrangler/config-schema.json",
-  compatibility_date: "2026-05-14",
+  compatibility_date: "2026-05-15",
   compatibility_flags: ["nodejs_compat"],
   observability: { enabled: true, head_sampling_rate: 1 },
   vars: { AUTH_ENV: "production", AUTH_PUBLIC_ORIGIN: "https://auth.example.test" },
@@ -2092,13 +2092,13 @@ async function writeStableEvidence(root: string) {
   await writeFixtureFile(
     root,
     "docs/api-report.md",
-    "Release approval: release-approved by release-captain-ada on 2026-05-14\n",
+    "Release approval: release-approved by release-captain-ada on 2026-05-15\n",
   );
   await writeFixtureFile(
     root,
     "docs/config-schema.md",
     configSchemaFixtureText(
-      "Release approval: release-approved by release-captain-ada on 2026-05-14",
+      "Release approval: release-approved by release-captain-ada on 2026-05-15",
     ),
   );
   await writeFixtureFile(
@@ -2107,7 +2107,7 @@ async function writeStableEvidence(root: string) {
     [
       "Status: maintainer-signoff",
       "Signed by: release-captain-ada",
-      "Date: 2026-05-14",
+      "Date: 2026-05-15",
       "Rationale: Stable release proceeds without external review after local security gates passed.",
       "Compensating controls: public security policy, dependency review, CodeQL, npm audit, and release tracker gates.",
     ].join("\n"),
@@ -2159,7 +2159,7 @@ process.exit(1);
 function validPackageEvidence(version: string) {
   return {
     schemaVersion: 1,
-    verifiedAt: "2026-05-14T00:00:00.000Z",
+    verifiedAt: "2026-05-15T00:00:00.000Z",
     verifiedBy: "release-captain-ada",
     packages: [
       {
@@ -2187,7 +2187,7 @@ function validAlphaEvidence() {
     schemaVersion: 1,
     localSetups: Array.from({ length: 5 }, (_, index) => ({
       user: alphaUsers[index],
-      completedAt: "2026-05-14T00:00:00.000Z",
+      completedAt: "2026-05-15T00:00:00.000Z",
       setupMinutes: 8,
       commands: [
         "npx --package @cf-auth/cli@alpha cf-auth init my-app --template hono-basic",
@@ -2202,7 +2202,7 @@ function validAlphaEvidence() {
     })),
     productionDeploys: Array.from({ length: 3 }, (_, index) => ({
       user: alphaUsers[index],
-      completedAt: "2026-05-14T00:00:00.000Z",
+      completedAt: "2026-05-15T00:00:00.000Z",
       commands: [
         "npx --package @cf-auth/cli@alpha cf-auth doctor --report --env production",
         "npx --package @cf-auth/cli@alpha cf-auth migrate --remote --env production",
@@ -2224,7 +2224,7 @@ function validDeployButtonEvidence() {
   return {
     schemaVersion: 1,
     status: "verified",
-    verifiedAt: "2026-05-14T00:00:00.000Z",
+    verifiedAt: "2026-05-15T00:00:00.000Z",
     verifiedBy: "release-captain-ada",
     templateRepositoryUrl:
       "https://github.com/cf-auth-release/cloudflare-auth-template",
@@ -2254,7 +2254,7 @@ function validDeployButtonEvidence() {
 function validBetaEvidence() {
   return {
     schemaVersion: 1,
-    reviewedAt: "2026-05-14T00:00:00.000Z",
+    reviewedAt: "2026-05-15T00:00:00.000Z",
     reviewedBy: "release-captain-ada",
     publishedQuickstart: {
       workflowRunUrl:
@@ -2268,7 +2268,7 @@ function validBetaEvidence() {
     },
     manualQuickstart: {
       maintainer: "release-captain-ada",
-      completedAt: "2026-05-14T00:00:00.000Z",
+      completedAt: "2026-05-15T00:00:00.000Z",
       packageTag: "beta",
       commands: [
         "npx --package @cf-auth/cli@beta cf-auth init my-app --template hono-basic",
@@ -2312,7 +2312,7 @@ function validBetaEvidence() {
 function validSecurityTracker() {
   return {
     schemaVersion: 1,
-    reviewedAt: "2026-05-14T00:00:00.000Z",
+    reviewedAt: "2026-05-15T00:00:00.000Z",
     reviewedBy: "release-captain-ada",
     issueSearchUrl:
       "https://github.com/cf-auth-release/cloudflare-auth/issues?q=is%3Aissue%20is%3Aopen%20label%3Aauth%20label%3Ahigh%2Ccritical",

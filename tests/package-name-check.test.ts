@@ -84,7 +84,7 @@ describe("package name registry checks", () => {
       `${JSON.stringify(
         {
           schemaVersion: 1,
-          verifiedAt: "2026-05-14T00:00:00.000Z",
+          verifiedAt: "2026-05-15T00:00:00.000Z",
           verifiedBy: "release-captain-ada",
         },
         null,
@@ -288,7 +288,7 @@ async function packageNameFixture(
     `${JSON.stringify(
       {
         schemaVersion: 1,
-        verifiedAt: "2026-05-14T00:00:00.000Z",
+        verifiedAt: "2026-05-15T00:00:00.000Z",
         verifiedBy: "release-captain-ada",
         packages: packageEvidence,
         reservedPackages: [

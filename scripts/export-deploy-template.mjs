@@ -126,7 +126,7 @@ async function writeWranglerJson(dir) {
     $schema: "./node_modules/wrangler/config-schema.json",
     name: templateName,
     main: "src/index.ts",
-    compatibility_date: "2026-05-14",
+    compatibility_date: "2026-05-15",
     compatibility_flags: ["nodejs_compat"],
     observability: {
       enabled: true,

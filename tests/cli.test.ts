@@ -103,7 +103,7 @@ describe("CLI MVP", () => {
     const wrangler = await readFile(join(app, "wrangler.jsonc"), "utf8");
     expect(wrangler).toContain('"$schema"');
     expect(wrangler).toContain('"name": "my-app-dev"');
-    expect(wrangler).toContain('"compatibility_date": "2026-05-14"');
+    expect(wrangler).toContain('"compatibility_date": "2026-05-15"');
     expect(wrangler).toContain('"compatibility_flags": ["nodejs_compat"]');
     expect(wrangler).toContain('"database_name": "my-app-auth-dev"');
     expect(wrangler).toContain('"database_id": "local-development"');
@@ -523,7 +523,7 @@ describe("CLI MVP", () => {
       };
     };
     expect(wrangler.$schema).toBe("./node_modules/wrangler/config-schema.json");
-    expect(wrangler.compatibility_date).toBe("2026-05-14");
+    expect(wrangler.compatibility_date).toBe("2026-05-15");
     expect(wrangler.compatibility_flags).toContain("nodejs_compat");
     expect(wrangler.vars.AUTH_ENV).toBe("development");
     expect(wrangler.observability).toEqual({
@@ -759,7 +759,7 @@ describe("CLI MVP", () => {
       `{
   // Local development Worker
   "name": "jsonc-app-dev",
-  "compatibility_date": "2026-05-14",
+  "compatibility_date": "2026-05-15",
   "compatibility_flags": ["nodejs_compat",],
   "vars": {
     "AUTH_ENV": "development",
@@ -3075,7 +3075,7 @@ async function writeWrangler(cwd: string) {
     join(cwd, "wrangler.jsonc"),
     JSON.stringify(
       {
-        compatibility_date: "2026-05-14",
+        compatibility_date: "2026-05-15",
         compatibility_flags: ["nodejs_compat"],
         vars: {
           AUTH_ENV: "development",

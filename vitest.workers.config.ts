@@ -8,7 +8,7 @@ export default defineConfig({
   plugins: [
     cloudflareTest({
       miniflare: {
-        compatibilityDate: "2026-05-14",
+        compatibilityDate: "2026-05-15",
         compatibilityFlags: ["nodejs_compat"],
       },
     }),

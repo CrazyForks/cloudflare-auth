@@ -1990,7 +1990,7 @@ function packageOwnershipFixtureEvidence(options: {
   if (options.publishCreatePackage) packages.push("create-cloudflare-auth");
   return {
     schemaVersion: 1,
-    verifiedAt: "2026-05-14T00:00:00.000Z",
+    verifiedAt: "2026-05-15T00:00:00.000Z",
     verifiedBy: "release-captain-ada",
     packages: packages.map((name) => ({
       name,
@@ -2052,7 +2052,7 @@ function validAlphaEvidence() {
     schemaVersion: 1,
     localSetups: Array.from({ length: 5 }, (_, index) => ({
       user: alphaUsers[index],
-      completedAt: "2026-05-14T00:00:00.000Z",
+      completedAt: "2026-05-15T00:00:00.000Z",
       setupMinutes: 8,
       commands: [
         "npx --package @cf-auth/cli@alpha cf-auth init my-app --template hono-basic",
@@ -2067,7 +2067,7 @@ function validAlphaEvidence() {
     })),
     productionDeploys: Array.from({ length: 3 }, (_, index) => ({
       user: alphaUsers[index],
-      completedAt: "2026-05-14T00:00:00.000Z",
+      completedAt: "2026-05-15T00:00:00.000Z",
       commands: [
         "npx --package @cf-auth/cli@alpha cf-auth doctor --report --env production",
         "npx --package @cf-auth/cli@alpha cf-auth migrate --remote --env production",
@@ -2088,7 +2088,7 @@ function validAlphaEvidence() {
 function validBetaEvidence() {
   return {
     schemaVersion: 1,
-    reviewedAt: "2026-05-14T00:00:00.000Z",
+    reviewedAt: "2026-05-15T00:00:00.000Z",
     reviewedBy: "release-captain-ada",
     publishedQuickstart: {
       workflowRunUrl:
@@ -2102,7 +2102,7 @@ function validBetaEvidence() {
     },
     manualQuickstart: {
       maintainer: "release-captain-ada",
-      completedAt: "2026-05-14T00:00:00.000Z",
+      completedAt: "2026-05-15T00:00:00.000Z",
       packageTag: "beta",
       commands: [
         "npx --package @cf-auth/cli@beta cf-auth init my-app --template hono-basic",
@@ -2147,7 +2147,7 @@ function validDeployButtonEvidence() {
   return {
     schemaVersion: 1,
     status: "verified",
-    verifiedAt: "2026-05-14T00:00:00.000Z",
+    verifiedAt: "2026-05-15T00:00:00.000Z",
     verifiedBy: "release-captain-ada",
     templateRepositoryUrl:
       "https://github.com/cf-auth-release/cloudflare-auth-template",
@@ -2177,7 +2177,7 @@ function validDeployButtonEvidence() {
 function validPackageEvidence() {
   return {
     schemaVersion: 1,
-    verifiedAt: "2026-05-14T00:00:00.000Z",
+    verifiedAt: "2026-05-15T00:00:00.000Z",
     verifiedBy: "release-captain-ada",
     packages: [
       "@cf-auth/cli",
@@ -2214,7 +2214,7 @@ function validPackageEvidence() {
 function validSecurityTracker() {
   return {
     schemaVersion: 1,
-    reviewedAt: "2026-05-14T00:00:00.000Z",
+    reviewedAt: "2026-05-15T00:00:00.000Z",
     reviewedBy: "release-captain-ada",
     issueSearchUrl:
       "https://github.com/cf-auth-release/cloudflare-auth/issues?q=is%3Aissue%20is%3Aopen%20label%3Aauth%20label%3Ahigh%2Ccritical",

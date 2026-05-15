@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "reviewedAt": "2026-05-14T00:00:00.000Z",
+  "reviewedAt": "2026-05-15T00:00:00.000Z",
   "reviewedBy": "maintainer-name",
   "publishedQuickstart": {
     "workflowRunUrl": "https://github.com/OWNER/REPO/actions/runs/0000000000",
@@ -13,7 +13,7 @@
   },
   "manualQuickstart": {
     "maintainer": "maintainer-name",
-    "completedAt": "2026-05-14T00:00:00.000Z",
+    "completedAt": "2026-05-15T00:00:00.000Z",
     "packageTag": "beta",
     "commands": [
       "npx --package @cf-auth/cli@beta cf-auth init my-app --template hono-basic",

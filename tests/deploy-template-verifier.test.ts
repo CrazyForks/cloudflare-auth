@@ -184,7 +184,7 @@ async function deployTemplateFixture(
     zod: "4.4.3",
     changesets: "2.31.0",
     wrangler: "4.90.1",
-    workersCompatibilityDate: "2026-05-14",
+    workersCompatibilityDate: "2026-05-15",
     workersCompatibilityDateFloor: "2024-09-23",
   });
   await writeFile(
@@ -241,7 +241,7 @@ function packageJson() {
 function wranglerJson() {
   return {
     $schema: "./node_modules/wrangler/config-schema.json",
-    compatibility_date: "2026-05-14",
+    compatibility_date: "2026-05-15",
     compatibility_flags: ["nodejs_compat"],
     observability: {
       enabled: true,

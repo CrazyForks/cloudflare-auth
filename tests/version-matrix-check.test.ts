@@ -89,7 +89,7 @@ function validVersionMatrix(): Record<string, string> {
     vitest: "4.1.6",
     zod: "4.4.3",
     changesets: "2.31.0",
-    workersCompatibilityDate: "2026-05-14",
+    workersCompatibilityDate: "2026-05-15",
     workersCompatibilityDateFloor: "2024-09-23",
   };
 }

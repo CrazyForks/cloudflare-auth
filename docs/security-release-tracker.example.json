@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "reviewedAt": "2026-05-14T00:00:00.000Z",
+  "reviewedAt": "2026-05-15T00:00:00.000Z",
   "reviewedBy": "maintainer-name",
   "issueSearchUrl": "https://github.com/OWNER/REPO/issues?q=is%3Aissue%20is%3Aopen%20label%3Aauth%20label%3Ahigh%2Ccritical",
   "advisorySearchUrl": "https://github.com/OWNER/REPO/security/advisories",

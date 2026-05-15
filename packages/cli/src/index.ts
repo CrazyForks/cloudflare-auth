@@ -30,7 +30,7 @@ export const cliPackageName = "@cf-auth/cli";
 const generatedPackageVersion = cliPackageJson.version;
 const supportedWranglerVersion = cliPackageJson.dependencies.wrangler;
 const wranglerSchemaPath = "./node_modules/wrangler/config-schema.json";
-const workersCompatibilityDate = "2026-05-14";
+const workersCompatibilityDate = "2026-05-15";
 const workersCompatibilityDateFloor = "2024-09-23";
 const workersNodeCompatibilityFlag = "nodejs_compat";
 const passwordBenchmarkCache = new Map<
@@ -3786,7 +3786,7 @@ function wranglerTemplate(appName: string): string {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "${appName}-dev",
   "main": "src/index.ts",
-  "compatibility_date": "2026-05-14",
+  "compatibility_date": "2026-05-15",
   "compatibility_flags": ["nodejs_compat"],
   "observability": {
     "enabled": true,

@@ -177,6 +177,28 @@ describe("package checks", () => {
     );
   });
 
+  it("requires release readiness audit coverage for current local verification", async () => {
+    const root = await packageCheckFixture();
+    await replaceFixtureText(
+      root,
+      "docs/release-readiness-audit.md",
+      "Recent local verification has passed for:",
+      "Recent verification:",
+    );
+    await replaceFixtureText(
+      root,
+      "docs/release-readiness-audit.md",
+      "- `pnpm smoke:wrangler-dev`",
+      "- `pnpm smoke:local-worker`",
+    );
+    const result = runPackageCheck(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "docs/release-readiness-audit.md: missing Recent local verification has passed for:",
+    );
+  });
+
   it("requires release readiness audit coverage for source notes and README draft", async () => {
     const root = await packageCheckFixture();
     await replaceFixtureText(

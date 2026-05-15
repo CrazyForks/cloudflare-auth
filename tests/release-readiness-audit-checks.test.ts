@@ -32,6 +32,8 @@ describe("release readiness audit checks", () => {
     const checks = await loadChecks();
     const audit = completeAuditText(checks)
       .replace("Section 33.1 README", "")
+      .replace("Recent local verification has passed for:", "")
+      .replace("pnpm package:check", "")
       .replace("Published quickstart smoke", "")
       .replace("Stage 12", "Stable 12")
       .replace("| 28 |", "| -- |");
@@ -39,6 +41,8 @@ describe("release readiness audit checks", () => {
     expect(checks.collectReleaseReadinessAuditFailures(audit)).toEqual(
       expect.arrayContaining([
         "docs/release-readiness-audit.md: missing Section 33.1 README",
+        "docs/release-readiness-audit.md: missing Recent local verification has passed for:",
+        "docs/release-readiness-audit.md: missing pnpm package:check",
         "docs/release-readiness-audit.md: missing Published quickstart smoke",
         "docs/release-readiness-audit.md: missing Stage 12",
         "docs/release-readiness-audit.md: missing Rule 28",

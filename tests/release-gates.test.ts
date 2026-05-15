@@ -103,6 +103,23 @@ describe("release gates", () => {
     expect(result.stderr).toContain("## Final Beta Definition Of Done Audit");
   });
 
+  it("requires release readiness audit coverage for current local verification", async () => {
+    const root = await releaseGateFixture({ deployButtonEvidence: true });
+    await replaceFixtureText(
+      root,
+      "docs/release-readiness-audit.md",
+      "Recent local verification has passed for:",
+      "Recent verification:",
+    );
+    const result = runReleaseGates(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("docs/release-readiness-audit.md");
+    expect(result.stderr).toContain(
+      "Recent local verification has passed for:",
+    );
+  });
+
   it("requires release readiness audit coverage for source notes and README draft", async () => {
     const root = await releaseGateFixture({ deployButtonEvidence: true });
     await replaceFixtureText(
@@ -1406,6 +1423,28 @@ function releaseReadinessAuditFixtureText() {
     "Sections 23-24 rate limiting and email",
     "Sections 25-27 SDK, integrations, and CLI",
     "Sections 28-29 security model and Turnstile",
+    "## Current Local Evidence",
+    "Recent local verification has passed for:",
+    "pnpm install --frozen-lockfile",
+    "pnpm format:check",
+    "pnpm lint",
+    "pnpm typecheck",
+    "pnpm test",
+    "pnpm test:workers",
+    "pnpm build",
+    "pnpm package:check",
+    "pnpm version-matrix:check",
+    "pnpm verify:docs-coverage",
+    "pnpm verify:security-docs",
+    "pnpm verify:migrations",
+    "pnpm verify:deploy-template",
+    "pnpm verify:examples",
+    "pnpm release:gates",
+    "pnpm audit --audit-level high",
+    "pnpm smoke:wrangler-dev",
+    "CF_AUTH_TARBALL_INSTALL=1 pnpm smoke:tarballs",
+    "pnpm benchmark:password",
+    "pnpm publish:dry-run",
     "## Testing, CI, And Docs Plan Audit",
     "Section 31.1 unit tests",
     "Section 31.2 repository tests",

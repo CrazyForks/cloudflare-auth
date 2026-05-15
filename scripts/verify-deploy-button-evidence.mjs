@@ -9,6 +9,8 @@ import {
   isFutureIsoDateString,
   isIsoDateString,
   isJsonObject,
+  isPlaceholderRepositoryUrl,
+  isReservedEvidenceHostname,
 } from "./evidence-validation.mjs";
 import { readReleasePackageState } from "./release-package-state.mjs";
 import { requiredAuthSmokeEndpoints } from "./smoke-endpoints.mjs";
@@ -200,6 +202,10 @@ function requireTemplateRepositoryUrl(value, path) {
     failures.push(
       `${evidencePath}: ${path} must be an exact public GitHub or GitLab repository URL`,
     );
+  } else if (isPlaceholderRepositoryUrl(value)) {
+    failures.push(
+      `${evidencePath}: ${path} must not use a placeholder repository owner or name`,
+    );
   }
 }
 
@@ -245,6 +251,10 @@ function requireOrigin(value, path) {
     const url = new URL(value);
     if (value !== url.origin || url.protocol !== "https:") {
       failures.push(`${evidencePath}: ${path} must be an exact https origin`);
+    } else if (isReservedEvidenceHostname(url.hostname)) {
+      failures.push(
+        `${evidencePath}: ${path} must not use a reserved or example origin`,
+      );
     }
   } catch {
     failures.push(`${evidencePath}: ${path} must be a valid URL origin`);
@@ -265,7 +275,13 @@ function containsSensitiveEvidence(text) {
 }
 
 function containsPlaceholderEvidence(text) {
-  return /\bOWNER\b|\bREPO\b|https:\/\/example\.com\b/u.test(text);
+  return (
+    /\bOWNER\b|\bREPO\b/u.test(text) ||
+    /github\.com\/(?:acme|example)\//iu.test(text) ||
+    /https?:\/\/[^\s"']*(?:example\.(?:com|net|org)|\.example|\.invalid|\.test|\.localhost|localhost)\b/iu.test(
+      text,
+    )
+  );
 }
 
 async function exists(path) {

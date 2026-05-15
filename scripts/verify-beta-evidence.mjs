@@ -9,6 +9,8 @@ import {
   isFutureIsoDateString,
   isIsoDateString,
   isJsonObject,
+  isPlaceholderRepositoryUrl,
+  isReservedEvidenceHostname,
 } from "./evidence-validation.mjs";
 import { readReleasePackageState } from "./release-package-state.mjs";
 import { requiredAuthSmokeEndpoints } from "./smoke-endpoints.mjs";
@@ -276,6 +278,10 @@ function requireGithubActionsRunUrl(value, path) {
     failures.push(
       `${evidencePath}: ${path} must be an https GitHub Actions run URL`,
     );
+  } else if (isPlaceholderRepositoryUrl(value)) {
+    failures.push(
+      `${evidencePath}: ${path} must not use a placeholder GitHub repository`,
+    );
   }
 }
 
@@ -297,6 +303,10 @@ function requireOrigin(value, path) {
     const url = new URL(value);
     if (value !== url.origin || url.protocol !== "https:") {
       failures.push(`${evidencePath}: ${path} must be an exact https origin`);
+    } else if (isReservedEvidenceHostname(url.hostname)) {
+      failures.push(
+        `${evidencePath}: ${path} must not use a reserved or example origin`,
+      );
     }
   } catch {
     failures.push(`${evidencePath}: ${path} must be a valid URL origin`);
@@ -320,8 +330,11 @@ function containsPlaceholderEvidence(text) {
   return (
     /\bmaintainer-name\b/u.test(text) ||
     /\bOWNER\b|\bREPO\b/u.test(text) ||
+    /github\.com\/(?:acme|example)\//iu.test(text) ||
     /\/actions\/runs\/0+\b/u.test(text) ||
-    /https:\/\/example\.com\b/u.test(text)
+    /https?:\/\/[^\s"']*(?:example\.(?:com|net|org)|\.example|\.invalid|\.test|\.localhost|localhost)\b/iu.test(
+      text,
+    )
   );
 }
 

@@ -726,9 +726,9 @@ describe("release evidence verifiers", () => {
   it("rejects beta evidence with insecure GitHub Actions workflow URLs", async () => {
     const evidence = validBetaEvidence();
     evidence.publishedQuickstart.workflowRunUrl =
-      "http://github.com/acme/cloudflare-auth/actions/runs/123";
+      "http://github.com/cf-auth-release/cloudflare-auth/actions/runs/123";
     evidence.productionSmoke.workflowRunUrl =
-      "http://github.com/acme/cloudflare-auth/actions/runs/124";
+      "http://github.com/cf-auth-release/cloudflare-auth/actions/runs/124";
     const path = await writeEvidence("beta-http-github-workflow", evidence);
     const result = runScript("scripts/verify-beta-evidence.mjs", {
       CF_AUTH_REQUIRE_BETA_EVIDENCE: "1",
@@ -739,6 +739,27 @@ describe("release evidence verifiers", () => {
     expect(result.stderr).toContain("publishedQuickstart.workflowRunUrl");
     expect(result.stderr).toContain("productionSmoke.workflowRunUrl");
     expect(result.stderr).toContain("https GitHub Actions run URL");
+  });
+
+  it("rejects beta evidence with placeholder workflow repositories and reserved origins", async () => {
+    const evidence = validBetaEvidence();
+    evidence.publishedQuickstart.workflowRunUrl =
+      "https://github.com/acme/cloudflare-auth/actions/runs/123";
+    evidence.productionSmoke.workflowRunUrl =
+      "https://github.com/acme/cloudflare-auth/actions/runs/124";
+    evidence.productionSmoke.origin = "https://auth.acme.test";
+    const path = await writeEvidence(
+      "beta-placeholder-release-targets",
+      evidence,
+    );
+    const result = runScript("scripts/verify-beta-evidence.mjs", {
+      CF_AUTH_REQUIRE_BETA_EVIDENCE: "1",
+      CF_AUTH_BETA_EVIDENCE_PATH: path,
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("placeholder GitHub repository");
+    expect(result.stderr).toContain("reserved or example origin");
   });
 
   it("rejects beta evidence with raw IPv6 addresses", async () => {
@@ -834,6 +855,27 @@ describe("release evidence verifiers", () => {
     expect(result.stderr).toContain("GitHub or GitLab repository URL");
     expect(result.stderr).toContain("deployButtonUrl");
     expect(result.stderr).toContain("only the url parameter");
+  });
+
+  it("rejects deploy button evidence with placeholder repositories and reserved origins", async () => {
+    const evidence = validDeployButtonEvidence();
+    evidence.templateRepositoryUrl =
+      "https://github.com/acme/cloudflare-auth-template";
+    evidence.deployButtonUrl =
+      "https://deploy.workers.cloudflare.com/?url=https://github.com/acme/cloudflare-auth-template";
+    evidence.deployedOrigin = "https://auth.acme.test";
+    const path = await writeEvidence(
+      "deploy-button-placeholder-release-targets",
+      evidence,
+    );
+    const result = runScript("scripts/verify-deploy-button-evidence.mjs", {
+      CF_AUTH_REQUIRE_DEPLOY_BUTTON_EVIDENCE: "1",
+      CF_AUTH_DEPLOY_BUTTON_EVIDENCE_PATH: path,
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("placeholder repository");
+    expect(result.stderr).toContain("reserved or example origin");
   });
 
   it("rejects deploy button evidence without required proof flags and endpoints", async () => {
@@ -1325,9 +1367,9 @@ describe("release evidence verifiers", () => {
   it("rejects security tracker evidence with insecure GitHub URLs", async () => {
     const evidence = validSecurityTracker();
     evidence.issueSearchUrl =
-      "http://github.com/acme/cloudflare-auth/issues?q=is%3Aissue%20is%3Aopen%20label%3Aauth%20label%3Ahigh%2Ccritical";
+      "http://github.com/cf-auth-release/cloudflare-auth/issues?q=is%3Aissue%20is%3Aopen%20label%3Aauth%20label%3Ahigh%2Ccritical";
     evidence.advisorySearchUrl =
-      "http://github.com/acme/cloudflare-auth/security/advisories";
+      "http://github.com/cf-auth-release/cloudflare-auth/security/advisories";
     const path = await writeEvidence("security-tracker-http-url", evidence);
     const result = runScript("scripts/verify-security-release-tracker.mjs", {
       CF_AUTH_REQUIRE_SECURITY_TRACKER: "1",
@@ -1338,6 +1380,25 @@ describe("release evidence verifiers", () => {
     expect(result.stderr).toContain("issueSearchUrl");
     expect(result.stderr).toContain("advisorySearchUrl");
     expect(result.stderr).toContain("https GitHub");
+  });
+
+  it("rejects security tracker evidence with placeholder GitHub repositories", async () => {
+    const evidence = validSecurityTracker();
+    evidence.issueSearchUrl =
+      "https://github.com/acme/cloudflare-auth/issues?q=is%3Aissue%20is%3Aopen%20label%3Aauth%20label%3Ahigh%2Ccritical";
+    evidence.advisorySearchUrl =
+      "https://github.com/acme/cloudflare-auth/security/advisories";
+    const path = await writeEvidence(
+      "security-tracker-placeholder-repo",
+      evidence,
+    );
+    const result = runScript("scripts/verify-security-release-tracker.mjs", {
+      CF_AUTH_REQUIRE_SECURITY_TRACKER: "1",
+      CF_AUTH_SECURITY_TRACKER_PATH: path,
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("placeholder GitHub repository");
   });
 
   it("rejects security tracker evidence with unresolved high or critical issues", async () => {
@@ -1577,7 +1638,7 @@ function validBetaEvidence() {
     reviewedBy: "release-reviewer",
     publishedQuickstart: {
       workflowRunUrl:
-        "https://github.com/acme/cloudflare-auth/actions/runs/123",
+        "https://github.com/cf-auth-release/cloudflare-auth/actions/runs/123",
       packageTag: "beta",
       passed: true,
       cleanDirectory: true,
@@ -1601,9 +1662,9 @@ function validBetaEvidence() {
     },
     productionSmoke: {
       workflowRunUrl:
-        "https://github.com/acme/cloudflare-auth/actions/runs/124",
+        "https://github.com/cf-auth-release/cloudflare-auth/actions/runs/124",
       packageTag: "beta",
-      origin: "https://auth.acme.test",
+      origin: "https://auth.cf-auth-release.dev",
       passed: true,
       documentedProductionPath: true,
       optInCloudflareAccountFixture: true,
@@ -1633,11 +1694,12 @@ function validDeployButtonEvidence() {
     status: "verified",
     verifiedAt: "2026-05-14T00:00:00.000Z",
     verifiedBy: "release-reviewer",
-    templateRepositoryUrl: "https://github.com/acme/cloudflare-auth-template",
+    templateRepositoryUrl:
+      "https://github.com/cf-auth-release/cloudflare-auth-template",
     deployButtonUrl:
-      "https://deploy.workers.cloudflare.com/?url=https://github.com/acme/cloudflare-auth-template",
+      "https://deploy.workers.cloudflare.com/?url=https://github.com/cf-auth-release/cloudflare-auth-template",
     packageTag: "beta",
-    deployedOrigin: "https://auth.acme.test",
+    deployedOrigin: "https://auth.cf-auth-release.dev",
     starterTemplateCreated: true,
     templateRepositoryPublic: true,
     templateHasNoWorkspaceDependencies: true,
@@ -1700,9 +1762,9 @@ function validSecurityTracker() {
     reviewedAt: "2026-05-14T00:00:00.000Z",
     reviewedBy: "release-reviewer",
     issueSearchUrl:
-      "https://github.com/acme/cloudflare-auth/issues?q=is%3Aissue%20is%3Aopen%20label%3Aauth%20label%3Ahigh%2Ccritical",
+      "https://github.com/cf-auth-release/cloudflare-auth/issues?q=is%3Aissue%20is%3Aopen%20label%3Aauth%20label%3Ahigh%2Ccritical",
     advisorySearchUrl:
-      "https://github.com/acme/cloudflare-auth/security/advisories",
+      "https://github.com/cf-auth-release/cloudflare-auth/security/advisories",
     openHighCriticalAuthSecurityIssues: [],
     advisories: [
       {

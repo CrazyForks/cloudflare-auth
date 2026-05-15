@@ -65,3 +65,51 @@ export function isFutureIsoDateString(
 export function isJsonObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
+
+export function isReservedEvidenceHostname(hostname) {
+  const normalized = String(hostname).toLowerCase().replace(/\.$/u, "");
+  if (
+    normalized === "localhost" ||
+    normalized.endsWith(".localhost") ||
+    normalized === "example.com" ||
+    normalized.endsWith(".example.com") ||
+    normalized === "example.net" ||
+    normalized.endsWith(".example.net") ||
+    normalized === "example.org" ||
+    normalized.endsWith(".example.org")
+  ) {
+    return true;
+  }
+  return ["example", "invalid", "test"].some(
+    (suffix) => normalized === suffix || normalized.endsWith(`.${suffix}`),
+  );
+}
+
+export function isPlaceholderRepositoryUrl(value) {
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  if (!["github.com", "gitlab.com"].includes(url.hostname)) {
+    return false;
+  }
+  const segments = url.pathname.split("/").filter(Boolean);
+  const owner = segments[0]?.toLowerCase();
+  const repo = segments[1]?.toLowerCase();
+  return [owner, repo].some((segment) =>
+    [
+      "acme",
+      "example",
+      "owner",
+      "repo",
+      "my-org",
+      "my-repo",
+      "your-org",
+      "your-repo",
+      "your-organization",
+      "your-repository",
+    ].includes(segment ?? ""),
+  );
+}

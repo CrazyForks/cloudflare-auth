@@ -1808,11 +1808,12 @@ function validDeployButtonEvidence() {
     status: "verified",
     verifiedAt: "2026-05-14T00:00:00.000Z",
     verifiedBy: "release-reviewer",
-    templateRepositoryUrl: "https://github.com/acme/cloudflare-auth-template",
+    templateRepositoryUrl:
+      "https://github.com/cf-auth-release/cloudflare-auth-template",
     deployButtonUrl:
-      "https://deploy.workers.cloudflare.com/?url=https://github.com/acme/cloudflare-auth-template",
+      "https://deploy.workers.cloudflare.com/?url=https://github.com/cf-auth-release/cloudflare-auth-template",
     packageTag: "beta",
-    deployedOrigin: "https://auth.acme.test",
+    deployedOrigin: "https://auth.cf-auth-release.dev",
     starterTemplateCreated: true,
     templateRepositoryPublic: true,
     templateHasNoWorkspaceDependencies: true,
@@ -1839,7 +1840,7 @@ function validBetaEvidence() {
     reviewedBy: "release-reviewer",
     publishedQuickstart: {
       workflowRunUrl:
-        "https://github.com/acme/cloudflare-auth/actions/runs/123",
+        "https://github.com/cf-auth-release/cloudflare-auth/actions/runs/123",
       packageTag: "beta",
       passed: true,
       cleanDirectory: true,
@@ -1863,9 +1864,9 @@ function validBetaEvidence() {
     },
     productionSmoke: {
       workflowRunUrl:
-        "https://github.com/acme/cloudflare-auth/actions/runs/124",
+        "https://github.com/cf-auth-release/cloudflare-auth/actions/runs/124",
       packageTag: "beta",
-      origin: "https://auth.acme.test",
+      origin: "https://auth.cf-auth-release.dev",
       passed: true,
       documentedProductionPath: true,
       optInCloudflareAccountFixture: true,
@@ -1895,9 +1896,9 @@ function validSecurityTracker() {
     reviewedAt: "2026-05-14T00:00:00.000Z",
     reviewedBy: "release-reviewer",
     issueSearchUrl:
-      "https://github.com/acme/cloudflare-auth/issues?q=is%3Aissue%20is%3Aopen%20label%3Aauth%20label%3Ahigh%2Ccritical",
+      "https://github.com/cf-auth-release/cloudflare-auth/issues?q=is%3Aissue%20is%3Aopen%20label%3Aauth%20label%3Ahigh%2Ccritical",
     advisorySearchUrl:
-      "https://github.com/acme/cloudflare-auth/security/advisories",
+      "https://github.com/cf-auth-release/cloudflare-auth/security/advisories",
     openHighCriticalAuthSecurityIssues: [],
     advisories: [
       {

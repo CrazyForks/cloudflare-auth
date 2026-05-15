@@ -9,6 +9,7 @@ import {
   isFutureIsoDateString,
   isIsoDateString,
   isJsonObject,
+  isPlaceholderRepositoryUrl,
 } from "./evidence-validation.mjs";
 import { readReleasePackageState } from "./release-package-state.mjs";
 
@@ -179,6 +180,11 @@ function requireIssueSearchUrl(value) {
     );
     return;
   }
+  if (isPlaceholderRepositoryUrl(value)) {
+    failures.push(
+      `${trackerPath}: issueSearchUrl must not use a placeholder GitHub repository`,
+    );
+  }
   const query = (url.searchParams.get("q") ?? "").toLowerCase();
   const requiredTerms = ["is:issue", "is:open", "auth", "high", "critical"];
   if (!requiredTerms.every((term) => query.includes(term))) {
@@ -203,6 +209,10 @@ function requireAdvisorySearchUrl(value) {
   ) {
     failures.push(
       `${trackerPath}: advisorySearchUrl must be an https GitHub repository security advisory URL`,
+    );
+  } else if (isPlaceholderRepositoryUrl(value)) {
+    failures.push(
+      `${trackerPath}: advisorySearchUrl must not use a placeholder GitHub repository`,
     );
   }
 }
@@ -247,7 +257,10 @@ function githubRepoForAdvisorySearch(value) {
 }
 
 function containsPlaceholderEvidence(text) {
-  return /\bmaintainer-name\b|\bGHSA-example\b|\bOWNER\b|\bREPO\b/u.test(text);
+  return (
+    /\bmaintainer-name\b|\bGHSA-example\b|\bOWNER\b|\bREPO\b/u.test(text) ||
+    /github\.com\/(?:acme|example)\//iu.test(text)
+  );
 }
 
 function containsSensitiveEvidence(text) {

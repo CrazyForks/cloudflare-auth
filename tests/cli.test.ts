@@ -1375,11 +1375,11 @@ export default defineAuthConfig({
     const output: string[] = [];
     const code = await runCli(["doctor", "--env", "production"], {
       cwd,
-      stdout: (line) => output.push(line),
+      stderr: (line) => output.push(line),
       runCommand: remoteSecretRunner(),
     });
 
-    expect(code).toBe(0);
+    expect(code).toBe(1);
     expect(output.join("\n")).toContain(
       "Cloudflare Auth package versions are inconsistent",
     );
@@ -1401,10 +1401,10 @@ export default defineAuthConfig({
     const workspaceOutput: string[] = [];
     const workspaceCode = await runCli(["doctor", "--env", "production"], {
       cwd,
-      stdout: (line) => workspaceOutput.push(line),
+      stderr: (line) => workspaceOutput.push(line),
       runCommand: remoteSecretRunner(),
     });
-    expect(workspaceCode).toBe(0);
+    expect(workspaceCode).toBe(1);
     expect(workspaceOutput.join("\n")).toContain(
       "Cloudflare Auth dependencies use workspace protocol",
     );
@@ -1413,10 +1413,10 @@ export default defineAuthConfig({
     const scalarOutput: string[] = [];
     const scalarCode = await runCli(["doctor", "--env", "production"], {
       cwd,
-      stdout: (line) => scalarOutput.push(line),
+      stderr: (line) => scalarOutput.push(line),
       runCommand: remoteSecretRunner(),
     });
-    expect(scalarCode).toBe(0);
+    expect(scalarCode).toBe(1);
     expect(scalarOutput.join("\n")).toContain(
       "package.json is not a JSON object",
     );
@@ -1438,11 +1438,11 @@ export default defineAuthConfig({
       ["doctor", "--env", "production"],
       {
         cwd,
-        stdout: (line) => invalidDependencyOutput.push(line),
+        stderr: (line) => invalidDependencyOutput.push(line),
         runCommand: remoteSecretRunner(),
       },
     );
-    expect(invalidDependencyCode).toBe(0);
+    expect(invalidDependencyCode).toBe(1);
     expect(invalidDependencyOutput.join("\n")).toContain(
       "package.json dependencies.@cf-auth/worker must be a string version",
     );
@@ -2356,6 +2356,57 @@ export default app;
     expect(output.join("\n")).toContain("/auth/password/reset/request");
     expect(output.join("\n")).toContain("/auth/email/verify/request");
     expect(output.join("\n")).toContain("Cloudflare Email/DNS");
+  });
+
+  it("rejects production deploys when package versions are unsafe", async () => {
+    const cwd = await tempDir();
+    await writeWrangler(cwd);
+    await writeFile(
+      join(cwd, "package.json"),
+      JSON.stringify(
+        {
+          dependencies: {
+            "@cf-auth/hono": "workspace:*",
+            "@cf-auth/worker": "workspace:*",
+          },
+        },
+        null,
+        2,
+      ),
+    );
+    const calls: string[] = [];
+    const errors: string[] = [];
+    const code = await runCli(["deploy", "--env", "production"], {
+      cwd,
+      stderr: (line) => errors.push(line),
+      runCommand: (command, args) => {
+        calls.push([command, ...args].join(" "));
+        if (args[0] === "--version") {
+          return { status: 0, stdout: "4.90.1\n", stderr: "" };
+        }
+        if (args[0] === "whoami") {
+          return { status: 0, stdout: healthyWhoamiJson(), stderr: "" };
+        }
+        if (args[0] === "d1" && args[1] === "execute") {
+          return { status: 0, stdout: migrationStateJson(), stderr: "" };
+        }
+        return {
+          status: 0,
+          stdout:
+            args[0] === "secret"
+              ? JSON.stringify([{ name: "AUTH_SECRET" }])
+              : "",
+          stderr: "",
+        };
+      },
+    });
+
+    expect(code).toBe(1);
+    expect(errors.join("\n")).toContain("doctor failed before deploy");
+    expect(errors.join("\n")).toContain(
+      "Cloudflare Auth dependencies use workspace protocol",
+    );
+    expect(calls).not.toContain("wrangler deploy --env production");
   });
 
   it("executes remote migrations before deploy when requested", async () => {

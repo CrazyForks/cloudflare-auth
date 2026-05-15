@@ -202,12 +202,14 @@ describe("email adapters and templates", () => {
   it("records redacted email send failures and keeps request responses generic", async () => {
     const db = createSqliteD1Database();
     await applyRootD1Migrations(db);
+    const rawToken = `cfauth.magic.k1.${"A".repeat(43)}`;
+    const tokenUrl = `https://example.com/auth/magic-link/verify?token=${rawToken}`;
+    const consoleErrors: unknown[][] = [];
+    const originalConsoleError = console.error;
     const adapter: AuthEmailAdapter = {
       kind: "failing-test",
       async sendMagicLink() {
-        throw new Error(
-          "provider failed for person@example.com cfauth.magic.k1.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-        );
+        throw new Error(`provider failed for person@example.com ${tokenUrl}`);
       },
       async sendEmailVerification() {},
       async sendPasswordReset() {},
@@ -231,39 +233,51 @@ describe("email adapters and templates", () => {
     };
     const deferred = testExecutionContext();
 
-    const signup = await handler.fetch(
-      new Request("http://localhost:8787/auth/signup", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Origin: "http://localhost:8787",
-        },
-        body: JSON.stringify({
-          email: "person@example.com",
-          password: "correct horse battery staple",
+    console.error = (...args: unknown[]) => {
+      consoleErrors.push(args);
+    };
+    let request: Response | null | undefined;
+    try {
+      const signup = await handler.fetch(
+        new Request("http://localhost:8787/auth/signup", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Origin: "http://localhost:8787",
+          },
+          body: JSON.stringify({
+            email: "person@example.com",
+            password: "correct horse battery staple",
+          }),
         }),
-      }),
-      env,
-      deferred.ctx,
-    );
-    await deferred.flush();
-    expect(signup?.status).toBe(200);
+        env,
+        deferred.ctx,
+      );
+      await deferred.flush();
+      expect(signup?.status).toBe(200);
 
-    const request = await handler.fetch(
-      new Request("http://localhost:8787/auth/magic-link/request", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Origin: "http://localhost:8787",
-        },
-        body: JSON.stringify({ email: "person@example.com" }),
-      }),
-      env,
-      deferred.ctx,
-    );
-    await deferred.flush();
+      request = await handler.fetch(
+        new Request("http://localhost:8787/auth/magic-link/request", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Origin: "http://localhost:8787",
+          },
+          body: JSON.stringify({ email: "person@example.com" }),
+        }),
+        env,
+        deferred.ctx,
+      );
+      await deferred.flush();
+    } finally {
+      console.error = originalConsoleError;
+    }
     expect(request?.status).toBe(200);
     await expect(request?.json()).resolves.toEqual({ ok: true });
+    const logged = JSON.stringify(consoleErrors);
+    expect(logged).toContain("email_send_failed");
+    expect(logged).not.toContain(rawToken);
+    expect(logged).not.toContain("/auth/magic-link/verify?token=");
     const event = await db
       .prepare(
         "SELECT event_type, ip_hash, user_agent_hash, metadata_json FROM auth_events ORDER BY created_at DESC LIMIT 1",
@@ -278,7 +292,9 @@ describe("email adapters and templates", () => {
     expect(event?.ip_hash).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(event?.user_agent_hash).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(event?.metadata_json).toContain('"tokenType":"magic_link"');
-    expect(event?.metadata_json).not.toMatch(/person@example\.com|cfauth\./);
+    expect(event?.metadata_json).not.toMatch(
+      /person@example\.com|cfauth\.|\/auth\/magic-link\/verify\?token=/,
+    );
   });
 
   it("handles signup verification email failures by session policy", async () => {

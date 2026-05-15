@@ -2820,6 +2820,46 @@ export default app;
     expect(output.join("\n")).not.toContain(calls[0]?.input ?? "");
   });
 
+  it("rejects remote auth secret rotation for top-level development configs", async () => {
+    const cwd = await tempDir();
+    await writeFile(
+      join(cwd, "wrangler.jsonc"),
+      JSON.stringify(
+        {
+          vars: {
+            AUTH_ENV: "development",
+            AUTH_PUBLIC_ORIGIN: "http://localhost:8787",
+          },
+          d1_databases: [
+            {
+              binding: "AUTH_DB",
+              database_name: "app-auth-dev",
+              database_id: "local-id",
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+    );
+    const calls: string[] = [];
+    const errors: string[] = [];
+    const code = await runCli(["rotate-secret", "--apply"], {
+      cwd,
+      stderr: (line) => errors.push(line),
+      runCommand: (command, args) => {
+        calls.push([command, ...args].join(" "));
+        return { status: 0, stdout: "", stderr: "" };
+      },
+    });
+
+    expect(code).toBe(1);
+    expect(calls).toEqual([]);
+    expect(errors.join("\n")).toContain(
+      "rotate-secret --apply must not target vars.AUTH_ENV=development",
+    );
+  });
+
   it("applies previous auth secret from environment before the new remote secret", async () => {
     const cwd = await tempDir();
     await writeWrangler(cwd);

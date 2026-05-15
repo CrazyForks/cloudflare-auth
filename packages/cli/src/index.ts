@@ -2699,6 +2699,7 @@ async function commandRotateSecret(
         "rotate-secret --apply requires --env when Wrangler config uses named environments.",
       );
     }
+    assertRemoteAuthEnvironment(config, envName, "rotate-secret --apply");
     const lines: string[] = [];
     const previous = await resolvePreviousSecret(parsed);
     if (previous) {

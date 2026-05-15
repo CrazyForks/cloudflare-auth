@@ -1,11 +1,11 @@
 export function isPrivateAlpha(version) {
   if (typeof version !== "string") return false;
-  return /^\d+\.\d+\.\d+-alpha(?:[.-].*)?$/u.test(version);
+  return /^\d+\.\d+\.\d+-alpha[.-].+$/u.test(version);
 }
 
 export function isPublicBeta(version) {
   if (typeof version !== "string") return false;
-  return /^\d+\.\d+\.\d+-beta(?:[.-].*)?$/u.test(version);
+  return /^\d+\.\d+\.\d+-beta[.-].+$/u.test(version);
 }
 
 export function isStableOneOrLater(version) {

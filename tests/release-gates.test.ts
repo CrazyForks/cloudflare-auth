@@ -790,7 +790,12 @@ process.exit(1);
   });
 
   it("rejects release versions outside the planned alpha, beta, and stable channels", async () => {
-    for (const packageVersion of ["0.1.0", "1.0.0-rc.0"]) {
+    for (const packageVersion of [
+      "0.1.0",
+      "0.1.0-alpha",
+      "0.1.0-beta",
+      "1.0.0-rc.0",
+    ]) {
       const root = await releaseGateFixture({
         deployButtonEvidence: true,
         packageVersion,

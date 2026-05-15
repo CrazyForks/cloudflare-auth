@@ -997,10 +997,15 @@ describe("package checks", () => {
         `@cf-auth/cli@${packageVersion}: release version must not use placeholder 0.0.0 base`,
       );
     }
-  });
+  }, 20_000);
 
   it("rejects unsupported publishable package release channels", async () => {
-    for (const packageVersion of ["0.1.0", "1.0.0-rc.0"]) {
+    for (const packageVersion of [
+      "0.1.0",
+      "0.1.0-alpha",
+      "0.1.0-beta",
+      "1.0.0-rc.0",
+    ]) {
       const root = await packageCheckFixture();
       for (const packageDir of defaultPublishablePackageDirs) {
         await updatePackageJson(root, `packages/${packageDir}/package.json`, {
@@ -1016,7 +1021,7 @@ describe("package checks", () => {
         `@cf-auth/cli@${packageVersion}: release versions must use alpha, beta, or stable 1.0+`,
       );
     }
-  });
+  }, 20_000);
 
   it("rejects workspace dependency ranges in packed manifests", async () => {
     const root = await packageCheckFixture();

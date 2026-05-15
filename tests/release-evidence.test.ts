@@ -1332,7 +1332,12 @@ describe("release evidence verifiers", () => {
   });
 
   it("rejects unsupported package release channels in evidence gates", async () => {
-    for (const packageVersion of ["0.1.0", "1.0.0-rc.0"]) {
+    for (const packageVersion of [
+      "0.1.0",
+      "0.1.0-alpha",
+      "0.1.0-beta",
+      "1.0.0-rc.0",
+    ]) {
       const cwd = await packageVersionFixture(packageVersion);
 
       for (const script of [

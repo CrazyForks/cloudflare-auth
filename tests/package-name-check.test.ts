@@ -84,7 +84,12 @@ describe("package name registry checks", () => {
   });
 
   it("rejects unsupported publish version channels", async () => {
-    for (const packageVersion of ["0.1.0", "1.0.0-rc.0"]) {
+    for (const packageVersion of [
+      "0.1.0",
+      "0.1.0-alpha",
+      "0.1.0-beta",
+      "1.0.0-rc.0",
+    ]) {
       const fixture = await packageNameFixture({
         packageVersion,
       });

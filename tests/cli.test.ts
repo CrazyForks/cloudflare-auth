@@ -1458,6 +1458,119 @@ export default defineAuthConfig({
     expect(invalidDependencyOutput.join("\n")).toContain(
       "package.json dependencies.@cf-auth/worker must be a string version",
     );
+
+    await writeFile(
+      join(cwd, "package.json"),
+      JSON.stringify(
+        {
+          optionalDependencies: {
+            "@cf-auth/worker": "workspace:*",
+          },
+        },
+        null,
+        2,
+      ),
+    );
+    const optionalOutput: string[] = [];
+    const optionalCode = await runCli(["doctor", "--env", "production"], {
+      cwd,
+      stderr: (line) => optionalOutput.push(line),
+      runCommand: remoteSecretRunner(),
+    });
+    expect(optionalCode).toBe(1);
+    expect(optionalOutput.join("\n")).toContain(
+      "Cloudflare Auth dependencies use workspace protocol",
+    );
+
+    await writeFile(
+      join(cwd, "package.json"),
+      JSON.stringify(
+        {
+          dependencies: {
+            "@cf-auth/worker": "1.0.0",
+          },
+          pnpm: {
+            overrides: {
+              "@cf-auth/worker": "workspace:*",
+            },
+          },
+        },
+        null,
+        2,
+      ),
+    );
+    const overrideOutput: string[] = [];
+    const overrideCode = await runCli(["doctor", "--env", "production"], {
+      cwd,
+      stderr: (line) => overrideOutput.push(line),
+      runCommand: remoteSecretRunner(),
+    });
+    expect(overrideCode).toBe(1);
+    expect(overrideOutput.join("\n")).toContain(
+      "Cloudflare Auth dependencies use workspace protocol",
+    );
+
+    await writeFile(
+      join(cwd, "package.json"),
+      JSON.stringify(
+        {
+          dependencies: {
+            "@cf-auth/hono": "file:/tmp/cf-auth-hono.tgz",
+            "@cf-auth/worker": "file:/tmp/cf-auth-worker.tgz",
+          },
+        },
+        null,
+        2,
+      ),
+    );
+    const fileOutput: string[] = [];
+    const fileCode = await runCli(["doctor", "--env", "production"], {
+      cwd,
+      stderr: (line) => fileOutput.push(line),
+      runCommand: remoteSecretRunner(),
+    });
+    expect(fileCode).toBe(1);
+    expect(fileOutput.join("\n")).toContain(
+      "Cloudflare Auth dependencies use local file specs",
+    );
+
+    const previousAllowLocalPackages =
+      process.env.CF_AUTH_ALLOW_LOCAL_PACKAGE_SPECS;
+    process.env.CF_AUTH_ALLOW_LOCAL_PACKAGE_SPECS = "1";
+    try {
+      const tarballOutput: string[] = [];
+      const tarballCode = await runCli(["doctor", "--env", "production"], {
+        cwd,
+        stdout: (line) => tarballOutput.push(line),
+        runCommand: remoteSecretRunner(),
+      });
+      expect(tarballCode).toBe(0);
+      expect(tarballOutput.join("\n")).toContain(
+        "Cloudflare Auth package versions use local tarball specs",
+      );
+    } finally {
+      if (previousAllowLocalPackages === undefined) {
+        delete process.env.CF_AUTH_ALLOW_LOCAL_PACKAGE_SPECS;
+      } else {
+        process.env.CF_AUTH_ALLOW_LOCAL_PACKAGE_SPECS =
+          previousAllowLocalPackages;
+      }
+    }
+  });
+
+  it("doctor reports unreadable production package manifests", async () => {
+    const cwd = await tempDir();
+    await writeWrangler(cwd);
+    await mkdir(join(cwd, "package.json"));
+    const output: string[] = [];
+    const code = await runCli(["doctor", "--env", "production"], {
+      cwd,
+      stderr: (line) => output.push(line),
+      runCommand: remoteSecretRunner(),
+    });
+
+    expect(code).toBe(1);
+    expect(output.join("\n")).toContain("package.json could not be read");
   });
 
   it("doctor accepts byEnvironment terminal email for development only", async () => {

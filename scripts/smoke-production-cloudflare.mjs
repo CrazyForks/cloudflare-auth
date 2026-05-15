@@ -288,6 +288,7 @@ export default defineAuthConfig({
 function runCfAuth(cwd, args, options = {}) {
   return run("pnpm", ["--dir", cwd, "exec", "cf-auth", ...args], {
     allowFailure: options.allowFailure,
+    env: config.packageTag ? {} : { CF_AUTH_ALLOW_LOCAL_PACKAGE_SPECS: "1" },
   });
 }
 
@@ -295,7 +296,7 @@ function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
     cwd: root,
     encoding: "utf8",
-    env: { ...process.env, CI: "true" },
+    env: { ...process.env, CI: "true", ...options.env },
     stdio: ["ignore", "pipe", "pipe"],
   });
   if (result.status !== 0 && !options.allowFailure) {

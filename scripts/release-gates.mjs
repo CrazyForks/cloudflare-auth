@@ -219,6 +219,10 @@ await requireText(
   "scripts/smoke-production-cloudflare.mjs",
   '"@cf-auth/email-cloudflare": packageTag',
 );
+await requireText(
+  "scripts/smoke-production-cloudflare.mjs",
+  "CF_AUTH_ALLOW_LOCAL_PACKAGE_SPECS",
+);
 await requireText(".github/workflows/release.yml", "package_names_confirmed");
 await requireText(
   ".github/workflows/release.yml",

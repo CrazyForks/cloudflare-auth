@@ -1428,16 +1428,19 @@ async function checkPackageVersions(
   try {
     pkg = JSON.parse(await readFile(join(cwd, "package.json"), "utf8"));
   } catch (error) {
-    if (
-      remoteTarget &&
-      !(error && typeof error === "object" && "code" in error)
-    ) {
+    if (hasErrorCode(error, "ENOENT")) {
+      return null;
+    }
+    if (error instanceof SyntaxError) {
       return malformedPackageVersionCheck(
         "package.json could not be parsed; Cloudflare Auth package versions could not be verified",
         remoteTarget,
       );
     }
-    return null;
+    return malformedPackageVersionCheck(
+      "package.json could not be read; Cloudflare Auth package versions could not be verified",
+      remoteTarget,
+    );
   }
   if (!isRecord(pkg)) {
     return malformedPackageVersionCheck(
@@ -1463,11 +1466,52 @@ async function checkPackageVersions(
       fix: "pin published @cf-auth package versions before preview or production deploy",
     };
   }
-  const publishedVersions = new Set(
-    cfAuthEntries
-      .map(([, version]) => version)
-      .filter((version) => !version.startsWith("workspace:")),
+  const localFileEntries = cfAuthEntries.filter(([, version]) =>
+    version.startsWith("file:"),
   );
+  const allowLocalFileSpecs =
+    process.env.CF_AUTH_ALLOW_LOCAL_PACKAGE_SPECS === "1";
+  if (remoteTarget && localFileEntries.length > 0 && !allowLocalFileSpecs) {
+    return {
+      id: "package_versions",
+      status: "fail",
+      message:
+        "Cloudflare Auth dependencies use local file specs in a deploy target",
+      fix: "pin published @cf-auth package versions before preview or production deploy",
+    };
+  }
+  const comparableVersions = cfAuthEntries
+    .map(([, version]) => version)
+    .filter(
+      (version) =>
+        !version.startsWith("workspace:") && !version.startsWith("file:"),
+    );
+  if (
+    comparableVersions.length > 0 &&
+    localFileEntries.length > 0 &&
+    (remoteTarget || allowLocalFileSpecs)
+  ) {
+    return {
+      id: "package_versions",
+      status: remoteTarget ? "fail" : "warn",
+      message:
+        "Cloudflare Auth package specs mix local file specs and published versions",
+      fix: "use either one published @cf-auth version or one local tarball set for smoke testing",
+    };
+  }
+  const publishedVersions = new Set(comparableVersions);
+  if (
+    publishedVersions.size === 0 &&
+    localFileEntries.length > 0 &&
+    allowLocalFileSpecs
+  ) {
+    return {
+      id: "package_versions",
+      status: "pass",
+      message:
+        "Cloudflare Auth package versions use local tarball specs for smoke testing",
+    };
+  }
   if (publishedVersions.size > 1) {
     return {
       id: "package_versions",
@@ -1494,6 +1538,7 @@ function collectPackageDependencyEntries(
     "dependencies",
     "devDependencies",
     "peerDependencies",
+    "optionalDependencies",
   ]) {
     const dependencies = pkg[section];
     if (dependencies === undefined) continue;
@@ -1520,7 +1565,83 @@ function collectPackageDependencyEntries(
       }
     }
   }
+  const overrides = collectPackageOverrideEntries(
+    pkg.overrides,
+    "package.json overrides",
+    remoteTarget,
+  );
+  if (!overrides.ok) return overrides;
+  entries.push(...overrides.entries);
+  if (pkg.pnpm !== undefined) {
+    if (!isRecord(pkg.pnpm)) {
+      return {
+        ok: false,
+        check: malformedPackageVersionCheck(
+          "package.json pnpm must be an object; Cloudflare Auth package versions could not be verified",
+          remoteTarget,
+        ),
+      };
+    }
+    const pnpmOverrides = collectPackageOverrideEntries(
+      pkg.pnpm.overrides,
+      "package.json pnpm.overrides",
+      remoteTarget,
+    );
+    if (!pnpmOverrides.ok) return pnpmOverrides;
+    entries.push(...pnpmOverrides.entries);
+  }
   return { ok: true, entries };
+}
+
+function collectPackageOverrideEntries(
+  overrides: unknown,
+  label: string,
+  remoteTarget: boolean,
+):
+  | { ok: true; entries: Array<[string, string]> }
+  | { ok: false; check: DoctorCheck } {
+  const entries: Array<[string, string]> = [];
+  if (overrides === undefined) return { ok: true, entries };
+  if (!isRecord(overrides)) {
+    return {
+      ok: false,
+      check: malformedPackageVersionCheck(
+        `${label} must be an object; Cloudflare Auth package versions could not be verified`,
+        remoteTarget,
+      ),
+    };
+  }
+  for (const [rawName, spec] of Object.entries(overrides)) {
+    const name = overridePackageName(rawName);
+    if (!isCfAuthPackageName(name)) continue;
+    if (typeof spec === "string") {
+      entries.push([name, spec]);
+      continue;
+    }
+    if (isRecord(spec) && typeof spec["."] === "string") {
+      entries.push([name, spec["."]]);
+      continue;
+    }
+    return {
+      ok: false,
+      check: malformedPackageVersionCheck(
+        `${label}.${rawName} must be a string version; Cloudflare Auth package versions could not be verified`,
+        remoteTarget,
+      ),
+    };
+  }
+  return { ok: true, entries };
+}
+
+function overridePackageName(rawName: string): string {
+  if (!rawName.startsWith("@")) {
+    const at = rawName.indexOf("@");
+    return at === -1 ? rawName : rawName.slice(0, at);
+  }
+  const slash = rawName.indexOf("/");
+  if (slash === -1) return rawName;
+  const versionAt = rawName.indexOf("@", slash + 1);
+  return versionAt === -1 ? rawName : rawName.slice(0, versionAt);
 }
 
 function malformedPackageVersionCheck(
@@ -1540,6 +1661,15 @@ function isCfAuthPackageName(name: string): boolean {
     name === "cf-auth" ||
     name === "create-cloudflare-auth" ||
     name.startsWith("@cf-auth/")
+  );
+}
+
+function hasErrorCode(error: unknown, code: string): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === code
   );
 }
 

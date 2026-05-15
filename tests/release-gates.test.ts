@@ -101,6 +101,7 @@ describe("release gates", () => {
       'assertNoWorkspaceDependencies(pkg, "production smoke package.json")',
     );
     expect(result.stderr).toContain('"@cf-auth/email-cloudflare": packageTag');
+    expect(result.stderr).toContain("CF_AUTH_ALLOW_LOCAL_PACKAGE_SPECS");
   });
 
   it("rejects non-object root package manifests", async () => {
@@ -851,6 +852,7 @@ async function releaseGateFixture(options: ReleaseGateFixtureOptions) {
         "__Host-cfauth-session=",
         'assertNoWorkspaceDependencies(pkg, "production smoke package.json")',
         '"@cf-auth/email-cloudflare": packageTag',
+        "CF_AUTH_ALLOW_LOCAL_PACKAGE_SPECS",
       ],
     ],
     [

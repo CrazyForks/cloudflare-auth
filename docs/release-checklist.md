@@ -17,8 +17,8 @@ recorded before public beta or 1.0.
 - `pnpm version-matrix:check`
 - `pnpm audit --audit-level high` reviewed as advisory evidence, not as the sole security gate
 - `pnpm verify:alpha-evidence`
-- `pnpm verify:beta-evidence`
 - `pnpm verify:deploy-button-evidence`
+- `pnpm verify:beta-evidence`
 - `pnpm verify:deploy-template`
 - `pnpm verify:docs-coverage`
 - `pnpm verify:migrations`

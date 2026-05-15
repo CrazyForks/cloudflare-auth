@@ -208,6 +208,11 @@ async function readOwnershipEvidence() {
       continue;
     }
     if (typeof item.name === "string") {
+      if (packageEvidenceByName.has(item.name)) {
+        failures.push(
+          `${evidencePath}: duplicate package evidence for ${item.name}`,
+        );
+      }
       packageEvidenceByName.set(item.name, item);
     }
   }
@@ -220,6 +225,11 @@ async function readOwnershipEvidence() {
       continue;
     }
     if (typeof item.name === "string") {
+      if (reservedEvidenceByName.has(item.name)) {
+        failures.push(
+          `${evidencePath}: duplicate reserved package evidence for ${item.name}`,
+        );
+      }
       if (!reservedPackageNames.has(item.name)) {
         failures.push(
           `${evidencePath}: ${item.name} must not be listed under reservedPackages unless its workspace package is private`,

@@ -1,4 +1,4 @@
-import { chmod, mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -131,6 +131,34 @@ describe("package name registry checks", () => {
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("packages[0] must be an object");
     expect(result.stderr).toContain("reservedPackages[0] must be an object");
+  });
+
+  it("rejects duplicate package ownership entries", async () => {
+    const fixture = await packageNameFixture();
+    const evidence = JSON.parse(
+      await readFile(
+        join(fixture.root, "docs", "package-ownership.json"),
+        "utf8",
+      ),
+    ) as {
+      packages: unknown[];
+      reservedPackages: unknown[];
+    };
+    evidence.packages.push(evidence.packages[0]);
+    evidence.reservedPackages.push(evidence.reservedPackages[0]);
+    await writeFile(
+      join(fixture.root, "docs", "package-ownership.json"),
+      `${JSON.stringify(evidence, null, 2)}\n`,
+    );
+    const result = runPackageNameCheck(fixture.root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "duplicate package evidence for @cf-auth/cli",
+    );
+    expect(result.stderr).toContain(
+      "duplicate reserved package evidence for cf-auth",
+    );
   });
 
   it("rejects non-object npm package lookup results", async () => {

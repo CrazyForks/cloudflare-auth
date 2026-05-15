@@ -449,6 +449,23 @@ async function verifyPackageNamingDocs() {
       failures.push(`docs/decisions/package-naming.md: missing ${name}`);
     }
   }
+  for (const needle of [
+    "@cloudflare-auth/cli",
+    "@cloudflare-auth/client",
+    "@cloudflare-auth/core",
+    "@cloudflare-auth/email-cloudflare",
+    "@cloudflare-auth/hono",
+    "@cloudflare-auth/testing",
+    "@cloudflare-auth/worker",
+    "availability signal only",
+    "ownership evidence",
+  ]) {
+    if (!naming.includes(needle)) {
+      failures.push(
+        `docs/decisions/package-naming.md: missing fallback scope evidence ${needle}`,
+      );
+    }
+  }
   if (!ownershipExample.includes('"registryVersion"')) {
     failures.push(
       "docs/package-ownership.example.json: missing registryVersion example for already-published package names",

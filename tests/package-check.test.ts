@@ -460,6 +460,31 @@ describe("package checks", () => {
     );
   });
 
+  it("requires fallback scope availability docs to avoid treating E404 as ownership", async () => {
+    const root = await packageCheckFixture();
+    await replaceFixtureText(
+      root,
+      "docs/decisions/package-naming.md",
+      "@cloudflare-auth/email-cloudflare",
+      "@cloudflare-auth/email",
+    );
+    await replaceFixtureText(
+      root,
+      "docs/decisions/package-naming.md",
+      "availability signal only",
+      "availability evidence",
+    );
+    const result = runPackageCheck(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "docs/decisions/package-naming.md: missing fallback scope evidence @cloudflare-auth/email-cloudflare",
+    );
+    expect(result.stderr).toContain(
+      "docs/decisions/package-naming.md: missing fallback scope evidence availability signal only",
+    );
+  });
+
   it("requires release gates before package publication", async () => {
     const root = await packageCheckFixture();
     await replaceFixtureText(

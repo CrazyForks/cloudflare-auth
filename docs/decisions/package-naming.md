@@ -40,6 +40,15 @@ npx --package @cf-auth/cli@latest cf-auth init
 
 If the `@cf-auth/*` scope is unavailable, maintainers must use the approved fallback scope `@cloudflare-auth/*` and update every package name, import, generated template, test, and doc consistently before publication.
 
+As of May 15, 2026, `npm view <name> version` returns `E404` for the approved
+fallback package names `@cloudflare-auth/cli`, `@cloudflare-auth/client`,
+`@cloudflare-auth/core`, `@cloudflare-auth/email-cloudflare`,
+`@cloudflare-auth/hono`, `@cloudflare-auth/testing`, and
+`@cloudflare-auth/worker`. Treat that as an availability signal only, not
+ownership evidence. Maintainers must still create and control the fallback scope
+and record package-ownership evidence before switching public docs or packages
+to `@cloudflare-auth/*`.
+
 If `create-cloudflare-auth` is unavailable, public new-app docs must use:
 
 ```bash

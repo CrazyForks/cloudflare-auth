@@ -236,7 +236,7 @@ describe("security hardening helpers", () => {
         endpoints: ["magic_link_request"],
         verify: async ({ token }) => {
           throw new Error(
-            `verifier failed token=${token} identifier=raw-identifier username=raw-user email=person@example.com remoteIp=2001:db8::1 userAgent="Mozilla/5.0 Secret Browser" AUTH_SECRET=k1.${secretMaterial}; token: ${token} identifier: colon-identifier username: colon-user User-Agent: Mozilla/5.0 Colon Browser CF-Connecting-IP: [2001:db8::1] AUTH_SECRET_PREVIOUS: k0.${previousSecretMaterial}`,
+            `verifier failed url=https://example.com/auth/magic-link/verify?token=${token}&next=/dashboard token=${token} identifier=raw-identifier username=raw-user email=person@example.com remoteIp=2001:db8::1 userAgent="Mozilla/5.0 Secret Browser" AUTH_SECRET=k1.${secretMaterial}; token: ${token} identifier: colon-identifier username: colon-user User-Agent: Mozilla/5.0 Colon Browser CF-Connecting-IP: [2001:db8::1] AUTH_SECRET_PREVIOUS: k0.${previousSecretMaterial}`,
           );
         },
       },
@@ -253,6 +253,7 @@ describe("security hardening helpers", () => {
     expect(response.status).toBe(500);
     const body = await response.text();
     expect(body).toContain('"code":"server_error"');
+    expect(body).toContain("url=[REDACTED_TOKEN_URL]");
     expect(body).toContain("token=[REDACTED]");
     expect(body).toContain("email=[REDACTED]");
     expect(body).toContain("AUTH_SECRET=[REDACTED]");
@@ -264,6 +265,7 @@ describe("security hardening helpers", () => {
     expect(body).toContain("User-Agent: [REDACTED]");
     expect(body).toContain("AUTH_SECRET_PREVIOUS: [REDACTED]");
     expect(body).not.toContain(rawToken);
+    expect(body).not.toContain("/auth/magic-link/verify?token=");
     expect(body).not.toContain("raw-identifier");
     expect(body).not.toContain("raw-user");
     expect(body).not.toContain("colon-identifier");
@@ -412,6 +414,7 @@ describe("security hardening helpers", () => {
       `${payload} leaked ${tokenHash} ${passwordHash}`,
     );
 
+    expect(redacted).toContain('"url":"[REDACTED_TOKEN_URL]"');
     expect(redacted).toContain('"password":"[REDACTED]"');
     expect(redacted).toContain('"passwordHash":"[REDACTED]"');
     expect(redacted).toContain('"email":"[REDACTED]"');
@@ -424,6 +427,7 @@ describe("security hardening helpers", () => {
     expect(redacted).toContain('"authorization":"[REDACTED]"');
     expect(redacted).toContain('"tokenType":"password_reset"');
     expect(() => JSON.parse(redactedJson)).not.toThrow();
+    expect(redacted).not.toContain("/auth/password/reset?token=");
     expect(redacted).not.toContain(rawToken);
     expect(redacted).not.toContain(tokenHash);
     expect(redacted).not.toContain(passwordHash);

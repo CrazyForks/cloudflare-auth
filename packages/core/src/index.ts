@@ -18,6 +18,10 @@ const sensitiveColonFieldPattern = new RegExp(
 export function redactLogValue(value: string): string {
   const redacted = value
     .replace(
+      /\bhttps?:\/\/[^\s"'<>;,]*[?&]token=[^\s"'<>;,]*/giu,
+      "[REDACTED_TOKEN_URL]",
+    )
+    .replace(
       /("[A-Za-z0-9_-]*(?:password(?:[_-]?hash)?|secret(?:[_-]?material)?|cookie|authorization|api[_-]?key|auth[_-]?token|session[_-]?token|(?:raw[_-]?)?token(?:[_-]?hash)?|(?:normalized[_-]?)?email|(?:normalized[_-]?)?identifier|(?:normalized[_-]?)?username|user[_-]?agent)"\s*:\s*)"[^"]*"/giu,
       '$1"[REDACTED]"',
     )

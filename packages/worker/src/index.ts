@@ -516,26 +516,43 @@ export function createD1Repositories(db: D1Database): AuthRepositories {
     },
     async revokeActiveVerificationTokens(input) {
       assertVerificationTokenSubject(input);
-      const subjectSql = input.userId
-        ? "user_id = ? AND normalized_email IS NULL"
-        : "normalized_email = ? AND user_id IS NULL";
-      const result = await db
-        .prepare(
-          `UPDATE verification_tokens
-          SET revoked_at = ?, revoked_reason = ?
-          WHERE type = ?
-            AND used_at IS NULL
-            AND consume_id IS NULL
-            AND revoked_at IS NULL
-            AND ${subjectSql}`,
-        )
-        .bind(
-          input.revokedAt,
-          input.revokedReason,
-          input.type,
-          input.userId ?? input.normalizedEmail,
-        )
-        .run();
+      const result = input.userId
+        ? await db
+            .prepare(
+              `UPDATE verification_tokens
+              SET revoked_at = ?, revoked_reason = ?
+              WHERE type = ?
+                AND used_at IS NULL
+                AND consume_id IS NULL
+                AND revoked_at IS NULL
+                AND user_id = ?
+                AND normalized_email IS NULL`,
+            )
+            .bind(
+              input.revokedAt,
+              input.revokedReason,
+              input.type,
+              input.userId,
+            )
+            .run()
+        : await db
+            .prepare(
+              `UPDATE verification_tokens
+              SET revoked_at = ?, revoked_reason = ?
+              WHERE type = ?
+                AND used_at IS NULL
+                AND consume_id IS NULL
+                AND revoked_at IS NULL
+                AND normalized_email = ?
+                AND user_id IS NULL`,
+            )
+            .bind(
+              input.revokedAt,
+              input.revokedReason,
+              input.type,
+              input.normalizedEmail,
+            )
+            .run();
       return changes(result);
     },
     async consumeVerificationToken(input: {

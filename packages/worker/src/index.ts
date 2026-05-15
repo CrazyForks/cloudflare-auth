@@ -489,6 +489,31 @@ export function createD1Repositories(db: D1Database): AuthRepositories {
         .bind(tokenHash, type, now)
         .first<VerificationTokenRow>();
     },
+    async findActiveDisabledUserByTokenHash(tokenHash, type, now) {
+      assertHmacTokenEnvelope(tokenHash);
+      return firstPrimaryDb(db)
+        .prepare(
+          `SELECT users.*
+           FROM verification_tokens
+           JOIN users ON (
+             users.id = verification_tokens.user_id
+             OR (
+               verification_tokens.user_id IS NULL
+               AND users.normalized_email = verification_tokens.normalized_email
+             )
+           )
+           WHERE verification_tokens.token_hash = ?
+             AND verification_tokens.type = ?
+             AND verification_tokens.used_at IS NULL
+             AND verification_tokens.consume_id IS NULL
+             AND verification_tokens.revoked_at IS NULL
+             AND verification_tokens.expires_at > ?
+             AND users.disabled_at IS NOT NULL
+           LIMIT 1`,
+        )
+        .bind(tokenHash, type, now)
+        .first<UserRow>();
+    },
     async revokeActiveVerificationTokens(input) {
       assertVerificationTokenSubject(input);
       const subjectSql = input.userId
@@ -2361,6 +2386,12 @@ async function handleMagicLinkRequest(
         runtime.config.magicLink.expiresInMinutes * 60 * 1000,
       ),
     );
+  } else if (user && user.disabled_at !== null) {
+    queueAuthEvent(runtime, request, "magic_link_request", {
+      userId: user.id,
+      metadata: { subject: "disabled_user" },
+    });
+    performDummyTokenWork(runtime, "magic", "magic_link");
   } else if (runtime.config.magicLink.allowSignups) {
     queueAuthEvent(runtime, request, "magic_link_request", {
       metadata: { subject: "jit_signup" },
@@ -2449,8 +2480,17 @@ async function handleMagicLinkConsume(
         ),
       });
     if (!consumed) {
+      const disabledUser =
+        await runtime.repos.verificationTokens.findActiveDisabledUserByTokenHash(
+          tokenHash,
+          "magic_link",
+          now,
+        );
       queueAuthEvent(runtime, request, "magic_link_consume_failed", {
-        metadata: { reason: "invalid_or_replayed" },
+        userId: disabledUser?.id ?? null,
+        metadata: {
+          reason: disabledUser ? "disabled_user" : "invalid_or_replayed",
+        },
       });
       return responseForMode(mode, "Invalid token", 400, "invalid_token");
     }
@@ -2593,8 +2633,17 @@ async function handleEmailVerifyConsume(
         ),
       });
     if (!consumed) {
+      const disabledUser =
+        await runtime.repos.verificationTokens.findActiveDisabledUserByTokenHash(
+          tokenHash,
+          "email_verification",
+          now,
+        );
       queueAuthEvent(runtime, request, "email_verification_consume_failed", {
-        metadata: { reason: "invalid_or_replayed" },
+        userId: disabledUser?.id ?? null,
+        metadata: {
+          reason: disabledUser ? "disabled_user" : "invalid_or_replayed",
+        },
       });
       return responseForMode(mode, "Invalid token", 400, "invalid_token");
     }
@@ -2721,15 +2770,25 @@ async function handlePasswordResetConfirm(
       });
       throw error;
     }
+    const lookupNow = Date.now();
     const active =
       await runtime.repos.verificationTokens.findActiveVerificationTokenByHash(
         tokenHash,
         "password_reset",
-        Date.now(),
+        lookupNow,
       );
     if (!active?.user_id) {
+      const disabledUser =
+        await runtime.repos.verificationTokens.findActiveDisabledUserByTokenHash(
+          tokenHash,
+          "password_reset",
+          lookupNow,
+        );
       queueAuthEvent(runtime, request, "password_reset_confirm_failed", {
-        metadata: { reason: "invalid_or_expired" },
+        userId: disabledUser?.id ?? null,
+        metadata: {
+          reason: disabledUser ? "disabled_user" : "invalid_or_expired",
+        },
       });
       return responseForMode(mode, "Invalid token", 400, "invalid_token");
     }
@@ -2780,8 +2839,17 @@ async function handlePasswordResetConfirm(
         ),
       });
     if (!consumed) {
+      const disabledUser =
+        await runtime.repos.verificationTokens.findActiveDisabledUserByTokenHash(
+          tokenHash,
+          "password_reset",
+          now,
+        );
       queueAuthEvent(runtime, request, "password_reset_confirm_failed", {
-        metadata: { reason: "invalid_or_replayed" },
+        userId: disabledUser?.id ?? null,
+        metadata: {
+          reason: disabledUser ? "disabled_user" : "invalid_or_replayed",
+        },
       });
       return responseForMode(mode, "Invalid token", 400, "invalid_token");
     }

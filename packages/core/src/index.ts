@@ -321,6 +321,11 @@ export interface VerificationTokenRepository {
     type: VerificationTokenType,
     now: number,
   ): Promise<VerificationTokenRow | null>;
+  findActiveDisabledUserByTokenHash(
+    tokenHash: string,
+    type: VerificationTokenType,
+    now: number,
+  ): Promise<UserRow | null>;
   revokeActiveVerificationTokens(
     input: RevokeActiveVerificationTokensInput,
   ): Promise<number>;

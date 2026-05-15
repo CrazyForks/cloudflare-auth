@@ -318,6 +318,14 @@ describe("D1 migrations and repositories", () => {
       createdAt: 110,
       expiresAt: 1_000,
     });
+    await repos.verificationTokens.createVerificationToken({
+      id: "vtok_disabled_magic_jit",
+      normalizedEmail: "disabled-token@example.com",
+      type: "magic_link",
+      tokenHash: magicHash,
+      createdAt: 111,
+      expiresAt: 1_000,
+    });
     await repos.users.setUserDisabled("usr_disabled_token", 150);
 
     await expect(
@@ -327,6 +335,20 @@ describe("D1 migrations and repositories", () => {
         200,
       ),
     ).resolves.toBeNull();
+    await expect(
+      repos.verificationTokens.findActiveDisabledUserByTokenHash(
+        resetHash,
+        "password_reset",
+        200,
+      ),
+    ).resolves.toMatchObject({ id: "usr_disabled_token" });
+    await expect(
+      repos.verificationTokens.findActiveDisabledUserByTokenHash(
+        magicHash,
+        "magic_link",
+        200,
+      ),
+    ).resolves.toMatchObject({ id: "usr_disabled_token" });
     await expect(
       repos.verificationTokens.consumePasswordReset({
         tokenHash: resetHash,

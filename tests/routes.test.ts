@@ -1187,6 +1187,9 @@ describe("auth HTTP runtime", () => {
     });
     const reset =
       email.messages.find((item) => item.type === "reset")?.token ?? "";
+    const magicMessagesBeforeDisabledRequest = email.messages.filter(
+      (item) => item.type === "magic",
+    ).length;
     const before = await db
       .prepare("SELECT password_hash FROM users WHERE normalized_email = ?")
       .bind("disabled-reset@example.com")
@@ -1200,6 +1203,16 @@ describe("auth HTTP runtime", () => {
       headers: { Cookie: cookie },
     });
     await expect(userResponse.json()).resolves.toEqual({ user: null });
+
+    const disabledMagicRequest = await authFetch("/auth/magic-link/request", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "disabled-reset@example.com" }),
+    });
+    expect(disabledMagicRequest.status).toBe(200);
+    expect(email.messages.filter((item) => item.type === "magic")).toHaveLength(
+      magicMessagesBeforeDisabledRequest,
+    );
 
     const loginResponse = await authFetch("/auth/login", {
       method: "POST",
@@ -1260,6 +1273,59 @@ describe("auth HTTP runtime", () => {
       .bind("disabled-reset@example.com")
       .first<{ password_hash: string }>();
     expect(after?.password_hash).toBe(before?.password_hash);
+
+    const events = await db
+      .prepare(
+        `SELECT event_type, user_id, metadata_json
+         FROM auth_events
+         WHERE event_type IN (
+           'disabled_user_auth_attempt',
+           'magic_link_request',
+           'magic_link_consume_failed',
+           'email_verification_consume_failed',
+           'password_reset_confirm_failed'
+         )
+         ORDER BY created_at`,
+      )
+      .all<{
+        event_type: string;
+        user_id: string | null;
+        metadata_json: string;
+      }>();
+    const parsedEvents = (events.results ?? []).map((event) => ({
+      event_type: event.event_type,
+      user_id: event.user_id,
+      metadata: JSON.parse(event.metadata_json),
+    }));
+    expect(parsedEvents).toEqual(
+      expect.arrayContaining([
+        {
+          event_type: "disabled_user_auth_attempt",
+          user_id: expect.any(String),
+          metadata: { flow: "password_login" },
+        },
+        {
+          event_type: "magic_link_request",
+          user_id: expect.any(String),
+          metadata: { subject: "disabled_user" },
+        },
+        {
+          event_type: "magic_link_consume_failed",
+          user_id: expect.any(String),
+          metadata: { reason: "disabled_user" },
+        },
+        {
+          event_type: "email_verification_consume_failed",
+          user_id: expect.any(String),
+          metadata: { reason: "disabled_user" },
+        },
+        {
+          event_type: "password_reset_confirm_failed",
+          user_id: expect.any(String),
+          metadata: { reason: "disabled_user" },
+        },
+      ]),
+    );
   });
 
   it("does not hash passwords before rejecting inactive reset tokens", async () => {

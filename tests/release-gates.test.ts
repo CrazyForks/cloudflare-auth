@@ -579,6 +579,24 @@ describe("release gates", () => {
     );
   });
 
+  it("derives metrics docs coverage from runtime auth events", async () => {
+    const root = await releaseGateFixture({ deployButtonEvidence: true });
+    await replaceFixtureText(
+      root,
+      "packages/worker/src/index.ts",
+      '  return new Response("not found");',
+      [
+        '  queueAuthEvent(undefined as never, request, "new_auth_event");',
+        '  return new Response("not found");',
+      ].join("\n"),
+    );
+    const result = runReleaseGates(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("scripts/verify-security-docs.mjs");
+    expect(result.stderr).toContain("docs/metrics.md: missing new_auth_event");
+  });
+
   it("requires production password hashing in examples and generated templates", async () => {
     const root = await releaseGateFixture({ deployButtonEvidence: true });
     await writeFixtureFile(
@@ -1575,6 +1593,27 @@ async function writeDocsCoverageFixtures(root: string) {
       '    return new Response("password reset confirm");',
       '  return new Response("not found");',
       "}",
+      "function emitAuthEventExamples(runtime: never, request: Request) {",
+      '  queueAuthEvent(runtime, request, "signup_success");',
+      '  queueAuthEvent(runtime, request, "signup_failed");',
+      '  queueAuthEvent(runtime, request, "password_login_success");',
+      '  queueAuthEvent(runtime, request, "password_login_failed");',
+      '  queueAuthEvent(runtime, request, "dummy_password_verification");',
+      '  queueAuthEvent(runtime, request, "magic_link_request");',
+      '  queueAuthEvent(runtime, request, "magic_link_consume_failed");',
+      '  queueAuthEvent(runtime, request, "email_verification_request");',
+      '  queueAuthEvent(runtime, request, "email_verification_consume_failed");',
+      '  queueAuthEvent(runtime, request, "password_reset_request");',
+      '  queueAuthEvent(runtime, request, "password_reset_confirm_failed");',
+      '  queueAuthEvent(runtime, request, "session_revoked");',
+      '  queueAuthEvent(runtime, request, "disabled_user_auth_attempt");',
+      '  queueAuthEvent(runtime, request, "rate_limit_hit");',
+      '  tokenConsumeEventInput(runtime, request, "magic_link_consume_success");',
+      '  tokenConsumeEventInput(runtime, request, "email_verification_consume_success");',
+      '  tokenConsumeEventInput(runtime, request, "password_reset_confirm_success");',
+      '  runtime.repos.events.writeAuthEvent({ eventType: "email_send_failed" });',
+      '  runtime.repos.events.writeAuthEvent({ eventType: "config_error" });',
+      "}",
     ].join("\n"),
   );
   await writeFixtureFile(
@@ -1782,14 +1821,18 @@ async function writeSecurityDocsFixtures(root: string) {
     "docs/metrics.md",
     [
       "Operational Metric Map",
+      "signup_success",
       "password_login_success",
       "password_login_failed",
       "dummy_password_verification",
       "signup_failed",
       "duplicate email or username attempts",
       "magic_link_request",
+      "magic_link_consume_failed",
       "email_verification_request",
+      "email_verification_consume_failed",
       "password_reset_request",
+      "password_reset_confirm_failed",
       "rate_limit_hit",
       "email_send_failed",
       "magic_link_consume_success",
@@ -1797,6 +1840,7 @@ async function writeSecurityDocsFixtures(root: string) {
       "password_reset_confirm_success",
       "invalid_or_replayed",
       "session_revoked",
+      "disabled_user_auth_attempt",
       "config_error",
       "malformed_token",
       "invalid_or_expired",

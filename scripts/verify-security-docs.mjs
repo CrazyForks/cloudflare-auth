@@ -119,6 +119,9 @@ for (const text of [
 ]) {
   requireText("docs/metrics.md", docs.metrics, text);
 }
+for (const eventType of await runtimeAuthEventTypes()) {
+  requireText("docs/metrics.md", docs.metrics, eventType);
+}
 
 if (failures.length > 0) {
   console.error(failures.join("\n"));
@@ -196,6 +199,82 @@ async function turnstileEndpointNames() {
     );
 
   return [...names].sort();
+}
+
+async function runtimeAuthEventTypes() {
+  const path = "packages/worker/src/index.ts";
+  let sourceText;
+  try {
+    sourceText = await readFile(path, "utf8");
+  } catch {
+    failures.push(`${path}: could not be read for metrics docs coverage`);
+    return [];
+  }
+
+  const sourceFile = ts.createSourceFile(
+    path,
+    sourceText,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const names = new Set();
+
+  function visit(node) {
+    if (ts.isCallExpression(node)) {
+      const name = callExpressionName(node.expression);
+      if (
+        (name === "queueAuthEvent" || name === "tokenConsumeEventInput") &&
+        node.arguments.length >= 3
+      ) {
+        addStringLiteral(names, node.arguments[2]);
+      }
+      if (name === "writeAuthEvent" && node.arguments.length >= 1) {
+        addObjectEventType(names, node.arguments[0]);
+      }
+    }
+    ts.forEachChild(node, visit);
+  }
+
+  visit(sourceFile);
+
+  if (names.size === 0)
+    failures.push(
+      `${path}: no auth event types found for metrics docs coverage`,
+    );
+
+  return [...names].sort();
+}
+
+function callExpressionName(expression) {
+  if (ts.isIdentifier(expression)) return expression.text;
+  if (ts.isPropertyAccessExpression(expression)) return expression.name.text;
+  return null;
+}
+
+function addObjectEventType(names, expression) {
+  const object = unwrapConstAssertion(expression);
+  if (!ts.isObjectLiteralExpression(object)) return;
+  for (const property of object.properties) {
+    if (
+      !ts.isPropertyAssignment(property) ||
+      propertyNameText(property.name) !== "eventType"
+    ) {
+      continue;
+    }
+    addStringLiteral(names, property.initializer);
+  }
+}
+
+function addStringLiteral(names, expression) {
+  const value = unwrapConstAssertion(expression);
+  if (ts.isStringLiteral(value) || ts.isNoSubstitutionTemplateLiteral(value))
+    names.add(value.text);
+}
+
+function propertyNameText(name) {
+  if (ts.isIdentifier(name) || ts.isStringLiteral(name)) return name.text;
+  return null;
 }
 
 function unwrapConstAssertion(expression) {

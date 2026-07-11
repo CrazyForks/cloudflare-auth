@@ -732,8 +732,8 @@ describe("release gates", () => {
         if: \${{ !inputs.package_names_confirmed }}
         run: |
           exit 1
-      - uses: actions/checkout@v7`,
-      `      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7`,
+      `      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
       - name: Require package-name gate
         if: \${{ false }}
         run: |
@@ -1145,6 +1145,7 @@ async function releaseGateFixture(options: ReleaseGateFixtureOptions) {
   await writeRootPackage(root);
 
   const requiredFiles = [
+    "AGENTS.md",
     ".github/dependabot.yml",
     ".github/workflows/ci.yml",
     ".github/workflows/codeql.yml",
@@ -1160,10 +1161,13 @@ async function releaseGateFixture(options: ReleaseGateFixtureOptions) {
     ".github/ISSUE_TEMPLATE/security-contact.md",
     "docs/alpha-evidence.example.json",
     "docs/alpha.md",
+    "docs/architecture.md",
     "docs/beta-evidence.example.json",
+    "docs/cloudflare-permissions.md",
     "docs/decisions/password-benchmark.md",
     "docs/deploy-button-evidence.example.json",
     "docs/deploy-to-cloudflare.md",
+    "docs/github-actions-security.md",
     "docs/known-limitations.md",
     "docs/package-ownership.example.json",
     "docs/platform-assumptions.md",
@@ -1218,6 +1222,10 @@ async function releaseGateFixture(options: ReleaseGateFixtureOptions) {
     ],
     ["docs/release-checklist.md", releaseChecklistFixtureText()],
     [
+      ".github/workflows/cloudflare-production-smoke.yml",
+      productionSmokeWorkflowFixtureText(),
+    ],
+    [
       "docs/platform-assumptions.md",
       [
         "Date rechecked:",
@@ -1245,9 +1253,24 @@ async function releaseGateFixture(options: ReleaseGateFixtureOptions) {
     ["docs/release-readiness-audit.md", releaseReadinessAuditFixtureText()],
     [
       ".github/workflows/dependency-review.yml",
-      ["actions/dependency-review-action"],
+      [
+        "jobs:",
+        "  dependency-review:",
+        "    steps:",
+        "      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294",
+      ],
     ],
-    [".github/workflows/codeql.yml", ["javascript-typescript"]],
+    [
+      ".github/workflows/codeql.yml",
+      [
+        "jobs:",
+        "  analyze:",
+        "    steps:",
+        "      - uses: github/codeql-action/init@1ad29ea4a422cce9a242a9fae469541dcd08addc",
+        "        with:",
+        "          languages: javascript-typescript",
+      ],
+    ],
     [
       ".github/dependabot.yml",
       ["package-ecosystem: npm", "package-ecosystem: github-actions"],
@@ -1327,7 +1350,15 @@ async function releaseGateFixture(options: ReleaseGateFixtureOptions) {
         '"packageTag"',
       ],
     ],
-    [".github/workflows/wrangler-dev-smoke.yml", ["pnpm smoke:wrangler-dev"]],
+    [
+      ".github/workflows/wrangler-dev-smoke.yml",
+      [
+        "jobs:",
+        "  smoke:",
+        "    steps:",
+        "      - run: pnpm smoke:wrangler-dev",
+      ],
+    ],
     [
       "scripts/smoke-wrangler-dev.mjs",
       [
@@ -1543,22 +1574,92 @@ function releaseWorkflowFixtureText() {
     "      package_names_confirmed:",
     "        required: true",
     "        type: boolean",
+    "permissions:",
+    "  actions: read",
+    "  contents: write",
+    "  id-token: write",
+    "  issues: read",
+    "  pull-requests: write",
+    "  security-events: read",
     "jobs:",
     "  release:",
+    "    if: ${{ github.ref_type == 'branch' && github.ref_name == github.event.repository.default_branch }}",
+    "    environment: npm-production",
     "    steps:",
     "      - name: Require package-name gate",
     "        if: ${{ !inputs.package_names_confirmed }}",
     "        run: |",
     "          exit 1",
-    "      - uses: actions/checkout@v7",
-    "      - run: pnpm install --frozen-lockfile",
-    "      - run: pnpm package:check",
-    "      - run: pnpm release:gates",
-    "      - run: pnpm publish:dry-run",
-    "      - uses: actions/upload-artifact@v4",
+    "      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7",
+    "      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6",
     "        with:",
+    "          registry-url: https://registry.npmjs.org",
+    "      - run: pnpm install --frozen-lockfile",
+    "      - run: pnpm format:check",
+    "      - run: pnpm lint",
+    "      - run: pnpm typecheck",
+    "      - run: pnpm test",
+    "      - run: pnpm test:workers",
+    "      - run: pnpm build",
+    "      - run: pnpm package:check",
+    "      - run: pnpm version-matrix:check",
+    "      - run: pnpm audit --audit-level high",
+    "      - run: pnpm verify:alpha-evidence",
+    "      - run: pnpm verify:deploy-button-evidence",
+    "      - run: pnpm verify:beta-evidence",
+    "      - run: pnpm verify:deploy-template",
+    "      - run: pnpm verify:docs-coverage",
+    "      - run: pnpm verify:migrations",
+    "      - run: pnpm verify:examples",
+    "      - run: pnpm verify:package-ownership",
+    "        env:",
+    '          CF_AUTH_REQUIRE_PACKAGE_OWNERSHIP: "1"',
+    "      - run: pnpm check:package-names",
+    "      - run: pnpm verify:release-audit",
+    "      - run: pnpm verify:security-docs",
+    "      - run: pnpm verify:security-tracker",
+    "      - run: pnpm release:gates",
+    "      - run: pnpm smoke:tarballs",
+    "        env:",
+    '          CF_AUTH_TARBALL_INSTALL: "1"',
+    "      - run: pnpm benchmark:password",
+    "      - run: pnpm publish:dry-run",
+    "      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7",
+    "        with:",
+    "          name: pnpm-publish-dry-run",
     "          path: pnpm-publish-summary.json",
     "      - run: pnpm changeset publish --provenance",
+    "        env:",
+    "          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}",
+  ];
+}
+
+function productionSmokeWorkflowFixtureText() {
+  return [
+    "on:",
+    "  workflow_dispatch:",
+    "    inputs:",
+    "      package_tag:",
+    "        description: Optional beta npm dist-tag or x.y.z-beta.* prerelease version to smoke. Empty uses local package tarballs.",
+    "        required: false",
+    "        type: string",
+    "jobs:",
+    "  production-smoke:",
+    "    if: ${{ github.ref_type == 'branch' && github.ref_name == github.event.repository.default_branch }}",
+    "    environment: cloudflare-production-smoke",
+    "    steps:",
+    "      - run: pnpm install --frozen-lockfile",
+    "      - run: pnpm build",
+    "      - run: pnpm smoke:cloudflare-production",
+    "        env:",
+    '          CF_AUTH_PRODUCTION_SMOKE: "1"',
+    "          CF_AUTH_PRODUCTION_SMOKE_PACKAGE_TAG: ${{ inputs.package_tag }}",
+    "          CF_AUTH_PRODUCTION_SMOKE_WORKER_NAME: ${{ vars.CF_AUTH_PRODUCTION_SMOKE_WORKER_NAME }}",
+    "          CF_AUTH_PRODUCTION_SMOKE_DATABASE_NAME: ${{ vars.CF_AUTH_PRODUCTION_SMOKE_DATABASE_NAME }}",
+    "          CF_AUTH_PRODUCTION_SMOKE_DATABASE_ID: ${{ secrets.CF_AUTH_PRODUCTION_SMOKE_DATABASE_ID }}",
+    "          CF_AUTH_PRODUCTION_SMOKE_ORIGIN: ${{ vars.CF_AUTH_PRODUCTION_SMOKE_ORIGIN }}",
+    "          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}",
+    "          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}",
   ];
 }
 
@@ -1740,6 +1841,7 @@ const configFixtureKeys = [
   "emailVerification.activeTokenPolicy",
   "turnstile.mode",
   "turnstile.endpoints",
+  "turnstile.contextBinding",
   "turnstile.verify",
   "email",
   "redirects.defaultAfterLogin",

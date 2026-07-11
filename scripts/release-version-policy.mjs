@@ -1,18 +1,44 @@
+const semverPattern =
+  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/u;
+
+export function parseReleaseVersion(version) {
+  if (typeof version !== "string") return null;
+  const match = semverPattern.exec(version);
+  if (!match) return null;
+  return {
+    major: Number(match[1]),
+    minor: Number(match[2]),
+    patch: Number(match[3]),
+    prerelease: match[4] ?? null,
+    build: match[5] ?? null,
+  };
+}
+
+export function isValidReleaseVersion(version) {
+  return parseReleaseVersion(version) !== null;
+}
+
 export function isPrivateAlpha(version) {
-  if (typeof version !== "string") return false;
-  return /^\d+\.\d+\.\d+-alpha[.-].+$/u.test(version);
+  const parsed = parseReleaseVersion(version);
+  return (
+    parsed !== null &&
+    parsed.prerelease !== null &&
+    /^alpha[.-].+$/u.test(parsed.prerelease)
+  );
 }
 
 export function isPublicBeta(version) {
-  if (typeof version !== "string") return false;
-  return /^\d+\.\d+\.\d+-beta[.-].+$/u.test(version);
+  const parsed = parseReleaseVersion(version);
+  return (
+    parsed !== null &&
+    parsed.prerelease !== null &&
+    /^beta[.-].+$/u.test(parsed.prerelease)
+  );
 }
 
 export function isStableOneOrLater(version) {
-  if (typeof version !== "string") return false;
-  const match = version.match(/^(\d+)\.(\d+)\.(\d+)(?:-.+)?$/u);
-  if (!match || version.includes("-")) return false;
-  return Number(match[1]) >= 1;
+  const parsed = parseReleaseVersion(version);
+  return parsed !== null && parsed.prerelease === null && parsed.major >= 1;
 }
 
 export function isSupportedReleaseVersion(version) {
@@ -28,16 +54,33 @@ export function isBetaPackageTag(value) {
 }
 
 export function isPublishedReleaseVersion(version) {
-  if (typeof version !== "string") return false;
-  const match = version.match(/^(\d+)\.(\d+)\.(\d+)(?:-[\w.-]+)?$/u);
-  if (!match) return false;
-  return version !== "0.0.0";
+  const parsed = parseReleaseVersion(version);
+  return (
+    parsed !== null &&
+    (parsed.major !== 0 ||
+      parsed.minor !== 0 ||
+      parsed.patch !== 0 ||
+      parsed.prerelease !== null)
+  );
 }
 
 export function isPlaceholderPrerelease(version) {
-  return typeof version === "string" && /^0\.0\.0-.+/u.test(version);
+  const parsed = parseReleaseVersion(version);
+  return (
+    parsed !== null &&
+    parsed.major === 0 &&
+    parsed.minor === 0 &&
+    parsed.patch === 0 &&
+    parsed.prerelease !== null
+  );
 }
 
 export function isPlaceholderReleaseVersion(version) {
-  return typeof version === "string" && /^0\.0\.0(?:-.+)?$/u.test(version);
+  const parsed = parseReleaseVersion(version);
+  return (
+    parsed !== null &&
+    parsed.major === 0 &&
+    parsed.minor === 0 &&
+    parsed.patch === 0
+  );
 }

@@ -9,12 +9,17 @@ on:
         type: boolean
 
 permissions:
+  actions: read
   contents: write
   id-token: write
+  issues: read
   pull-requests: write
+  security-events: read
 
 jobs:
   release:
+    if: ${{ github.ref_type == 'branch' && github.ref_name == github.event.repository.default_branch }}
+    environment: npm-production
     runs-on: ubuntu-latest
     steps:
       - name: Require package-name gate
@@ -22,11 +27,11 @@ jobs:
         run: |
           echo "Set package_names_confirmed=true only after npm package names and public docs are verified."
           exit 1
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: pnpm/action-setup@b0f76dfb45f55f8421693e4803ac7bb65143bd34 # v6
         with:
           version: 11.1.1
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: 22.13.0
           registry-url: https://registry.npmjs.org
@@ -40,12 +45,13 @@ jobs:
       - run: pnpm build
       - run: pnpm package:check
       - run: pnpm version-matrix:check
-      - name: Advisory npm audit
+      - name: High-severity dependency audit
         run: pnpm audit --audit-level high
-        continue-on-error: true
       - run: pnpm verify:alpha-evidence
       - run: pnpm verify:deploy-button-evidence
       - run: pnpm verify:beta-evidence
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
       - run: pnpm verify:deploy-template
       - run: pnpm verify:docs-coverage
       - run: pnpm verify:migrations
@@ -57,13 +63,17 @@ jobs:
       - run: pnpm verify:release-audit
       - run: pnpm verify:security-docs
       - run: pnpm verify:security-tracker
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
       - run: pnpm release:gates
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
       - run: pnpm smoke:tarballs
         env:
           CF_AUTH_TARBALL_INSTALL: "1"
       - run: pnpm benchmark:password
       - run: pnpm publish:dry-run
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: pnpm-publish-dry-run
           path: pnpm-publish-summary.json

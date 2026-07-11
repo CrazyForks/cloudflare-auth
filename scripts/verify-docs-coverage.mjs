@@ -6,12 +6,22 @@ import { isJsonObject } from "./evidence-validation.mjs";
 import { requiredAuthSmokeEndpoints } from "./smoke-endpoints.mjs";
 
 const docs = {
+  agents: await readFile("AGENTS.md", "utf8"),
   api: await readFile("docs/api.md", "utf8"),
   apiReport: await readFile("docs/api-report.md", "utf8"),
+  architecture: await readFile("docs/architecture.md", "utf8"),
   cli: await readFile("docs/cli.md", "utf8"),
   configSchema: await readFile("docs/config-schema.md", "utf8"),
   config: await readFile("docs/configuration.md", "utf8"),
+  cloudflarePermissions: await readFile(
+    "docs/cloudflare-permissions.md",
+    "utf8",
+  ),
   deployment: await readFile("docs/deployment.md", "utf8"),
+  githubActionsSecurity: await readFile(
+    "docs/github-actions-security.md",
+    "utf8",
+  ),
   migrations: await readFile("docs/migrations.md", "utf8"),
   readme: await readFile("README.md", "utf8"),
 };

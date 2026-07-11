@@ -14,13 +14,14 @@ import {
   isPublicBeta,
   isStableOneOrLater,
   isSupportedReleaseVersion,
+  isValidReleaseVersion,
 } from "./release-version-policy.mjs";
 import { requiredAuthSmokeEndpoints } from "./smoke-endpoints.mjs";
 import {
-  blockHasTrimmedLine,
-  workflowInputBlock,
-  workflowNamedStepBlock,
-} from "./workflow-text.mjs";
+  collectActionPinFailures,
+  collectProductionSmokeWorkflowFailures,
+  collectReleaseWorkflowFailures,
+} from "./release-workflow-policy.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = dirname(scriptDir);
@@ -67,12 +68,16 @@ await requireFile(".github/ISSUE_TEMPLATE/alpha-feedback.yml");
 await requireFile(".github/ISSUE_TEMPLATE/bug.yml");
 await requireFile(".github/ISSUE_TEMPLATE/feature-request.yml");
 await requireFile(".github/ISSUE_TEMPLATE/security-contact.md");
+await requireFile("AGENTS.md");
 await requireFile("docs/alpha-evidence.example.json");
 await requireFile("docs/alpha.md");
+await requireFile("docs/architecture.md");
 await requireFile("docs/beta-evidence.example.json");
+await requireFile("docs/cloudflare-permissions.md");
 await requireFile("docs/decisions/password-benchmark.md");
 await requireFile("docs/deploy-button-evidence.example.json");
 await requireFile("docs/deploy-to-cloudflare.md");
+await requireFile("docs/github-actions-security.md");
 await requireFile("docs/known-limitations.md");
 await requireFile("docs/package-ownership.example.json");
 await requireFile("docs/platform-assumptions.md");
@@ -350,19 +355,26 @@ const releaseWorkflow = await requireText(
   ".github/workflows/release.yml",
   "package_names_confirmed",
 );
-requireReleaseWorkflowPackageNameGate(releaseWorkflow);
-await requireText(
-  ".github/workflows/release.yml",
-  "pnpm install --frozen-lockfile",
+failures.push(...collectReleaseWorkflowFailures(releaseWorkflow));
+const productionSmokeWorkflow = await requireText(
+  ".github/workflows/cloudflare-production-smoke.yml",
+  "workflow_dispatch:",
 );
-await requireText(".github/workflows/release.yml", "pnpm package:check");
-await requireText(".github/workflows/release.yml", "pnpm release:gates");
-await requireText(".github/workflows/release.yml", "pnpm publish:dry-run");
-await requireText(".github/workflows/release.yml", "pnpm-publish-summary.json");
-await requireText(
-  ".github/workflows/release.yml",
-  "pnpm changeset publish --provenance",
+failures.push(
+  ...collectProductionSmokeWorkflowFailures(productionSmokeWorkflow),
 );
+for (const workflowPath of [
+  ".github/workflows/ci.yml",
+  ".github/workflows/cloudflare-production-smoke.yml",
+  ".github/workflows/codeql.yml",
+  ".github/workflows/dependency-review.yml",
+  ".github/workflows/examples.yml",
+  ".github/workflows/published-quickstart-smoke.yml",
+  ".github/workflows/release.yml",
+  ".github/workflows/wrangler-dev-smoke.yml",
+]) {
+  await requirePinnedWorkflowActions(workflowPath);
+}
 await requireText(
   "docs/release-checklist.md",
   "opt-in Wrangler dev smoke workflow",
@@ -378,6 +390,9 @@ requireVerifier("scripts/verify-security-docs.mjs");
 const stablePackages = packages.filter((pkg) =>
   isStableOneOrLater(pkg.version),
 );
+const invalidReleasePackages = packages.filter(
+  (pkg) => !isValidReleaseVersion(pkg.version),
+);
 const unsupportedReleasePackages = packages.filter(
   (pkg) =>
     isPublishedReleaseVersion(pkg.version) &&
@@ -392,6 +407,9 @@ const betaOrStablePackages = packages.filter(
 const publishedReleasePackages = packages.filter((pkg) =>
   isPublishedReleaseVersion(pkg.version),
 );
+for (const pkg of invalidReleasePackages) {
+  failures.push(`${pkg.name}@${pkg.version}: version must be valid SemVer`);
+}
 for (const pkg of unsupportedReleasePackages) {
   failures.push(
     `${pkg.name}@${pkg.version}: release versions must use alpha, beta, or stable 1.0+ channels from the implementation plan`,
@@ -574,49 +592,15 @@ function requireVerifier(script, env) {
   }
 }
 
-function requireReleaseWorkflowPackageNameGate(releaseWorkflow) {
-  const packageNameInput = workflowInputBlock(
-    releaseWorkflow,
-    "package_names_confirmed",
-  );
-  if (
-    !blockHasTrimmedLine(packageNameInput, "required: true") ||
-    !blockHasTrimmedLine(packageNameInput, "type: boolean")
-  ) {
-    failures.push(
-      ".github/workflows/release.yml: package_names_confirmed must be a required boolean workflow input",
-    );
+async function requirePinnedWorkflowActions(path) {
+  let text = "";
+  try {
+    text = await readFile(path, "utf8");
+  } catch {
+    failures.push(`${path}: could not be read`);
+    return;
   }
-
-  const packageNameGate = workflowNamedStepBlock(
-    releaseWorkflow,
-    "Require package-name gate",
-  );
-  if (
-    !blockHasTrimmedLine(
-      packageNameGate,
-      "if: ${{ !inputs.package_names_confirmed }}",
-    ) ||
-    !blockHasTrimmedLine(packageNameGate, "exit 1")
-  ) {
-    failures.push(
-      ".github/workflows/release.yml: package_names_confirmed must be enforced by an early failing gate step",
-    );
-  }
-
-  const packageNameGateIndex = releaseWorkflow.indexOf(
-    "name: Require package-name gate",
-  );
-  const checkoutIndex = releaseWorkflow.indexOf("uses: actions/checkout");
-  if (
-    packageNameGateIndex === -1 ||
-    checkoutIndex === -1 ||
-    packageNameGateIndex > checkoutIndex
-  ) {
-    failures.push(
-      ".github/workflows/release.yml: package-name gate must run before checkout",
-    );
-  }
+  failures.push(...collectActionPinFailures(text, path));
 }
 
 function releaseChecklistScripts(scripts) {

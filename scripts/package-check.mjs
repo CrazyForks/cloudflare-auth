@@ -16,10 +16,10 @@ import {
   isSupportedReleaseVersion,
 } from "./release-version-policy.mjs";
 import {
-  blockHasTrimmedLine,
-  workflowInputBlock,
-  workflowNamedStepBlock,
-} from "./workflow-text.mjs";
+  collectActionPinFailures,
+  collectProductionSmokeWorkflowFailures,
+  collectReleaseWorkflowFailures,
+} from "./release-workflow-policy.mjs";
 
 const failures = [];
 const rootPackage = (await readJsonObject("package.json")) ?? {};
@@ -666,6 +666,9 @@ async function verifyPackageNamingDocs() {
 
 async function verifyDocsManifest() {
   for (const file of [
+    "AGENTS.md",
+    "docs/architecture.md",
+    "docs/cloudflare-permissions.md",
     "docs/decisions/package-naming.md",
     "docs/decisions/password-benchmark.md",
     "docs/non-goals.md",
@@ -673,6 +676,7 @@ async function verifyDocsManifest() {
     "docs/existing-hono-app.md",
     "docs/existing-worker-app.md",
     "docs/deployment.md",
+    "docs/github-actions-security.md",
     "docs/cloudflare-email.md",
     "docs/custom-email-adapter.md",
     "docs/local-development.md",
@@ -915,134 +919,13 @@ async function verifyReleaseControls() {
     ".github/workflows/release.yml",
     "utf8",
   );
-  for (const needle of [
-    "id-token: write",
-    "package_names_confirmed",
-    "registry-url: https://registry.npmjs.org",
-    "pnpm install --frozen-lockfile",
-    "pnpm format:check",
-    "pnpm lint",
-    "pnpm typecheck",
-    "pnpm test",
-    "pnpm test:workers",
-    "pnpm build",
-    "pnpm package:check",
-    "pnpm version-matrix:check",
-    "pnpm audit --audit-level high",
-    "continue-on-error: true",
-    "pnpm verify:alpha-evidence",
-    "pnpm verify:beta-evidence",
-    "pnpm verify:deploy-button-evidence",
-    "pnpm verify:deploy-template",
-    "pnpm verify:docs-coverage",
-    "pnpm verify:migrations",
-    "pnpm verify:examples",
-    "pnpm verify:package-ownership",
-    "CF_AUTH_REQUIRE_PACKAGE_OWNERSHIP",
-    "pnpm check:package-names",
-    "pnpm verify:release-audit",
-    "pnpm verify:security-docs",
-    "pnpm verify:security-tracker",
-    "pnpm release:gates",
-    "pnpm smoke:tarballs",
-    "CF_AUTH_TARBALL_INSTALL",
-    "pnpm benchmark:password",
-    "pnpm publish:dry-run",
-    "actions/upload-artifact",
-    "pnpm-publish-dry-run",
-    "pnpm-publish-summary.json",
-    "pnpm changeset publish --provenance",
-    "NODE_AUTH_TOKEN",
-    "secrets.NPM_TOKEN",
-  ]) {
-    if (!releaseWorkflow.includes(needle)) {
-      failures.push(`.github/workflows/release.yml: missing ${needle}`);
-    }
-  }
-  for (const script of releaseWorkflowScripts(rootPackage.scripts ?? {})) {
-    const needle = `pnpm ${script}`;
-    if (!releaseWorkflow.includes(needle)) {
-      failures.push(`.github/workflows/release.yml: missing ${needle}`);
-    }
-  }
-  const packageNameInput = workflowInputBlock(
-    releaseWorkflow,
-    "package_names_confirmed",
+  failures.push(
+    ...collectReleaseWorkflowFailures(releaseWorkflow, {
+      requiredRuns: releaseWorkflowScripts(rootPackage.scripts ?? {}).map(
+        (script) => `pnpm ${script}`,
+      ),
+    }),
   );
-  if (
-    !blockHasTrimmedLine(packageNameInput, "required: true") ||
-    !blockHasTrimmedLine(packageNameInput, "type: boolean")
-  ) {
-    failures.push(
-      ".github/workflows/release.yml: package_names_confirmed must be a required boolean workflow input",
-    );
-  }
-  const packageNameGate = workflowNamedStepBlock(
-    releaseWorkflow,
-    "Require package-name gate",
-  );
-  if (
-    !blockHasTrimmedLine(
-      packageNameGate,
-      "if: ${{ !inputs.package_names_confirmed }}",
-    ) ||
-    !blockHasTrimmedLine(packageNameGate, "exit 1")
-  ) {
-    failures.push(
-      ".github/workflows/release.yml: package_names_confirmed must be enforced by an early failing gate step",
-    );
-  }
-  const packageNameGateIndex = releaseWorkflow.indexOf(
-    "name: Require package-name gate",
-  );
-  const checkoutIndex = releaseWorkflow.indexOf("uses: actions/checkout");
-  if (
-    packageNameGateIndex === -1 ||
-    checkoutIndex === -1 ||
-    packageNameGateIndex > checkoutIndex
-  ) {
-    failures.push(
-      ".github/workflows/release.yml: package-name gate must run before checkout",
-    );
-  }
-  if (
-    !/-\s+run:\s+pnpm smoke:tarballs\s*\n\s+env:\s*\n\s+CF_AUTH_TARBALL_INSTALL:\s+"1"/u.test(
-      releaseWorkflow,
-    )
-  ) {
-    failures.push(
-      '.github/workflows/release.yml: pnpm smoke:tarballs must run with CF_AUTH_TARBALL_INSTALL: "1"',
-    );
-  }
-  requireOrderedText(".github/workflows/release.yml", releaseWorkflow, [
-    "pnpm install --frozen-lockfile",
-    "pnpm format:check",
-    "pnpm lint",
-    "pnpm typecheck",
-    "pnpm test",
-    "pnpm test:workers",
-    "pnpm build",
-    "pnpm package:check",
-    "pnpm version-matrix:check",
-    "pnpm audit --audit-level high",
-    "pnpm verify:alpha-evidence",
-    "pnpm verify:deploy-button-evidence",
-    "pnpm verify:beta-evidence",
-    "pnpm verify:deploy-template",
-    "pnpm verify:docs-coverage",
-    "pnpm verify:migrations",
-    "pnpm verify:examples",
-    "pnpm verify:package-ownership",
-    "pnpm check:package-names",
-    "pnpm verify:release-audit",
-    "pnpm verify:security-docs",
-    "pnpm verify:security-tracker",
-    "pnpm release:gates",
-    "pnpm smoke:tarballs",
-    "pnpm benchmark:password",
-    "pnpm publish:dry-run",
-    "pnpm changeset publish --provenance",
-  ]);
 
   const releaseChecklist = await readFile("docs/release-checklist.md", "utf8");
   const everyReleaseChecklist = markdownSection(
@@ -1094,25 +977,22 @@ async function verifyReleaseControls() {
     ".github/workflows/cloudflare-production-smoke.yml",
     "utf8",
   );
-  for (const needle of [
-    "workflow_dispatch:",
-    "package_tag:",
-    "Optional beta npm dist-tag or x.y.z-beta.* prerelease version to smoke. Empty uses local package tarballs.",
-    "pnpm smoke:cloudflare-production",
-    'CF_AUTH_PRODUCTION_SMOKE: "1"',
-    "CF_AUTH_PRODUCTION_SMOKE_PACKAGE_TAG",
-    "CF_AUTH_PRODUCTION_SMOKE_WORKER_NAME",
-    "CF_AUTH_PRODUCTION_SMOKE_DATABASE_NAME",
-    "CF_AUTH_PRODUCTION_SMOKE_DATABASE_ID",
-    "CF_AUTH_PRODUCTION_SMOKE_ORIGIN",
-    "CLOUDFLARE_ACCOUNT_ID",
-    "CLOUDFLARE_API_TOKEN",
+  failures.push(
+    ...collectProductionSmokeWorkflowFailures(productionSmokeWorkflow),
+  );
+
+  for (const workflowPath of [
+    ".github/workflows/ci.yml",
+    ".github/workflows/cloudflare-production-smoke.yml",
+    ".github/workflows/codeql.yml",
+    ".github/workflows/dependency-review.yml",
+    ".github/workflows/examples.yml",
+    ".github/workflows/published-quickstart-smoke.yml",
+    ".github/workflows/release.yml",
+    ".github/workflows/wrangler-dev-smoke.yml",
   ]) {
-    if (!productionSmokeWorkflow.includes(needle)) {
-      failures.push(
-        `.github/workflows/cloudflare-production-smoke.yml: missing ${needle}`,
-      );
-    }
+    const workflow = await readFile(workflowPath, "utf8");
+    failures.push(...collectActionPinFailures(workflow, workflowPath));
   }
 
   const publishedQuickstartWorkflow = await readFile(
@@ -1336,16 +1216,24 @@ async function verifyWorkflowToolchainControls() {
     ".github/workflows/cloudflare-production-smoke.yml",
   ]) {
     const text = await readFile(file, "utf8");
-    if (!text.includes("pnpm/action-setup@v6")) {
-      failures.push(`${file}: missing pnpm/action-setup@v6`);
+    if (
+      !text.includes(
+        "pnpm/action-setup@b0f76dfb45f55f8421693e4803ac7bb65143bd34",
+      )
+    ) {
+      failures.push(`${file}: missing pinned pnpm/action-setup v6`);
     }
     if (!text.includes(`version: ${matrix.pnpm}`)) {
       failures.push(
         `${file}: pnpm/action-setup version must be ${matrix.pnpm}`,
       );
     }
-    if (!text.includes("actions/setup-node@v6")) {
-      failures.push(`${file}: missing actions/setup-node@v6`);
+    if (
+      !text.includes(
+        "actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e",
+      )
+    ) {
+      failures.push(`${file}: missing pinned actions/setup-node v6`);
     }
     if (!text.includes(`node-version: ${nodeVersion}`)) {
       failures.push(`${file}: node-version must be ${nodeVersion}`);
@@ -1362,7 +1250,7 @@ async function verifySecurityAutomationControls() {
     "pull_request:",
     "contents: read",
     "pull-requests: read",
-    "actions/dependency-review-action@v5",
+    "actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294",
   ]) {
     if (!dependencyReviewWorkflow.includes(needle)) {
       failures.push(
@@ -1376,9 +1264,9 @@ async function verifySecurityAutomationControls() {
     "pull_request:",
     "branches: [main]",
     "security-events: write",
-    "github/codeql-action/init@v4",
+    "github/codeql-action/init@1ad29ea4a422cce9a242a9fae469541dcd08addc",
     "languages: javascript-typescript",
-    "github/codeql-action/analyze@v4",
+    "github/codeql-action/analyze@1ad29ea4a422cce9a242a9fae469541dcd08addc",
   ]) {
     if (!codeqlWorkflow.includes(needle)) {
       failures.push(`.github/workflows/codeql.yml: missing ${needle}`);

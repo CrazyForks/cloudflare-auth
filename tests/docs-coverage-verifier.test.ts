@@ -30,7 +30,7 @@ describe("docs coverage verifier", () => {
 async function docsCoverageFixture() {
   const sourceRoot = process.cwd();
   const root = await mkdtemp(join(tmpdir(), "cf-auth-docs-coverage-"));
-  for (const path of ["README.md", "docs", "packages"]) {
+  for (const path of ["AGENTS.md", "README.md", "docs", "packages"]) {
     await cp(join(sourceRoot, path), join(root, path), { recursive: true });
   }
   return root;

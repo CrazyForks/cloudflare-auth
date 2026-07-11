@@ -433,7 +433,7 @@ describe("package checks", { timeout: 60_000 }, () => {
 
     expect(result.status).toBe(1);
     expect(result.stderr).toContain(
-      '.github/workflows/cloudflare-production-smoke.yml: missing CF_AUTH_PRODUCTION_SMOKE: "1"',
+      ".github/workflows/cloudflare-production-smoke.yml: production smoke must bind CF_AUTH_PRODUCTION_SMOKE",
     );
   });
 
@@ -802,7 +802,7 @@ describe("package checks", { timeout: 60_000 }, () => {
 
     expect(result.status).toBe(1);
     expect(result.stderr).toContain(
-      ".github/workflows/release.yml: missing pnpm verify:new-gate",
+      ".github/workflows/release.yml: release job must execute pnpm verify:new-gate",
     );
   });
 
@@ -818,7 +818,7 @@ describe("package checks", { timeout: 60_000 }, () => {
 
     expect(result.status).toBe(1);
     expect(result.stderr).toContain(
-      ".github/workflows/release.yml: missing pnpm-publish-summary.json",
+      ".github/workflows/release.yml: dry-run summary must be uploaded before provenance publish",
     );
   });
 
@@ -905,8 +905,8 @@ describe("package checks", { timeout: 60_000 }, () => {
     await replaceFixtureText(
       root,
       ".github/workflows/dependency-review.yml",
-      "actions/dependency-review-action@v5",
-      "actions/checkout@v5",
+      "actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294",
+      "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0",
     );
     await replaceFixtureText(
       root,
@@ -924,7 +924,7 @@ describe("package checks", { timeout: 60_000 }, () => {
 
     expect(result.status).toBe(1);
     expect(result.stderr).toContain(
-      ".github/workflows/dependency-review.yml: missing actions/dependency-review-action@v5",
+      ".github/workflows/dependency-review.yml: missing actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294",
     );
     expect(result.stderr).toContain(
       ".github/workflows/codeql.yml: missing languages: javascript-typescript",
@@ -946,7 +946,7 @@ describe("package checks", { timeout: 60_000 }, () => {
 
     expect(result.status).toBe(1);
     expect(result.stderr).toContain(
-      ".github/workflows/release.yml: missing NODE_AUTH_TOKEN",
+      ".github/workflows/release.yml: provenance publish must receive NODE_AUTH_TOKEN from secrets.NPM_TOKEN",
     );
   });
 
@@ -992,8 +992,8 @@ describe("package checks", { timeout: 60_000 }, () => {
         run: |
           echo "Set package_names_confirmed=true only after npm package names and public docs are verified."
           exit 1
-      - uses: actions/checkout@v7`,
-      `      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7`,
+      `      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
       - name: Require package-name gate
         if: \${{ !inputs.package_names_confirmed }}
         run: |
@@ -1384,6 +1384,7 @@ async function packageCheckFixture() {
     "vitest.config.ts",
     "vitest.workers.config.ts",
     "LICENSE",
+    "AGENTS.md",
     "README.md",
     "SECURITY.md",
     "CONTRIBUTING.md",

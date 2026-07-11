@@ -1,4 +1,14 @@
-import { mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  stat,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -63,6 +73,7 @@ describe("CLI MVP", () => {
       name: string;
       packageManager: string;
       dependencies: Record<string, string>;
+      devDependencies: Record<string, string>;
       scripts: Record<string, string>;
       pnpm: { onlyBuiltDependencies: string[] };
     };
@@ -77,6 +88,12 @@ describe("CLI MVP", () => {
     expect(generatedPackage.dependencies["@cf-auth/worker"]).toBe(
       generatedPackageVersion,
     );
+    expect(generatedPackage.dependencies.hono).toBe("4.12.29");
+    expect(generatedPackage.devDependencies).toMatchObject({
+      typescript: "7.0.2",
+      wrangler: "4.110.0",
+      vitest: "4.1.10",
+    });
     expect(generatedPackage.scripts.test).toBe("vitest run --passWithNoTests");
     expect(generatedPackage.pnpm.onlyBuiltDependencies).toEqual([
       "esbuild",
@@ -95,6 +112,9 @@ describe("CLI MVP", () => {
     expect(tsconfig).not.toContain("../../tsconfig");
     const devVars = await readFile(join(app, ".dev.vars"), "utf8");
     expect(devVars).toMatch(/AUTH_SECRET=k_dev\.[A-Za-z0-9_-]{43}(?:\n|$)/);
+    if (process.platform !== "win32") {
+      expect((await stat(join(app, ".dev.vars"))).mode & 0o777).toBe(0o600);
+    }
     const gitignore = await readFile(join(app, ".gitignore"), "utf8");
     expect(gitignore).toContain("*.cf-auth-backup");
     const source = await readFile(join(app, "src", "index.ts"), "utf8");
@@ -103,7 +123,7 @@ describe("CLI MVP", () => {
     const wrangler = await readFile(join(app, "wrangler.jsonc"), "utf8");
     expect(wrangler).toContain('"$schema"');
     expect(wrangler).toContain('"name": "my-app-dev"');
-    expect(wrangler).toContain('"compatibility_date": "2026-05-15"');
+    expect(wrangler).toContain('"compatibility_date": "2026-07-11"');
     expect(wrangler).toContain('"compatibility_flags": ["nodejs_compat"]');
     expect(wrangler).toContain('"database_name": "my-app-auth-dev"');
     expect(wrangler).toContain('"database_id": "local-development"');
@@ -116,6 +136,144 @@ describe("CLI MVP", () => {
       ).resolves.toBe(await readFile(join("migrations", file), "utf8"));
     }
     expect(output.join("\n")).toContain("Initialized Cloudflare Auth");
+  });
+
+  it("merges required gitignore entries idempotently before creating local secrets", async () => {
+    const cwd = await tempDir();
+    const app = join(cwd, "existing-ignore");
+    await mkdir(app);
+    await writeFile(join(app, ".gitignore"), "coverage\n.dev.vars\n");
+
+    expect(await runCli(["init", "existing-ignore"], { cwd })).toBe(0);
+    const localSecret = await readFile(join(app, ".dev.vars"), "utf8");
+    if (process.platform !== "win32") {
+      await chmod(join(app, ".dev.vars"), 0o644);
+    }
+    expect(await runCli(["init", "existing-ignore"], { cwd })).toBe(0);
+
+    const lines = (await readFile(join(app, ".gitignore"), "utf8"))
+      .trim()
+      .split("\n");
+    expect(lines[0]).toBe("coverage");
+    for (const required of [
+      ".dev.vars",
+      "*.cf-auth-backup",
+      ".wrangler",
+      "node_modules",
+      "dist",
+    ]) {
+      expect(lines.filter((line) => line === required)).toHaveLength(1);
+    }
+    expect(existsSync(join(app, ".dev.vars"))).toBe(true);
+    await expect(readFile(join(app, ".dev.vars"), "utf8")).resolves.toBe(
+      localSecret,
+    );
+    if (process.platform !== "win32") {
+      expect((await stat(join(app, ".dev.vars"))).mode & 0o777).toBe(0o600);
+    }
+  });
+
+  it("rejects symlinked init children, file targets, and dangling local-secret targets", async () => {
+    const cwd = await tempDir();
+    const outside = join(cwd, "outside");
+    const unsafeChild = join(cwd, "unsafe-child");
+    await mkdir(outside);
+    await mkdir(unsafeChild);
+    await symlink(outside, join(unsafeChild, "src"), "dir");
+    const childErrors: string[] = [];
+
+    expect(
+      await runCli(["init", "unsafe-child"], {
+        cwd,
+        stderr: (line) => childErrors.push(line),
+      }),
+    ).toBe(1);
+    expect(childErrors.join("\n")).toContain(
+      "symbolic-link directories are not allowed",
+    );
+    expect(await readdir(outside)).toEqual([]);
+
+    const unsafePackage = join(cwd, "unsafe-package");
+    const outsidePackage = join(outside, "package.json");
+    await mkdir(unsafePackage);
+    await writeFile(outsidePackage, '{"name":"outside"}\n');
+    await symlink(outsidePackage, join(unsafePackage, "package.json"));
+    const packageErrors: string[] = [];
+    expect(
+      await runCli(["init", "unsafe-package"], {
+        cwd,
+        stderr: (line) => packageErrors.push(line),
+      }),
+    ).toBe(1);
+    expect(packageErrors.join("\n")).toContain(
+      "symbolic links are not allowed",
+    );
+    await expect(readFile(outsidePackage, "utf8")).resolves.toBe(
+      '{"name":"outside"}\n',
+    );
+
+    const unsafeConfig = join(cwd, "unsafe-config");
+    const outsideConfig = join(outside, "wrangler.jsonc");
+    await mkdir(unsafeConfig);
+    await writeFile(outsideConfig, '{"vars":{"AUTH_ENV":"development"}}\n');
+    await symlink(outsideConfig, join(unsafeConfig, "wrangler.jsonc"));
+    const configErrors: string[] = [];
+    expect(
+      await runCli(["init", "unsafe-config"], {
+        cwd,
+        stderr: (line) => configErrors.push(line),
+      }),
+    ).toBe(1);
+    expect(configErrors.join("\n")).toContain("symbolic links are not allowed");
+    await expect(readFile(outsideConfig, "utf8")).resolves.toBe(
+      '{"vars":{"AUTH_ENV":"development"}}\n',
+    );
+
+    const unsafeBackup = join(cwd, "unsafe-backup");
+    const outsideBackup = join(outside, "backup");
+    await mkdir(unsafeBackup);
+    const repairableConfig =
+      JSON.stringify({ name: "unsafe-backup", vars: {} }, null, 2) + "\n";
+    await writeFile(join(unsafeBackup, "wrangler.jsonc"), repairableConfig);
+    await writeFile(outsideBackup, "outside backup\n");
+    await symlink(
+      outsideBackup,
+      join(unsafeBackup, "wrangler.jsonc.cf-auth-backup"),
+    );
+    const backupErrors: string[] = [];
+    expect(
+      await runCli(["init", "unsafe-backup"], {
+        cwd,
+        stderr: (line) => backupErrors.push(line),
+      }),
+    ).toBe(1);
+    expect(backupErrors.join("\n")).toContain("symbolic links are not allowed");
+    await expect(readFile(outsideBackup, "utf8")).resolves.toBe(
+      "outside backup\n",
+    );
+    await expect(
+      readFile(join(unsafeBackup, "wrangler.jsonc"), "utf8"),
+    ).resolves.toBe(repairableConfig);
+
+    const dangling = join(cwd, "dangling-secret");
+    await mkdir(dangling);
+    await writeFile(join(dangling, ".gitignore"), "coverage\n");
+    const missingSecretTarget = join(outside, "missing-secret");
+    await symlink(missingSecretTarget, join(dangling, ".dev.vars"));
+    const danglingErrors: string[] = [];
+    expect(
+      await runCli(["init", "dangling-secret"], {
+        cwd,
+        stderr: (line) => danglingErrors.push(line),
+      }),
+    ).toBe(1);
+    expect(danglingErrors.join("\n")).toContain(
+      "symbolic links are not allowed",
+    );
+    expect(existsSync(missingSecretTarget)).toBe(false);
+    expect(await readFile(join(dangling, ".gitignore"), "utf8")).toContain(
+      ".dev.vars",
+    );
   });
 
   it("scaffolds bundled migrations without relying on the repo cwd", async () => {
@@ -298,7 +456,7 @@ describe("CLI MVP", () => {
     expect(packageJson.dependencies["@cf-auth/email-cloudflare"]).toBe(
       generatedPackageVersion,
     );
-    expect(packageJson.devDependencies.wrangler).toBe("4.90.1");
+    expect(packageJson.devDependencies.wrangler).toBe("4.110.0");
     await expect(readFile(join(app, "src", "index.ts"), "utf8")).resolves.toBe(
       existingSource,
     );
@@ -523,7 +681,7 @@ describe("CLI MVP", () => {
       };
     };
     expect(wrangler.$schema).toBe("./node_modules/wrangler/config-schema.json");
-    expect(wrangler.compatibility_date).toBe("2026-05-15");
+    expect(wrangler.compatibility_date).toBe("2026-07-11");
     expect(wrangler.compatibility_flags).toContain("nodejs_compat");
     expect(wrangler.vars.AUTH_ENV).toBe("development");
     expect(wrangler.observability).toEqual({
@@ -557,6 +715,272 @@ describe("CLI MVP", () => {
       "Repaired Wrangler auth bindings and vars.",
     );
     expect(output.join("\n")).toContain("wrangler.jsonc.cf-auth-backup");
+  });
+
+  it("provisions an existing production D1 binding with a safe backup and is idempotent", async () => {
+    const cwd = await tempDir();
+    await writeWrangler(cwd);
+    const path = join(cwd, "wrangler.jsonc");
+    const config = JSON.parse(await readFile(path, "utf8")) as {
+      account_id?: string;
+      env: {
+        production: {
+          account_id?: string;
+          d1_databases: Array<{ database_id?: string }>;
+        };
+      };
+    };
+    config.account_id = "acct_root";
+    config.env.production.account_id = "acct_environment";
+    config.env.production.d1_databases[0]!.database_id = "REPLACE_D1_ID";
+    const original = `${JSON.stringify(config, null, 2).replace(
+      "{\n",
+      "{\n  // preserved in the provision backup\n",
+    )}\n`;
+    await writeFile(path, original);
+    const calls: string[] = [];
+    const output: string[] = [];
+    const runner = (command: string, args: string[]) => {
+      calls.push([command, ...args].join(" "));
+      if (args[0] === "whoami") {
+        return {
+          status: 0,
+          stdout: healthyWhoamiJson([
+            { id: "acct_environment" },
+            { id: "acct_other" },
+          ]),
+          stderr: "",
+        };
+      }
+      return {
+        status: 0,
+        stdout: JSON.stringify([{ name: "app-auth", uuid: "uuid-production" }]),
+        stderr: "",
+      };
+    };
+
+    expect(
+      await runCli(["provision", "--env", "production"], {
+        cwd,
+        stdout: (line) => output.push(line),
+        runCommand: runner,
+      }),
+    ).toBe(0);
+    expect(calls).toEqual([
+      "wrangler whoami --json",
+      "wrangler d1 list --json --env production",
+    ]);
+    const patched = JSON.parse(await readFile(path, "utf8")) as {
+      env: { production: { d1_databases: Array<{ database_id?: string }> } };
+    };
+    expect(patched.env.production.d1_databases[0]?.database_id).toBe(
+      "uuid-production",
+    );
+    await expect(
+      readFile(join(cwd, "wrangler.jsonc.cf-auth-backup"), "utf8"),
+    ).resolves.toBe(original);
+    expect(output.join("\n")).toContain("Found D1 database app-auth");
+    expect(output.join("\n")).toContain("Patched AUTH_DB database_id");
+    expect(output.join("\n")).toContain("Backup written to");
+    expect(await readFile(path, "utf8")).not.toContain(
+      "preserved in the provision backup",
+    );
+
+    const afterFirstRun = await readFile(path, "utf8");
+    const backupAfterFirstRun = await readFile(
+      join(cwd, "wrangler.jsonc.cf-auth-backup"),
+      "utf8",
+    );
+    calls.length = 0;
+    output.length = 0;
+    expect(
+      await runCli(["provision", "--env", "production"], {
+        cwd,
+        stdout: (line) => output.push(line),
+        runCommand: runner,
+      }),
+    ).toBe(0);
+    expect(calls).toEqual([
+      "wrangler whoami --json",
+      "wrangler d1 list --json --env production",
+    ]);
+    await expect(readFile(path, "utf8")).resolves.toBe(afterFirstRun);
+    await expect(
+      readFile(join(cwd, "wrangler.jsonc.cf-auth-backup"), "utf8"),
+    ).resolves.toBe(backupAfterFirstRun);
+    expect(output.join("\n")).toContain("AUTH_DB is already provisioned");
+  });
+
+  it("creates and re-discovers production D1 with current location flags", async () => {
+    const cwd = await tempDir();
+    await writeWrangler(cwd);
+    const path = join(cwd, "wrangler.jsonc");
+    const config = JSON.parse(await readFile(path, "utf8")) as {
+      account_id?: string;
+      env: {
+        production: {
+          account_id?: string;
+          d1_databases: Array<{ database_id?: string }>;
+        };
+      };
+    };
+    delete config.account_id;
+    delete config.env.production.account_id;
+    delete config.env.production.d1_databases[0]!.database_id;
+    await writeFile(path, JSON.stringify(config, null, 2) + "\n");
+    const preexistingBackup = join(cwd, "wrangler.jsonc.cf-auth-backup");
+    await writeFile(preexistingBackup, "earlier backup\n");
+    const originalAccountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+    delete process.env.CLOUDFLARE_ACCOUNT_ID;
+    const calls: string[] = [];
+    const output: string[] = [];
+    let listCount = 0;
+    try {
+      const code = await runCli(
+        ["provision", "--env", "production", "--location", "weur"],
+        {
+          cwd,
+          stdout: (line) => output.push(line),
+          runCommand: (command, args) => {
+            calls.push([command, ...args].join(" "));
+            if (args[0] === "whoami") {
+              return {
+                status: 0,
+                stdout: healthyWhoamiJson([{ id: "acct_only" }]),
+                stderr: "",
+              };
+            }
+            if (args[0] === "d1" && args[1] === "list") {
+              listCount += 1;
+              return {
+                status: 0,
+                stdout: JSON.stringify(
+                  listCount === 1
+                    ? []
+                    : [{ name: "app-auth", uuid: "uuid-created" }],
+                ),
+                stderr: "",
+              };
+            }
+            return { status: 0, stdout: "created\n", stderr: "" };
+          },
+        },
+      );
+      expect(code).toBe(0);
+    } finally {
+      if (originalAccountId === undefined) {
+        delete process.env.CLOUDFLARE_ACCOUNT_ID;
+      } else {
+        process.env.CLOUDFLARE_ACCOUNT_ID = originalAccountId;
+      }
+    }
+
+    expect(calls).toEqual([
+      "wrangler whoami --json",
+      "wrangler d1 list --json --env production",
+      "wrangler d1 create app-auth --location weur --env production",
+      "wrangler d1 list --json --env production",
+    ]);
+    const patched = JSON.parse(await readFile(path, "utf8")) as {
+      account_id?: string;
+      env: { production: { d1_databases: Array<{ database_id?: string }> } };
+    };
+    expect(patched.account_id).toBe("acct_only");
+    expect(patched.env.production.d1_databases[0]?.database_id).toBe(
+      "uuid-created",
+    );
+    await expect(readFile(preexistingBackup, "utf8")).resolves.toBe(
+      "earlier backup\n",
+    );
+    expect(output.join("\n")).toContain("Existing backup preserved at");
+    expect(output.join("\n")).not.toContain("Backup written to");
+  });
+
+  it("keeps provision dry-runs mutation-free and accepts Wrangler jurisdiction flags", async () => {
+    const cwd = await tempDir();
+    await writeWrangler(cwd);
+    const path = join(cwd, "wrangler.jsonc");
+    const config = JSON.parse(await readFile(path, "utf8")) as {
+      env: { production: { d1_databases: Array<{ database_id?: string }> } };
+    };
+    config.env.production.d1_databases[0]!.database_id = "REPLACE_D1_ID";
+    const original = JSON.stringify(config, null, 2) + "\n";
+    await writeFile(path, original);
+    const output: string[] = [];
+    let calls = 0;
+
+    expect(
+      await runCli(
+        [
+          "provision",
+          "--dry-run",
+          "--env",
+          "production",
+          "--jurisdiction",
+          "eu",
+        ],
+        {
+          cwd,
+          stdout: (line) => output.push(line),
+          runCommand: () => {
+            calls += 1;
+            return { status: 1, stdout: "", stderr: "unexpected" };
+          },
+        },
+      ),
+    ).toBe(0);
+    expect(calls).toBe(0);
+    expect(output.join("\n")).toContain(
+      "wrangler d1 create app-auth --jurisdiction eu --env production",
+    );
+    await expect(readFile(path, "utf8")).resolves.toBe(original);
+    expect(existsSync(join(cwd, "wrangler.jsonc.cf-auth-backup"))).toBe(false);
+  });
+
+  it("refuses ambiguous provision accounts before D1 operations", async () => {
+    const cwd = await tempDir();
+    await writeWrangler(cwd);
+    const path = join(cwd, "wrangler.jsonc");
+    const config = JSON.parse(await readFile(path, "utf8")) as {
+      account_id?: string;
+      env: { production: { account_id?: string } };
+    };
+    delete config.account_id;
+    delete config.env.production.account_id;
+    await writeFile(path, JSON.stringify(config, null, 2));
+    const originalAccountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+    delete process.env.CLOUDFLARE_ACCOUNT_ID;
+    const calls: string[] = [];
+    const errors: string[] = [];
+    try {
+      expect(
+        await runCli(["provision", "--env", "production"], {
+          cwd,
+          stderr: (line) => errors.push(line),
+          runCommand: (command, args) => {
+            calls.push([command, ...args].join(" "));
+            return {
+              status: 0,
+              stdout: healthyWhoamiJson([
+                { id: "acct_one" },
+                { id: "acct_two" },
+              ]),
+              stderr: "",
+            };
+          },
+        }),
+      ).toBe(1);
+    } finally {
+      if (originalAccountId === undefined) {
+        delete process.env.CLOUDFLARE_ACCOUNT_ID;
+      } else {
+        process.env.CLOUDFLARE_ACCOUNT_ID = originalAccountId;
+      }
+    }
+    expect(calls).toEqual(["wrangler whoami --json"]);
+    expect(errors.join("\n")).toContain(
+      "requires account_id when Wrangler can access multiple Cloudflare accounts",
+    );
   });
 
   it("constructs local and remote Wrangler migration commands", async () => {
@@ -611,6 +1035,9 @@ describe("CLI MVP", () => {
       stdout: (line) => remote.push(line),
       runCommand: (command, args) => {
         remoteCalls.push([command, ...args].join(" "));
+        if (args[0] === "whoami") {
+          return { status: 0, stdout: healthyWhoamiJson(), stderr: "" };
+        }
         if (args[0] === "d1" && args[1] === "execute") {
           return { status: 0, stdout: migrationStateJson(), stderr: "" };
         }
@@ -618,6 +1045,7 @@ describe("CLI MVP", () => {
       },
     });
     expect(remoteCalls).toEqual([
+      "wrangler whoami --json",
       "wrangler d1 migrations apply app-auth --remote --env production",
       `wrangler d1 execute app-auth --remote --env production --json --command ${migrationStateSql()}`,
     ]);
@@ -633,10 +1061,14 @@ describe("CLI MVP", () => {
       stdout: (line) => remoteStatus.push(line),
       runCommand: (command, args) => {
         remoteStatusCalls.push([command, ...args].join(" "));
+        if (args[0] === "whoami") {
+          return { status: 0, stdout: healthyWhoamiJson(), stderr: "" };
+        }
         return { status: 0, stdout: "remote migrations\n", stderr: "" };
       },
     });
     expect(remoteStatusCalls).toEqual([
+      "wrangler whoami --json",
       "wrangler d1 migrations list app-auth --remote --env production",
     ]);
     expect(remoteStatus.join("\n")).toContain(
@@ -660,6 +1092,226 @@ describe("CLI MVP", () => {
     });
     expect(code).toBe(1);
     expect(errors.join("\n")).toContain("Remote migrations require --env");
+  });
+
+  it("uses the selected AUTH_DB migrations_dir when verifying migrations", async () => {
+    const cwd = await tempDir();
+    await writeWrangler(cwd);
+    await mkdir(join(cwd, "database", "auth"), { recursive: true });
+    await writeFile(
+      join(cwd, "database", "auth", "0042_custom.sql"),
+      "-- custom migration\n",
+    );
+    const path = join(cwd, "wrangler.jsonc");
+    const config = JSON.parse(await readFile(path, "utf8")) as {
+      env: {
+        production: {
+          d1_databases: Array<{ binding: string; migrations_dir?: string }>;
+        };
+      };
+    };
+    config.env.production.d1_databases[0]!.migrations_dir = "database/auth";
+    await writeFile(path, JSON.stringify(config, null, 2));
+    const calls: string[] = [];
+    const errors: string[] = [];
+
+    const code = await runCli(["migrate", "--remote", "--env", "production"], {
+      cwd,
+      stderr: (line) => errors.push(line),
+      runCommand: (command, args) => {
+        calls.push([command, ...args].join(" "));
+        if (args[0] === "whoami") {
+          return { status: 0, stdout: healthyWhoamiJson(), stderr: "" };
+        }
+        if (args[0] === "d1" && args[1] === "execute") {
+          return {
+            status: 0,
+            stdout: migrationStateJson(["0042"], "42"),
+            stderr: "",
+          };
+        }
+        return { status: 0, stdout: "migrated\n", stderr: "" };
+      },
+    });
+
+    expect(code).toBe(0);
+    expect(errors).toEqual([]);
+    expect(calls).toContain(
+      `wrangler d1 execute app-auth --remote --env production --json --command ${migrationStateSql()}`,
+    );
+  });
+
+  it("uses deterministic account precedence and validates accessibility before remote mutations", async () => {
+    const cwd = await tempDir();
+    await writeWrangler(cwd);
+    const path = join(cwd, "wrangler.jsonc");
+    const config = JSON.parse(await readFile(path, "utf8")) as {
+      account_id?: string;
+      env: {
+        production: {
+          account_id?: string;
+          d1_databases: Array<{ database_id?: string }>;
+        };
+      };
+    };
+    config.account_id = "acct_root";
+    config.env.production.account_id = "acct_environment";
+    await writeFile(path, JSON.stringify(config, null, 2));
+    const originalAccountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+    process.env.CLOUDFLARE_ACCOUNT_ID = "acct_process";
+    try {
+      const selectedCalls: string[] = [];
+      expect(
+        await runCli(
+          ["migrate", "--status", "--remote", "--env", "production"],
+          {
+            cwd,
+            runCommand: (command, args) => {
+              selectedCalls.push([command, ...args].join(" "));
+              return args[0] === "whoami"
+                ? {
+                    status: 0,
+                    stdout: healthyWhoamiJson([{ id: "acct_environment" }]),
+                    stderr: "",
+                  }
+                : { status: 0, stdout: "migrations\n", stderr: "" };
+            },
+          },
+        ),
+      ).toBe(0);
+      expect(selectedCalls[0]).toBe("wrangler whoami --json");
+
+      delete config.env.production.account_id;
+      await writeFile(path, JSON.stringify(config, null, 2));
+      expect(
+        await runCli(
+          ["migrate", "--status", "--remote", "--env", "production"],
+          {
+            cwd,
+            runCommand: (_command, args) =>
+              args[0] === "whoami"
+                ? {
+                    status: 0,
+                    stdout: healthyWhoamiJson([{ id: "acct_root" }]),
+                    stderr: "",
+                  }
+                : { status: 0, stdout: "migrations\n", stderr: "" },
+          },
+        ),
+      ).toBe(0);
+
+      delete config.account_id;
+      await writeFile(path, JSON.stringify(config, null, 2));
+      expect(
+        await runCli(
+          ["migrate", "--status", "--remote", "--env", "production"],
+          {
+            cwd,
+            runCommand: (_command, args) =>
+              args[0] === "whoami"
+                ? {
+                    status: 0,
+                    stdout: healthyWhoamiJson([{ id: "acct_process" }]),
+                    stderr: "",
+                  }
+                : { status: 0, stdout: "migrations\n", stderr: "" },
+          },
+        ),
+      ).toBe(0);
+
+      config.env.production.account_id = "acct_inaccessible";
+      await writeFile(path, JSON.stringify(config, null, 2));
+      const errors: string[] = [];
+      const mutationCalls: string[] = [];
+      expect(
+        await runCli(
+          ["migrate", "--status", "--remote", "--env", "production"],
+          {
+            cwd,
+            stderr: (line) => errors.push(line),
+            runCommand: (command, args) => {
+              mutationCalls.push([command, ...args].join(" "));
+              return {
+                status: 0,
+                stdout: healthyWhoamiJson([{ id: "acct_process" }]),
+                stderr: "",
+              };
+            },
+          },
+        ),
+      ).toBe(1);
+      expect(errors.join("\n")).toContain(
+        "account_id is not available to the authenticated Wrangler user",
+      );
+      expect(mutationCalls).toEqual(["wrangler whoami --json"]);
+    } finally {
+      if (originalAccountId === undefined) {
+        delete process.env.CLOUDFLARE_ACCOUNT_ID;
+      } else {
+        process.env.CLOUDFLARE_ACCOUNT_ID = originalAccountId;
+      }
+    }
+  });
+
+  it("rejects duplicate AUTH_DB bindings while preserving remote dry-runs", async () => {
+    const cwd = await tempDir();
+    await writeWrangler(cwd);
+    const path = join(cwd, "wrangler.jsonc");
+    const config = JSON.parse(await readFile(path, "utf8")) as {
+      account_id?: string;
+      env: {
+        production: {
+          d1_databases: Array<{
+            binding?: string;
+            database_name?: string;
+            database_id?: string;
+          }>;
+        };
+      };
+    };
+    delete config.account_id;
+    config.env.production.d1_databases[0]!.database_id = "REPLACE_D1_ID";
+    await writeFile(path, JSON.stringify(config, null, 2));
+    const dryRun: string[] = [];
+    let dryRunCalls = 0;
+    expect(
+      await runCli(
+        ["migrate", "--dry-run", "--remote", "--env", "production"],
+        {
+          cwd,
+          stdout: (line) => dryRun.push(line),
+          runCommand: () => {
+            dryRunCalls += 1;
+            return { status: 1, stdout: "", stderr: "unexpected" };
+          },
+        },
+      ),
+    ).toBe(0);
+    expect(dryRunCalls).toBe(0);
+    expect(dryRun.join("\n")).toContain(
+      "wrangler d1 migrations apply app-auth --remote --env production",
+    );
+
+    config.env.production.d1_databases.push({
+      binding: "AUTH_DB",
+      database_name: "other-auth",
+      database_id: "other-id",
+    });
+    await writeFile(path, JSON.stringify(config, null, 2));
+    const errors: string[] = [];
+    let calls = 0;
+    expect(
+      await runCli(["migrate", "--status", "--remote", "--env", "production"], {
+        cwd,
+        stderr: (line) => errors.push(line),
+        runCommand: () => {
+          calls += 1;
+          return { status: 0, stdout: "", stderr: "" };
+        },
+      }),
+    ).toBe(1);
+    expect(calls).toBe(0);
+    expect(errors.join("\n")).toContain("exactly one AUTH_DB D1 binding");
   });
 
   it("rejects remote migrations without --env for top-level development configs", async () => {
@@ -948,6 +1600,33 @@ describe("CLI MVP", () => {
     expect(errors.join("\n")).not.toContain("bad-secret");
   });
 
+  it("doctor diagnoses broadly readable local secret files", async () => {
+    const cwd = await tempDir();
+    await writeWrangler(cwd);
+    await writeFile(
+      join(cwd, ".dev.vars"),
+      `AUTH_SECRET=k_dev.${"A".repeat(43)}\n`,
+    );
+    if (process.platform !== "win32") {
+      await chmod(join(cwd, ".dev.vars"), 0o644);
+    }
+    const output: string[] = [];
+
+    expect(
+      await runCli(["doctor"], {
+        cwd,
+        stdout: (line) => output.push(line),
+        runCommand: localDoctorRunner(),
+      }),
+    ).toBe(0);
+    if (process.platform !== "win32") {
+      expect(output.join("\n")).toContain(
+        ".dev.vars permissions 644 allow group or other access",
+      );
+      expect(output.join("\n")).toContain("chmod 600 .dev.vars");
+    }
+  });
+
   it("doctor reports unavailable Wrangler before deployment checks", async () => {
     const cwd = await tempDir();
     await writeWrangler(cwd);
@@ -1050,16 +1729,27 @@ describe("CLI MVP", () => {
     config.account_id = "missing-account";
     await writeFile(join(cwd, "wrangler.jsonc"), JSON.stringify(config));
     const errors: string[] = [];
+    const calls: string[] = [];
     const code = await runCli(["doctor", "--env", "production"], {
       cwd,
       stderr: (line) => errors.push(line),
-      runCommand: remoteSecretRunner(),
+      runCommand: (command, args) => {
+        calls.push([command, ...args].join(" "));
+        if (args[0] === "--version") {
+          return { status: 0, stdout: "4.110.0\n", stderr: "" };
+        }
+        if (args[0] === "whoami") {
+          return { status: 0, stdout: healthyWhoamiJson(), stderr: "" };
+        }
+        return { status: 0, stdout: "unexpected remote read", stderr: "" };
+      },
     });
 
     expect(code).toBe(1);
     expect(errors.join("\n")).toContain(
       "Wrangler account_id is not available to the authenticated user",
     );
+    expect(calls).toEqual(["wrangler --version", "wrangler whoami --json"]);
   });
 
   it("doctor validates environment-specific Cloudflare account selections", async () => {
@@ -1087,23 +1777,65 @@ describe("CLI MVP", () => {
     );
   });
 
-  it("doctor warns when production account selection is implicit", async () => {
+  it("doctor rejects implicit production account selection and honors CLOUDFLARE_ACCOUNT_ID", async () => {
     const cwd = await tempDir();
     await writeWrangler(cwd);
-    const output: string[] = [];
-    const code = await runCli(["doctor", "--env", "production"], {
-      cwd,
-      stdout: (line) => output.push(line),
-      runCommand: remoteSecretRunner([
-        { id: "acct_prod" },
-        { id: "acct_other" },
-      ]),
-    });
+    const wranglerPath = join(cwd, "wrangler.jsonc");
+    const config = JSON.parse(await readFile(wranglerPath, "utf8")) as {
+      account_id?: string;
+    };
+    delete config.account_id;
+    await writeFile(wranglerPath, JSON.stringify(config));
+    const errors: string[] = [];
+    const originalAccountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+    delete process.env.CLOUDFLARE_ACCOUNT_ID;
+    const calls: string[] = [];
+    try {
+      const code = await runCli(["doctor", "--env", "production"], {
+        cwd,
+        stderr: (line) => errors.push(line),
+        runCommand: (command, args) => {
+          calls.push([command, ...args].join(" "));
+          if (args[0] === "--version") {
+            return { status: 0, stdout: "4.110.0\n", stderr: "" };
+          }
+          if (args[0] === "whoami") {
+            return {
+              status: 0,
+              stdout: healthyWhoamiJson([
+                { id: "acct_prod" },
+                { id: "acct_other" },
+              ]),
+              stderr: "",
+            };
+          }
+          return { status: 0, stdout: "unexpected remote read", stderr: "" };
+        },
+      });
 
-    expect(code).toBe(0);
-    expect(output.join("\n")).toContain(
-      "Multiple Cloudflare accounts available; selection is implicit",
-    );
+      expect(code).toBe(1);
+      expect(errors.join("\n")).toContain(
+        "Cloudflare account selection is implicit because account_id is missing",
+      );
+      expect(calls).toEqual(["wrangler --version", "wrangler whoami --json"]);
+
+      process.env.CLOUDFLARE_ACCOUNT_ID = "acct_prod";
+      expect(
+        await runCli(["doctor", "--env", "production"], {
+          cwd,
+          runCommand: remoteSecretRunner([
+            { id: "acct_prod" },
+            { id: "acct_other" },
+          ]),
+        }),
+      ).toBe(0);
+    } finally {
+      if (originalAccountId === undefined) {
+        delete process.env.CLOUDFLARE_ACCOUNT_ID;
+      } else {
+        process.env.CLOUDFLARE_ACCOUNT_ID = originalAccountId;
+      }
+    }
   });
 
   it("doctor reports missing production email binding", async () => {
@@ -1987,6 +2719,32 @@ export default app;
       ok: true,
       environment: "production",
     });
+    if (process.platform !== "win32") {
+      expect((await stat(join(cwd, "report.json"))).mode & 0o777).toBe(0o600);
+    }
+
+    const outside = join(cwd, "outside-report.json");
+    await writeFile(outside, "do not replace\n");
+    await symlink(outside, join(cwd, "report-link.json"));
+    const errors: string[] = [];
+    const symlinkCode = await runCli(
+      [
+        "doctor",
+        "--report",
+        "--env",
+        "production",
+        "--output",
+        "report-link.json",
+      ],
+      {
+        cwd,
+        stderr: (line) => errors.push(line),
+        runCommand: remoteSecretRunner(),
+      },
+    );
+    expect(symlinkCode).toBe(1);
+    expect(errors.join("\n")).toContain("symbolic links are not allowed");
+    await expect(readFile(outside, "utf8")).resolves.toBe("do not replace\n");
   });
 
   it("prints deploy dry-run and safe recovery helper output", async () => {
@@ -2082,6 +2840,8 @@ export default app;
       "normalized_email = 'person@example.com'",
     );
     expect(userCalls[0]?.sql).toContain("UPDATE sessions SET revoked_at");
+    expect(userCalls[0]?.sql).toContain("strftime('%s', 'now')");
+    expect(userCalls[0]?.sql).not.toMatch(/= 1\d{12}\b/);
     expect(userOutput.join("\n")).not.toContain("person@example.com");
     expect(userOutput.join("\n")).not.toContain("2001:db8::1");
     expect(userOutput.join("\n")).not.toContain("raw-cookie");
@@ -2126,6 +2886,9 @@ export default app;
         cwd,
         stdout: (line) => output.push(line),
         runCommand: (_command, args) => {
+          if (args[0] === "whoami") {
+            return { status: 0, stdout: healthyWhoamiJson(), stderr: "" };
+          }
           sessionCalls.push({ args, sql: args.at(-1) ?? "" });
           return {
             status: 0,
@@ -2196,7 +2959,9 @@ export default app;
     expect(disableCode).toBe(0);
     expect(revokeCode).toBe(0);
     expect(calls[0]?.sql).toContain("normalized_email = 'o''hara@example.com'");
+    expect(calls[0]?.sql).toContain("strftime('%s', 'now')");
     expect(calls[1]?.sql).toContain("id = 'usr_'' OR 1=1 --'");
+    expect(calls[1]?.sql).toContain("strftime('%s', 'now')");
     expect(calls[1]?.sql).not.toContain("id = 'usr_' OR 1=1 --'");
   });
 
@@ -2217,7 +2982,10 @@ export default app;
       {
         cwd,
         stderr: (line) => invalidErrors.push(line),
-        runCommand: () => ({ status: 0, stdout: "not json", stderr: "" }),
+        runCommand: (_command, args) =>
+          args[0] === "whoami"
+            ? { status: 0, stdout: healthyWhoamiJson(), stderr: "" }
+            : { status: 0, stdout: "not json", stderr: "" },
       },
     );
 
@@ -2240,11 +3008,14 @@ export default app;
       {
         cwd,
         stderr: (line) => shapeErrors.push(line),
-        runCommand: () => ({
-          status: 0,
-          stdout: JSON.stringify([{ results: "not rows" }]),
-          stderr: "",
-        }),
+        runCommand: (_command, args) =>
+          args[0] === "whoami"
+            ? { status: 0, stdout: healthyWhoamiJson(), stderr: "" }
+            : {
+                status: 0,
+                stdout: JSON.stringify([{ results: "not rows" }]),
+                stderr: "",
+              },
       },
     );
 
@@ -2338,6 +3109,8 @@ export default app;
     expect(calls[0]?.sql).toContain("DELETE FROM verification_tokens");
     expect(calls[0]?.sql).toContain("DELETE FROM rate_limits");
     expect(calls[0]?.sql).toContain("DELETE FROM auth_events");
+    expect(calls[0]?.sql).toContain("strftime('%s', 'now')");
+    expect(calls[0]?.sql).not.toMatch(/\b1\d{12}\b/);
     expect(cleanOutput.join("\n")).toContain(
       "wrangler d1 execute app-auth-dev --local --command <redacted cleanup SQL>",
     );
@@ -2812,6 +3585,50 @@ export default app;
     expect(calls.at(-1)).toBe("wrangler deploy --env production");
   });
 
+  it("allows deploy --migrate to initialize a fresh remote D1 database", async () => {
+    const cwd = await tempDir();
+    await writeWrangler(cwd);
+    const calls: string[] = [];
+    let migrationReads = 0;
+    const code = await runCli(["deploy", "--migrate", "--env", "production"], {
+      cwd,
+      runCommand: (command, args) => {
+        calls.push([command, ...args].join(" "));
+        if (args[0] === "--version") {
+          return { status: 0, stdout: "4.110.0\n", stderr: "" };
+        }
+        if (args[0] === "whoami") {
+          return { status: 0, stdout: healthyWhoamiJson(), stderr: "" };
+        }
+        if (args[0] === "d1" && args[1] === "execute") {
+          migrationReads += 1;
+          return migrationReads === 1
+            ? {
+                status: 1,
+                stdout: "",
+                stderr: "D1_ERROR: no such table: auth_schema_migrations",
+              }
+            : { status: 0, stdout: migrationStateJson(), stderr: "" };
+        }
+        return {
+          status: 0,
+          stdout:
+            args[0] === "secret"
+              ? JSON.stringify([{ name: "AUTH_SECRET" }])
+              : "",
+          stderr: "",
+        };
+      },
+    });
+
+    expect(code).toBe(0);
+    expect(calls).toContain(
+      "wrangler d1 migrations apply app-auth --remote --env production",
+    );
+    expect(migrationReads).toBe(2);
+    expect(calls.at(-1)).toBe("wrangler deploy --env production");
+  });
+
   it("rejects top-level development deploys without an explicit environment", async () => {
     const cwd = await tempDir();
     await writeFile(
@@ -2889,6 +3706,9 @@ export default app;
         cwd,
         stdout: (line) => output.push(line),
         runCommand: (command, args, options) => {
+          if (args[0] === "whoami") {
+            return { status: 0, stdout: healthyWhoamiJson(), stderr: "" };
+          }
           calls.push({ command, args, input: options.input });
           return { status: 0, stdout: "", stderr: "" };
         },
@@ -2898,15 +3718,19 @@ export default app;
     expect(code).toBe(0);
     expect(calls).toHaveLength(1);
     expect(calls[0]?.command).toBe("wrangler");
-    expect(calls[0]?.args).toEqual([
-      "secret",
-      "put",
-      "AUTH_SECRET",
-      "--env",
-      "production",
-    ]);
-    expect(calls[0]?.input).toMatch(/^k1\.[A-Za-z0-9_-]{43}$/);
-    expect(output.join("\n")).toContain("Remote AUTH_SECRET updated.");
+    expect(calls[0]?.args).toEqual(["secret", "bulk", "--env", "production"]);
+    const payload = JSON.parse(calls[0]?.input ?? "") as Record<
+      string,
+      string | null
+    >;
+    expect(payload.AUTH_SECRET).toMatch(/^k1\.[A-Za-z0-9_-]{43}$/);
+    expect(payload.AUTH_SECRET_PREVIOUS).toBeNull();
+    expect(output.join("\n")).toContain(
+      "Remote AUTH_SECRET updated and AUTH_SECRET_PREVIOUS removed atomically.",
+    );
+    expect(output.join("\n")).toContain(
+      "Wrangler created and deployed a Worker version for the secret update.",
+    );
     expect(output.join("\n")).not.toContain(calls[0]?.input ?? "");
   });
 
@@ -2969,6 +3793,9 @@ export default app;
         {
           cwd,
           runCommand: (_command, args, options) => {
+            if (args[0] === "whoami") {
+              return { status: 0, stdout: healthyWhoamiJson(), stderr: "" };
+            }
             calls.push({ args, input: options.input });
             return { status: 0, stdout: "", stderr: "" };
           },
@@ -2979,17 +3806,14 @@ export default app;
       delete process.env.AUTH_SECRET_OLD;
     }
 
-    expect(calls[0]).toMatchObject({
-      args: ["secret", "put", "AUTH_SECRET_PREVIOUS", "--env", "production"],
-      input: previous,
-    });
-    expect(calls[1]?.args).toEqual([
-      "secret",
-      "put",
-      "AUTH_SECRET",
-      "--env",
-      "production",
-    ]);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.args).toEqual(["secret", "bulk", "--env", "production"]);
+    const payload = JSON.parse(calls[0]?.input ?? "") as Record<
+      string,
+      string | null
+    >;
+    expect(payload.AUTH_SECRET_PREVIOUS).toBe(previous);
+    expect(payload.AUTH_SECRET).toMatch(/^k1\.[A-Za-z0-9_-]{43}$/);
   });
 
   it("rejects invalid previous auth secrets before remote writes", async () => {
@@ -3075,6 +3899,7 @@ async function writeWrangler(cwd: string) {
     join(cwd, "wrangler.jsonc"),
     JSON.stringify(
       {
+        account_id: "acct_prod",
         compatibility_date: "2026-05-15",
         compatibility_flags: ["nodejs_compat"],
         vars: {

@@ -31,7 +31,7 @@ export interface WorkersPasswordBenchmarkInput<
   wranglerCommand?: string;
 }
 
-const benchmarkCompatibilityDate = "2026-05-15";
+const benchmarkCompatibilityDate = "2026-07-11";
 
 export async function runWorkersPasswordBenchmark<
   ProfileName extends string = string,

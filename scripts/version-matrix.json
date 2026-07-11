@@ -8,6 +8,6 @@
   "vitest": "4.1.10",
   "zod": "4.4.3",
   "changesets": "2.31.0",
-  "workersCompatibilityDate": "2026-05-15",
+  "workersCompatibilityDate": "2026-07-11",
   "workersCompatibilityDateFloor": "2024-09-23"
 }

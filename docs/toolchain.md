@@ -14,9 +14,15 @@ package artifacts are tested against one known set of versions.
 | Vitest                           | `4.1.10`                                             |
 | Zod                              | `4.4.3`                                              |
 | Changesets                       | `2.31.0`                                             |
-| Workers compatibility date       | `2026-05-15`                                         |
+| Workers compatibility date       | `2026-07-11`                                         |
 | Workers compatibility date floor | `2024-09-23`                                         |
 
 Run `pnpm version-matrix:check` after changing any of these versions. Update
 this page, generated templates, examples, and `doctor` guidance in the same
 change when a platform minimum changes.
+
+The workspace also pins patched transitive releases of Vite, esbuild, and both
+supported js-yaml majors in `pnpm-workspace.yaml`. Those overrides keep local
+development and release tooling free of known advisories even though they are
+not part of the deployed Worker runtime. Re-run `pnpm audit --audit-level low`
+and the complete build/test suite before changing or removing an override.

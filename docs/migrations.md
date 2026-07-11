@@ -12,9 +12,15 @@ npx --package @cf-auth/cli@latest cf-auth migrate --status --local
 Run remotely:
 
 ```bash
+npx --package @cf-auth/cli@latest cf-auth provision --env production
 npx --package @cf-auth/cli@latest cf-auth migrate --remote --env production
 npx --package @cf-auth/cli@latest cf-auth migrate --status --remote --env production
 ```
+
+`provision` is safe to rerun: it discovers an exact-name D1 database before
+creating one and safely updates the selected `AUTH_DB.database_id`. Migration
+discovery follows that binding's `migrations_dir`; custom directories do not
+fall back to a stale top-level `migrations/` folder.
 
 Every migration updates `auth_schema_migrations` and `auth_meta.schema_version`. Future table rewrites that need temporary foreign-key deferral must use `PRAGMA defer_foreign_keys = on`.
 
@@ -56,3 +62,6 @@ The CLI cleanup wrapper applies the default v1 retention windows:
 npx --package @cf-auth/cli@latest cf-auth clean --dry-run --remote --env production
 npx --package @cf-auth/cli@latest cf-auth clean --remote --env production
 ```
+
+CLI cleanup uses D1 server time for destructive retention cutoffs, so an
+operator workstation with a skewed clock cannot expire rows early.

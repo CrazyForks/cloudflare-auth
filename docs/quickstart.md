@@ -15,3 +15,7 @@ Expected local behavior:
 - terminal email prints magic-link, verification, and reset links
 - local cookies use `cfauth-session`, not a `__Host-` prefix
 - signup and login work without a production email provider
+
+For production, continue with the ordered resource, migration, secret, doctor,
+and deploy sequence in [Deployment](deployment.md). Do not run `doctor`
+before the first migration on a newly provisioned database.

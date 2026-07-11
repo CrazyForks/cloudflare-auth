@@ -1,14 +1,53 @@
 # Deployment
 
-Production deploys should use a named environment.
+Production deploys should use a named environment and deterministic account
+selection. Interactive users can run `wrangler login`; automation must export
+`CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`. The least-privilege
+token matrix is in [Cloudflare API Permissions](cloudflare-permissions.md).
 
 Use the supported toolchain from [Toolchain](toolchain.md) when deploying
 release candidates or reproducing support reports.
 
+## Fresh Production Deployment
+
+From the generated application directory:
+
 ```bash
-npx --package @cf-auth/cli@latest cf-auth doctor --env production
+# 1. Ensure the selected D1 database exists and patch its real ID.
+npx --package @cf-auth/cli@latest cf-auth provision --env production
+
+# 2. Apply the append-only schema before any Worker version goes live.
 npx --package @cf-auth/cli@latest cf-auth migrate --remote --env production
+
+# 3. Create the first Worker auth secret without printing it.
+npx --package @cf-auth/cli@latest cf-auth rotate-secret --apply --env production
+
+# 4. Validate account, bindings, secrets, email policy, hashing, and schema.
+npx --package @cf-auth/cli@latest cf-auth doctor --env production
+
+# 5. Deploy the Worker.
 npx --package @cf-auth/cli@latest cf-auth deploy --env production
+```
+
+`provision` lists D1 databases first, reuses an exact-name match, and only
+creates a database when none exists. It writes a sibling
+`.cf-auth-backup` before safely replacing Wrangler configuration. Use
+`--location <region>` or `--jurisdiction eu|fedramp` only on first creation;
+those D1 placement choices cannot be changed by rerunning setup.
+
+[`wrangler secret bulk`](https://developers.cloudflare.com/workers/wrangler/commands/workers/#secret-bulk),
+which backs `rotate-secret --apply`, creates and deploys a Worker version
+immediately. The fresh-deployment order therefore migrates D1 first, preventing
+an auth Worker from becoming reachable against an uninitialized schema. Treat
+later rotations as immediate production deployments and use the previous-secret
+options below.
+
+Preview every mutation in an unfamiliar account:
+
+```bash
+npx --package @cf-auth/cli@latest cf-auth provision --dry-run --env production
+npx --package @cf-auth/cli@latest cf-auth migrate --dry-run --remote --env production
+npx --package @cf-auth/cli@latest cf-auth deploy --dry-run --env production
 ```
 
 To preview the exact checks and Wrangler deploy command without changing
@@ -18,7 +57,8 @@ Cloudflare state:
 npx --package @cf-auth/cli@latest cf-auth deploy --dry-run --env production
 ```
 
-To apply remote migrations immediately before deployment:
+For later releases, apply and verify remote migrations immediately before
+deployment:
 
 ```bash
 npx --package @cf-auth/cli@latest cf-auth deploy --migrate --env production
@@ -33,6 +73,7 @@ npx --package @cf-auth/cli@latest cf-auth doctor --report --env production --out
 
 Required placeholders:
 
+- `CLOUDFLARE_ACCOUNT_ID` or Wrangler `account_id`: the one account that owns all selected resources
 - `AUTH_PUBLIC_ORIGIN`: exact production origin, for example `https://example.com`
 - `AUTH_SECRET`: generated with `npx --package @cf-auth/cli@latest cf-auth rotate-secret --print` and stored as a Worker secret
 - `TURNSTILE_SECRET_KEY`: stored as a Worker secret when `turnstile.mode` is `required` and no custom verifier is configured
@@ -54,7 +95,8 @@ local Workers runtime, reports p50/p95 and throughput, and labels production
 results as local estimates.
 
 `npx --package @cf-auth/cli@latest cf-auth rotate-secret --apply --env production` generates a new `AUTH_SECRET`
-and sends it to Wrangler over stdin. It prints the Wrangler operation result,
+and sends it to Wrangler over stdin in one bulk update. Wrangler creates and
+deploys a Worker version for that update; the CLI prints the operation result,
 not the generated secret. Provide `--previous-from-env NAME` or
 `--previous-from-stdin` when rotating without invalidating existing sessions and
 email tokens.
@@ -64,7 +106,10 @@ Cloudflare Email/DNS readiness reminder. Treat that reminder as external setup:
 Wrangler can verify the binding exists, but sender/domain readiness still lives
 in Cloudflare Email configuration.
 
-Deploying without `--env` fails unless `doctor` proves the top-level Wrangler config is intentionally production-safe.
+Deploying or mutating D1 without `--env` fails when named environments exist.
+Remote mutations also fail before Wrangler is invoked when account selection is
+ambiguous, the configured account is inaccessible, or `AUTH_DB` is missing,
+duplicated, incomplete, or still contains a placeholder ID.
 
 ## Opt-in Production Smoke
 

@@ -1,13 +1,7 @@
 import { spawnSync } from "node:child_process";
-import {
-  copyFile,
-  mkdir,
-  readFile,
-  readdir,
-  writeFile,
-} from "node:fs/promises";
-import { existsSync } from "node:fs";
-import { basename, join, resolve } from "node:path";
+import { lstat, mkdir, open, readdir, rename, unlink } from "node:fs/promises";
+import { constants as fsConstants, existsSync, type Stats } from "node:fs";
+import { basename, dirname, join, parse, resolve, sep } from "node:path";
 import { randomBytes } from "node:crypto";
 import {
   base64urlEncode,
@@ -30,7 +24,7 @@ export const cliPackageName = "@cf-auth/cli";
 const generatedPackageVersion = cliPackageJson.version;
 const supportedWranglerVersion = cliPackageJson.dependencies.wrangler;
 const wranglerSchemaPath = "./node_modules/wrangler/config-schema.json";
-const workersCompatibilityDate = "2026-05-15";
+const workersCompatibilityDate = "2026-07-11";
 const workersCompatibilityDateFloor = "2024-09-23";
 const workersNodeCompatibilityFlag = "nodejs_compat";
 const passwordBenchmarkCache = new Map<
@@ -125,11 +119,14 @@ export async function runCli(
       case "--help":
       case "-h":
         out(
-          "cf-auth <init|migrate|doctor|deploy|generate|clean|rotate-secret|users|sessions>",
+          "cf-auth <init|provision|migrate|doctor|deploy|generate|clean|rotate-secret|users|sessions>",
         );
         return 0;
       case "init":
         await commandInit(parsed, cwd, out);
+        return 0;
+      case "provision":
+        out(await commandProvision(parsed, cwd, runner));
         return 0;
       case "migrate":
         out(await commandMigrate(parsed, cwd, runner));
@@ -146,7 +143,7 @@ export async function runCli(
           const reportJson = JSON.stringify(result.report, null, 2) + "\n";
           if (typeof parsed.flags.output === "string") {
             const outputPath = resolve(cwd, parsed.flags.output);
-            await writeFile(outputPath, reportJson);
+            await safeAtomicWriteFile(outputPath, reportJson, { mode: 0o600 });
             out(`Wrote doctor report to ${outputPath}`);
           } else {
             out(reportJson.trimEnd());
@@ -198,8 +195,9 @@ async function commandInit(
     out(templateMountSnippet(template));
     return;
   }
-  await mkdir(join(target, "src"), { recursive: true });
-  await mkdir(join(target, "migrations"), { recursive: true });
+  await ensureSafeDirectory(target);
+  await ensureSafeDirectory(join(target, "src"));
+  await ensureSafeDirectory(join(target, "migrations"));
   const localSecret = `k_dev.${base64urlEncode(randomBytes(32))}`;
   const packageResult = await writeOrPatchPackageJson(
     join(target, "package.json"),
@@ -207,10 +205,13 @@ async function commandInit(
     template,
   );
   const wranglerConfigPath =
-    existingWranglerPath(target) ?? join(target, "wrangler.jsonc");
-  const wranglerConfigExists = existsSync(wranglerConfigPath);
+    (await existingWranglerPathForWrite(target)) ??
+    join(target, "wrangler.jsonc");
+  const wranglerConfigExists =
+    (await safeFileInfo(wranglerConfigPath, true)) !== null;
   const sourceIndexPath = join(target, "src", "index.ts");
-  const sourceIndexExists = existsSync(sourceIndexPath);
+  const sourceIndexExists =
+    (await safeFileInfo(sourceIndexPath, true)) !== null;
   await writeIfMissing(
     join(target, "pnpm-workspace.yaml"),
     pnpmWorkspaceTemplate(),
@@ -222,8 +223,15 @@ async function commandInit(
   );
   await writeIfMissing(sourceIndexPath, indexTemplate(template));
   await writeIfMissing(wranglerConfigPath, wranglerTemplate(workerName));
-  await writeIfMissing(join(target, ".gitignore"), gitignoreTemplate());
-  await writeIfMissing(join(target, ".dev.vars"), devVarsTemplate(localSecret));
+  await ensureGitignoreEntries(join(target, ".gitignore"));
+  await writeIfMissing(
+    join(target, ".dev.vars"),
+    devVarsTemplate(localSecret),
+    {
+      mode: 0o600,
+      enforceMode: true,
+    },
+  );
   await writeIfMissing(join(target, ".dev.vars.example"), devVarsTemplate());
   await writeIfMissing(
     join(target, "migrations", "0001_initial.sql"),
@@ -238,7 +246,13 @@ async function commandInit(
   });
   if (repaired.changed) {
     out("Repaired Wrangler auth bindings and vars.");
-    if (repaired.backupPath) out(`Backup written to ${repaired.backupPath}`);
+    if (repaired.backupPath) {
+      out(
+        repaired.backupCreated
+          ? `Backup written to ${repaired.backupPath}`
+          : `Existing backup preserved at ${repaired.backupPath}`,
+      );
+    }
   }
   out(`Initialized Cloudflare Auth in ${target}`);
   if (packageResult === "updated")
@@ -254,6 +268,198 @@ async function commandInit(
   );
 }
 
+const d1LocationChoices = new Set([
+  "weur",
+  "eeur",
+  "apac",
+  "oc",
+  "wnam",
+  "enam",
+]);
+const d1JurisdictionChoices = new Set(["eu", "fedramp"]);
+
+async function commandProvision(
+  parsed: ParsedArgs,
+  cwd: string,
+  runner: CommandRunner,
+): Promise<string> {
+  const envName = requiredStringFlag(
+    parsed.flags.env,
+    "provision requires --env",
+  );
+  const location = optionalChoiceFlag(
+    parsed.flags.location,
+    "--location",
+    d1LocationChoices,
+  );
+  const jurisdiction = optionalChoiceFlag(
+    parsed.flags.jurisdiction,
+    "--jurisdiction",
+    d1JurisdictionChoices,
+  );
+  if (location && jurisdiction) {
+    throw new Error(
+      "provision accepts either --location or --jurisdiction, not both.",
+    );
+  }
+
+  const config = await readWrangler(cwd);
+  assertRemoteAuthEnvironment(config, envName, "Provisioning");
+  const database = selectD1ForProvisioning(config, envName);
+  const listCommand = {
+    command: "wrangler",
+    args: ["d1", "list", "--json", "--env", envName],
+  };
+  const createCommand = {
+    command: "wrangler",
+    args: [
+      "d1",
+      "create",
+      database.database_name,
+      ...(location ? ["--location", location] : []),
+      ...(jurisdiction ? ["--jurisdiction", jurisdiction] : []),
+      "--env",
+      envName,
+    ],
+  };
+  if (parsed.flags["dry-run"]) {
+    return [
+      "Dry run only. Would resolve one accessible Cloudflare account and provision AUTH_DB.",
+      displayCommand(listCommand.command, listCommand.args),
+      `If ${database.database_name} is absent: ${displayCommand(createCommand.command, createCommand.args)}`,
+      `Would back up ${basename(wranglerPath(cwd))} and patch AUTH_DB database_id without following symbolic links.`,
+    ].join("\n");
+  }
+
+  const configPath = wranglerPath(cwd);
+  await safeFileInfo(configPath);
+  await safeFileInfo(`${configPath}.cf-auth-backup`, true);
+  const accountId = resolveProvisionAccount(config, envName, cwd, runner);
+  let databases = runD1List(listCommand, cwd, runner);
+  let matches = databases.filter(
+    (item) => item.name === database.database_name,
+  );
+  if (matches.length > 1) {
+    throw new Error(
+      `Cloudflare returned multiple D1 databases named ${database.database_name}; refusing to choose implicitly.`,
+    );
+  }
+  let created = false;
+  if (matches.length === 0) {
+    if (isUsableD1DatabaseId(database.database_id)) {
+      throw new Error(
+        `Configured AUTH_DB database_id is not present as ${database.database_name} in the selected Cloudflare account.`,
+      );
+    }
+    runCheckedCommand(createCommand, cwd, runner);
+    created = true;
+    databases = runD1List(listCommand, cwd, runner);
+    matches = databases.filter((item) => item.name === database.database_name);
+  }
+  const provisioned = matches[0];
+  if (!provisioned || matches.length !== 1) {
+    throw new Error(
+      `D1 database ${database.database_name} could not be resolved after provisioning.`,
+    );
+  }
+  if (
+    isUsableD1DatabaseId(database.database_id) &&
+    database.database_id !== provisioned.uuid
+  ) {
+    throw new Error(
+      `Configured AUTH_DB database_id does not match ${database.database_name} in the selected Cloudflare account.`,
+    );
+  }
+
+  let changed = database.database_id !== provisioned.uuid;
+  database.database_id = provisioned.uuid;
+  if (!configuredAccountId(config, envName)) {
+    config.account_id = accountId;
+    changed = true;
+  }
+  let backupPath: string | undefined;
+  let backupCreated = false;
+  if (changed) {
+    const backup = await writeConfigBackup(configPath);
+    backupPath = backup.path;
+    backupCreated = backup.created;
+    await safeAtomicWriteFile(
+      configPath,
+      JSON.stringify(config, null, 2) + "\n",
+    );
+  }
+  return [
+    created
+      ? `Created D1 database ${database.database_name}.`
+      : `Found D1 database ${database.database_name}.`,
+    changed
+      ? `Patched AUTH_DB database_id in ${basename(wranglerPath(cwd))}.`
+      : "AUTH_DB is already provisioned.",
+    ...(backupPath
+      ? [
+          backupCreated
+            ? `Backup written to ${backupPath}`
+            : `Existing backup preserved at ${backupPath}`,
+        ]
+      : []),
+  ].join("\n");
+}
+
+function requiredStringFlag(
+  value: string | boolean | undefined,
+  message: string,
+): string {
+  if (typeof value !== "string" || !value.trim())
+    throw new Error(`${message}.`);
+  return value.trim();
+}
+
+function optionalChoiceFlag(
+  value: string | boolean | undefined,
+  name: string,
+  choices: Set<string>,
+): string | undefined {
+  if (value === undefined || value === false) return undefined;
+  if (typeof value !== "string" || !choices.has(value)) {
+    throw new Error(`${name} must be one of: ${[...choices].join(", ")}.`);
+  }
+  return value;
+}
+
+function runD1List(
+  command: { command: string; args: string[] },
+  cwd: string,
+  runner: CommandRunner,
+): Array<{ name: string; uuid: string }> {
+  const result = runner(command.command, command.args, { cwd });
+  if (result.status !== 0) {
+    throw new Error(
+      `Command failed: ${displayCommand(command.command, command.args)}`,
+    );
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(result.stdout);
+  } catch {
+    throw new Error("Wrangler D1 list response could not be parsed.");
+  }
+  if (!Array.isArray(parsed)) {
+    throw new Error("Wrangler D1 list response had unexpected shape.");
+  }
+  return parsed.map((item) => {
+    if (
+      !isRecord(item) ||
+      typeof item.name !== "string" ||
+      typeof item.uuid !== "string" ||
+      !item.name.trim() ||
+      !item.uuid.trim()
+    ) {
+      throw new Error("Wrangler D1 list response had unexpected shape.");
+    }
+    return { name: item.name, uuid: item.uuid };
+  });
+}
+
 async function commandMigrate(
   parsed: ParsedArgs,
   cwd: string,
@@ -262,13 +468,26 @@ async function commandMigrate(
   const command = await buildMigrateCommand(parsed, cwd);
   if (parsed.flags["dry-run"])
     return displayCommand(command.command, command.args);
+  const target = targetMode(parsed);
+  if (target.remote) {
+    const config = await readWrangler(cwd);
+    assertRemoteAccountAccess(
+      config,
+      parsed.flags.env as string | undefined,
+      cwd,
+      runner,
+      "Remote migrations",
+    );
+  }
   const lines = [runCheckedCommand(command, cwd, runner)];
   if (!parsed.flags.status) {
-    const target = targetMode(parsed);
     const envName = parsed.flags.env as string | undefined;
     const config = await readWrangler(cwd);
-    const database = selectD1(config, envName);
-    const localMigrationVersions = await readLocalMigrationVersions(cwd);
+    const database = selectD1(config, envName, { remote: target.remote });
+    const localMigrationVersions = await readLocalMigrationVersions(
+      cwd,
+      database,
+    );
     if (localMigrationVersions.length > 0) {
       const check = checkD1MigrationState({
         cwd,
@@ -313,7 +532,9 @@ async function buildMigrateCommand(
   if (target.remote) {
     assertRemoteAuthEnvironment(config, envName, "Remote migrations");
   }
-  const database = selectD1(config, envName);
+  const database = selectD1(config, envName, {
+    remote: target.remote && !parsed.flags["dry-run"],
+  });
   const status = parsed.flags.status ? "list" : "apply";
   const remoteFlag = target.remote ? "--remote" : "--local";
   return {
@@ -343,6 +564,7 @@ async function commandDoctor(
     binding: string;
     database_name: string;
     database_id?: string;
+    migrations_dir?: string;
   } | null = null;
   const envName = parsed.flags.env as string | undefined;
   const addCheck = (check: DoctorCheck) => {
@@ -411,45 +633,79 @@ async function commandDoctor(
       fix: "set d1_databases to an array containing the AUTH_DB binding",
     });
   }
-  d1 = Array.isArray(selected.d1_databases)
-    ? (selected.d1_databases.find(isAuthD1Binding) ?? null)
-    : null;
-  if (!d1) {
+  const authD1Bindings = Array.isArray(selected.d1_databases)
+    ? selected.d1_databases.filter(
+        (item) => isRecord(item) && item.binding === "AUTH_DB",
+      )
+    : [];
+  if (authD1Bindings.length > 1) {
+    addCheck({
+      id: "d1_binding",
+      status: "fail",
+      message: "Wrangler config must contain exactly one AUTH_DB D1 binding",
+      fix: "remove duplicate AUTH_DB entries from the selected Wrangler environment",
+    });
+  } else if (authD1Bindings.length === 1) {
+    const candidate = authD1Bindings[0];
+    if (isAuthD1Binding(candidate)) d1 = candidate;
+    else {
+      addCheck({
+        id: "d1_binding",
+        status: "fail",
+        message: "D1 binding AUTH_DB has invalid fields",
+        fix: "set string database_name, database_id, and migrations_dir values for AUTH_DB",
+      });
+    }
+  }
+  if (authD1Bindings.length === 0) {
     addCheck({
       id: "d1_binding",
       status: "fail",
       message: "D1 binding AUTH_DB is missing",
       fix: "npx --package @cf-auth/cli@latest cf-auth init --repair or add d1_databases binding AUTH_DB",
     });
-  } else if (!d1.database_name?.trim()) {
+  } else if (d1 && !d1.database_name?.trim()) {
     addCheck({
       id: "d1_database_name",
       status: "fail",
       message: "D1 database_name is missing for AUTH_DB",
       fix: "set database_name for the AUTH_DB D1 binding",
     });
-  } else if (remoteTarget && !d1.database_id?.trim()) {
+  } else if (
+    d1 &&
+    d1.migrations_dir !== undefined &&
+    !d1.migrations_dir.trim()
+  ) {
+    addCheck({
+      id: "d1_migrations_dir",
+      status: "fail",
+      message: "D1 binding AUTH_DB migrations_dir is empty",
+      fix: "remove migrations_dir to use migrations or set a non-empty relative path",
+    });
+  } else if (d1 && remoteTarget && !d1.database_id?.trim()) {
     addCheck({
       id: "d1_database_id",
       status: "fail",
       message: "D1 database_id is missing for remote target",
       fix: "set the real D1 database_id for AUTH_DB in the selected Wrangler environment",
     });
-  } else if (isPlaceholderD1DatabaseId(d1.database_id)) {
+  } else if (d1 && isPlaceholderD1DatabaseId(d1.database_id)) {
     addCheck({
       id: "d1_database_id",
       status: "fail",
       message: "D1 database_id is still a placeholder",
       fix: "set the real D1 database_id for AUTH_DB",
     });
-  } else {
+  } else if (d1) {
     addCheck({
       id: "d1_binding",
       status: "pass",
       message: "D1 binding AUTH_DB configured",
     });
   }
-  const localMigrationVersions = await readLocalMigrationVersions(cwd);
+  const localMigrationVersions = d1
+    ? await readLocalMigrationVersions(cwd, d1)
+    : [];
   if (localMigrationVersions.length === 0) {
     addCheck({
       id: "migration_files",
@@ -520,10 +776,18 @@ async function commandDoctor(
   addCheck(
     await checkPasswordBenchmark(authSource, remoteTarget, passwordBenchmark),
   );
+  let remoteAccountVerified = !remoteTarget;
   if (remoteTarget) {
-    addCheck(checkCloudflareAccount(cwd, runner, selected ?? config, config));
+    const accountCheck = checkCloudflareAccount(
+      cwd,
+      runner,
+      selected ?? config,
+      config,
+    );
+    addCheck(accountCheck);
+    remoteAccountVerified = accountCheck.status === "pass";
   }
-  if (d1 && localMigrationVersions.length > 0) {
+  if (remoteAccountVerified && d1 && localMigrationVersions.length > 0) {
     const migrationCheck = checkD1MigrationState({
       cwd,
       runner,
@@ -531,6 +795,7 @@ async function commandDoctor(
       envName,
       remote: remoteTarget,
       localMigrationVersions,
+      allowUninitialized: Boolean(options.allowPendingMigrations),
     });
     addCheck(
       options.allowPendingMigrations && isPendingMigrationCheck(migrationCheck)
@@ -564,43 +829,45 @@ async function commandDoctor(
             : "Cloudflare Email binding AUTH_EMAIL configured",
       });
     }
-    const secretCheck = checkRemoteSecret(
-      envName,
-      cwd,
-      runner,
-      localSecretNames.has("AUTH_SECRET"),
-    );
-    addCheck(secretCheck);
-    if (localSecretNames.has("AUTH_SECRET_PREVIOUS")) {
-      addCheck(
-        checkRemoteSecretName({
-          name: "AUTH_SECRET_PREVIOUS",
-          envName,
-          cwd,
-          runner,
-          missingMessage:
-            "AUTH_SECRET_PREVIOUS exists in .dev.vars but is missing remotely",
-          unavailableMessage:
-            "Remote AUTH_SECRET_PREVIOUS could not be verified",
-          passMessage: "Remote AUTH_SECRET_PREVIOUS configured",
-          fix: `wrangler secret put AUTH_SECRET_PREVIOUS${envName ? ` --env ${envName}` : ""}`,
-        }),
+    if (remoteAccountVerified) {
+      const secretCheck = checkRemoteSecret(
+        envName,
+        cwd,
+        runner,
+        localSecretNames.has("AUTH_SECRET"),
       );
-    }
-    if (authSource.turnstileRequiresSecret) {
-      addCheck(
-        checkRemoteSecretName({
-          name: "TURNSTILE_SECRET_KEY",
-          envName,
-          cwd,
-          runner,
-          missingMessage: "TURNSTILE_SECRET_KEY is missing remotely",
-          unavailableMessage:
-            "Remote TURNSTILE_SECRET_KEY could not be verified",
-          passMessage: "Remote TURNSTILE_SECRET_KEY configured",
-          fix: `wrangler secret put TURNSTILE_SECRET_KEY${envName ? ` --env ${envName}` : ""}`,
-        }),
-      );
+      addCheck(secretCheck);
+      if (localSecretNames.has("AUTH_SECRET_PREVIOUS")) {
+        addCheck(
+          checkRemoteSecretName({
+            name: "AUTH_SECRET_PREVIOUS",
+            envName,
+            cwd,
+            runner,
+            missingMessage:
+              "AUTH_SECRET_PREVIOUS exists in .dev.vars but is missing remotely",
+            unavailableMessage:
+              "Remote AUTH_SECRET_PREVIOUS could not be verified",
+            passMessage: "Remote AUTH_SECRET_PREVIOUS configured",
+            fix: `wrangler secret put AUTH_SECRET_PREVIOUS${envName ? ` --env ${envName}` : ""}`,
+          }),
+        );
+      }
+      if (authSource.turnstileRequiresSecret) {
+        addCheck(
+          checkRemoteSecretName({
+            name: "TURNSTILE_SECRET_KEY",
+            envName,
+            cwd,
+            runner,
+            missingMessage: "TURNSTILE_SECRET_KEY is missing remotely",
+            unavailableMessage:
+              "Remote TURNSTILE_SECRET_KEY could not be verified",
+            passMessage: "Remote TURNSTILE_SECRET_KEY configured",
+            fix: `wrangler secret put TURNSTILE_SECRET_KEY${envName ? ` --env ${envName}` : ""}`,
+          }),
+        );
+      }
     }
   }
   if (!envName) {
@@ -768,6 +1035,10 @@ function isPlaceholderD1DatabaseId(value: string | undefined): boolean {
   return Boolean(normalized && normalized.startsWith("REPLACE_"));
 }
 
+function isUsableD1DatabaseId(value: string | undefined): value is string {
+  return Boolean(value?.trim()) && !isPlaceholderD1DatabaseId(value);
+}
+
 function checkCloudflareAccount(
   cwd: string,
   runner: CommandRunner,
@@ -786,7 +1057,9 @@ function checkCloudflareAccount(
   const account = parseWhoamiResult(result.stdout);
   if (!account.ok) return account.check;
   const configuredAccount =
-    selected.account_id?.trim() || root.account_id?.trim();
+    selected.account_id?.trim() ||
+    root.account_id?.trim() ||
+    process.env.CLOUDFLARE_ACCOUNT_ID?.trim();
   if (configuredAccount) {
     const found = account.accounts.some(
       (item) => item.id === configuredAccount,
@@ -806,18 +1079,12 @@ function checkCloudflareAccount(
       message: "Cloudflare account selection verified",
     };
   }
-  if (account.accounts.length > 1) {
-    return {
-      id: "cloudflare_account",
-      status: "warn",
-      message: "Multiple Cloudflare accounts available; selection is implicit",
-      fix: "set account_id in wrangler.jsonc for reproducible production deploys",
-    };
-  }
   return {
     id: "cloudflare_account",
-    status: "pass",
-    message: "Cloudflare login verified",
+    status: "fail",
+    message:
+      "Cloudflare account selection is implicit because account_id is missing",
+    fix: "run cf-auth provision --env production or set account_id in wrangler.jsonc",
   };
 }
 
@@ -851,12 +1118,15 @@ function parseWhoamiResult(
       },
     };
   }
-  const accounts = Array.isArray(parsed.accounts)
-    ? parsed.accounts.flatMap((item) => {
-        if (!isRecord(item) || typeof item.id !== "string") return [];
-        return [{ id: item.id }];
-      })
-    : [];
+  const accountIds = new Set<string>();
+  if (Array.isArray(parsed.accounts)) {
+    for (const item of parsed.accounts) {
+      if (!isRecord(item) || typeof item.id !== "string") continue;
+      const id = item.id.trim();
+      if (id) accountIds.add(id);
+    }
+  }
+  const accounts = [...accountIds].map((id) => ({ id }));
   if (accounts.length === 0) {
     return {
       ok: false,
@@ -871,6 +1141,81 @@ function parseWhoamiResult(
   return { ok: true, accounts };
 }
 
+function configuredAccountId(
+  config: WranglerConfig,
+  envName: string | undefined,
+): string | undefined {
+  const selected = envName ? config.env?.[envName] : config;
+  return (
+    selected?.account_id?.trim() ||
+    config.account_id?.trim() ||
+    process.env.CLOUDFLARE_ACCOUNT_ID?.trim() ||
+    undefined
+  );
+}
+
+function readAccessibleAccounts(
+  cwd: string,
+  runner: CommandRunner,
+  label: string,
+): Array<{ id: string }> {
+  const result = runner("wrangler", ["whoami", "--json"], { cwd });
+  if (result.status !== 0) {
+    throw new Error(`${label} could not verify the Cloudflare account.`);
+  }
+  const account = parseWhoamiResult(result.stdout);
+  if (!account.ok) {
+    throw new Error(`${label} could not verify the Cloudflare account.`);
+  }
+  return account.accounts;
+}
+
+function assertRemoteAccountAccess(
+  config: WranglerConfig,
+  envName: string | undefined,
+  cwd: string,
+  runner: CommandRunner,
+  label: string,
+): string {
+  const configured = configuredAccountId(config, envName);
+  if (!configured) {
+    throw new Error(
+      `${label} requires an explicit account_id. Run cf-auth provision --env ${envName ?? "production"} or set account_id in Wrangler config.`,
+    );
+  }
+  const accounts = readAccessibleAccounts(cwd, runner, label);
+  if (!accounts.some((item) => item.id === configured)) {
+    throw new Error(
+      `${label} account_id is not available to the authenticated Wrangler user.`,
+    );
+  }
+  return configured;
+}
+
+function resolveProvisionAccount(
+  config: WranglerConfig,
+  envName: string,
+  cwd: string,
+  runner: CommandRunner,
+): string {
+  const accounts = readAccessibleAccounts(cwd, runner, "Provisioning");
+  const configured = configuredAccountId(config, envName);
+  if (configured) {
+    if (!accounts.some((item) => item.id === configured)) {
+      throw new Error(
+        "Provisioning account_id is not available to the authenticated Wrangler user.",
+      );
+    }
+    return configured;
+  }
+  if (accounts.length !== 1) {
+    throw new Error(
+      "Provisioning requires account_id when Wrangler can access multiple Cloudflare accounts.",
+    );
+  }
+  return accounts[0]!.id;
+}
+
 function checkD1MigrationState(options: {
   cwd: string;
   runner: CommandRunner;
@@ -878,6 +1223,7 @@ function checkD1MigrationState(options: {
   envName: string | undefined;
   remote: boolean;
   localMigrationVersions: string[];
+  allowUninitialized?: boolean;
 }): DoctorCheck {
   const modeFlag = options.remote ? "--remote" : "--local";
   const result = options.runner(
@@ -896,6 +1242,18 @@ function checkD1MigrationState(options: {
   );
   const target = options.remote ? "remote" : "local";
   if (result.status !== 0) {
+    const detail = `${result.stderr}\n${result.stdout}`;
+    if (
+      options.allowUninitialized &&
+      /no such table:\s*(?:auth_schema_migrations|auth_meta)/iu.test(detail)
+    ) {
+      return {
+        id: "d1_migrations",
+        status: "fail",
+        message: `D1 migration ${options.localMigrationVersions[0] ?? "0001"} has not been applied ${target}ly; the auth schema is uninitialized`,
+        fix: migrationFix(options.remote, options.envName),
+      };
+    }
     return {
       id: "d1_migrations",
       status: "fail",
@@ -1116,7 +1474,7 @@ async function commandDeploy(
         },
         cwd,
       );
-      const database = selectD1(config, envName);
+      const database = selectD1(config, envName, { remote: true });
       const migrationVerify = buildD1ExecuteCommand(
         {
           databaseName: database.database_name,
@@ -1151,8 +1509,11 @@ async function commandDeploy(
       cwd,
     );
     lines.push(runCheckedCommand(migrateApply, cwd, runner));
-    const database = selectD1(config, envName);
-    const localMigrationVersions = await readLocalMigrationVersions(cwd);
+    const database = selectD1(config, envName, { remote: true });
+    const localMigrationVersions = await readLocalMigrationVersions(
+      cwd,
+      database,
+    );
     const migrationCheck = checkD1MigrationState({
       cwd,
       runner,
@@ -1436,7 +1797,7 @@ async function checkPackageVersions(
 ): Promise<DoctorCheck | null> {
   let pkg: unknown;
   try {
-    pkg = JSON.parse(await readFile(join(cwd, "package.json"), "utf8"));
+    pkg = JSON.parse(await safeReadFile(join(cwd, "package.json")));
   } catch (error) {
     if (hasErrorCode(error, "ENOENT")) {
       return null;
@@ -1692,9 +2053,13 @@ function isAuthMode(
 }
 
 async function checkLocalSecrets(cwd: string): Promise<DoctorCheck[]> {
+  const path = join(cwd, ".dev.vars");
   let text: string;
+  let permissionCheck: DoctorCheck | null = null;
   try {
-    text = await readFile(join(cwd, ".dev.vars"), "utf8");
+    const info = await safeFileInfo(path);
+    text = await safeReadFile(path);
+    permissionCheck = localSecretPermissionCheck(info.mode);
   } catch {
     return [
       {
@@ -1715,6 +2080,7 @@ async function checkLocalSecrets(cwd: string): Promise<DoctorCheck[]> {
         message: "Local AUTH_SECRET is missing",
         fix: "npx --package @cf-auth/cli@latest cf-auth rotate-secret --print >> .dev.vars",
       },
+      ...(permissionCheck ? [permissionCheck] : []),
     ];
   }
   try {
@@ -1727,6 +2093,7 @@ async function checkLocalSecrets(cwd: string): Promise<DoctorCheck[]> {
         message: "Local AUTH_SECRET or AUTH_SECRET_PREVIOUS is invalid",
         fix: "regenerate secrets with npx --package @cf-auth/cli@latest cf-auth rotate-secret --print",
       },
+      ...(permissionCheck ? [permissionCheck] : []),
     ];
   }
   return [
@@ -1737,12 +2104,31 @@ async function checkLocalSecrets(cwd: string): Promise<DoctorCheck[]> {
         ? "Local AUTH_SECRET key ring is valid"
         : "Local AUTH_SECRET format is valid",
     },
+    ...(permissionCheck ? [permissionCheck] : []),
   ];
+}
+
+function localSecretPermissionCheck(mode: number): DoctorCheck | null {
+  if (process.platform === "win32") return null;
+  const permissions = mode & 0o777;
+  if ((permissions & 0o077) !== 0) {
+    return {
+      id: "local_secret_permissions",
+      status: "warn",
+      message: `.dev.vars permissions ${permissions.toString(8).padStart(3, "0")} allow group or other access`,
+      fix: "chmod 600 .dev.vars",
+    };
+  }
+  return {
+    id: "local_secret_permissions",
+    status: "pass",
+    message: ".dev.vars permissions are restricted",
+  };
 }
 
 async function readLocalSecretNames(cwd: string): Promise<Set<string>> {
   try {
-    const text = await readFile(join(cwd, ".dev.vars"), "utf8");
+    const text = await safeReadFile(join(cwd, ".dev.vars"));
     const values = parseEnvFile(text);
     return new Set(
       ["AUTH_SECRET", "AUTH_SECRET_PREVIOUS"].filter((name) =>
@@ -1760,7 +2146,7 @@ async function checkLocalNamedSecret(
 ): Promise<DoctorCheck> {
   let text: string;
   try {
-    text = await readFile(join(cwd, ".dev.vars"), "utf8");
+    text = await safeReadFile(join(cwd, ".dev.vars"));
   } catch {
     return {
       id: "turnstile_secret",
@@ -2345,14 +2731,21 @@ async function readRootAuthConfigFiles(cwd: string): Promise<SourceFile[]> {
     "auth.config.cjs",
   ]) {
     const path = join(cwd, name);
-    if (!existsSync(path)) continue;
-    files.push({ path, text: await readFile(path, "utf8") });
+    if (!(await safeFileInfo(path, true))) continue;
+    files.push({ path, text: await safeReadFile(path) });
   }
   return files;
 }
 
 async function readSourceFiles(root: string): Promise<SourceFile[]> {
-  if (!existsSync(root)) return [];
+  const rootInfo = await lstatIfPresent(root);
+  if (!rootInfo) return [];
+  if (rootInfo.isSymbolicLink()) {
+    throw new Error(`${root}: symbolic-link directories are not allowed`);
+  }
+  if (!rootInfo.isDirectory()) {
+    throw new Error(`${root}: expected a directory`);
+  }
   const files: SourceFile[] = [];
   async function visit(directory: string) {
     const entries = await readdir(directory, { withFileTypes: true });
@@ -2368,7 +2761,7 @@ async function readSourceFiles(root: string): Promise<SourceFile[]> {
         !entry.name.endsWith(".d.ts")
       ) {
         const path = join(directory, entry.name);
-        files.push({ path, text: await readFile(path, "utf8") });
+        files.push({ path, text: await safeReadFile(path) });
       }
     }
   }
@@ -2718,37 +3111,38 @@ async function commandRotateSecret(
       );
     }
     assertRemoteAuthEnvironment(config, envName, "rotate-secret --apply");
-    const lines: string[] = [];
     const previous = await resolvePreviousSecret(parsed);
-    if (previous) {
-      validateRotatedSecrets(secret, previous);
-      const previousCommand = {
-        command: "wrangler",
-        args: [
-          "secret",
-          "put",
-          "AUTH_SECRET_PREVIOUS",
-          ...(envName ? ["--env", envName] : []),
-        ],
-      };
-      lines.push(runCheckedCommand(previousCommand, cwd, runner, previous));
-      lines.push("Remote AUTH_SECRET_PREVIOUS updated.");
-    } else {
+    validateRotatedSecrets(secret, previous ?? undefined);
+    assertRemoteAccountAccess(
+      config,
+      envName,
+      cwd,
+      runner,
+      "rotate-secret --apply",
+    );
+    const command = {
+      command: "wrangler",
+      args: ["secret", "bulk", ...(envName ? ["--env", envName] : [])],
+    };
+    const input =
+      JSON.stringify({
+        AUTH_SECRET: secret,
+        AUTH_SECRET_PREVIOUS: previous,
+      }) + "\n";
+    const lines = [runCheckedCommand(command, cwd, runner, input)];
+    lines.push(
+      previous
+        ? "Remote AUTH_SECRET and AUTH_SECRET_PREVIOUS updated atomically."
+        : "Remote AUTH_SECRET updated and AUTH_SECRET_PREVIOUS removed atomically.",
+    );
+    lines.push(
+      "Wrangler created and deployed a Worker version for the secret update.",
+    );
+    if (!previous) {
       lines.push(
         "Warning: previous secret was not provided; existing sessions and email tokens will be invalidated.",
       );
     }
-    const command = {
-      command: "wrangler",
-      args: [
-        "secret",
-        "put",
-        "AUTH_SECRET",
-        ...(envName ? ["--env", envName] : []),
-      ],
-    };
-    lines.push(runCheckedCommand(command, cwd, runner, secret));
-    lines.push("Remote AUTH_SECRET updated.");
     return lines.join("\n");
   }
   return `AUTH_SECRET=${secret}`;
@@ -2788,8 +3182,8 @@ async function commandClean(
   cwd: string,
   runner: CommandRunner,
 ): Promise<string> {
-  const context = await d1CommandContext(parsed, cwd, "Remote cleanup");
-  const command = buildD1ExecuteCommand(context, cleanupSql(Date.now()));
+  const context = await d1CommandContext(parsed, cwd, runner, "Remote cleanup");
+  const command = buildD1ExecuteCommand(context, cleanupSql());
   const display = displayD1ExecuteCommand(context, "<redacted cleanup SQL>");
   if (parsed.flags["dry-run"]) {
     return [
@@ -2801,12 +3195,17 @@ async function commandClean(
   return `${result}\ncleanup completed`;
 }
 
-function cleanupSql(now: number): string {
+function d1NowMillisecondsSql(): string {
+  return "(CAST(strftime('%s', 'now') AS INTEGER) * 1000)";
+}
+
+function cleanupSql(): string {
   const day = 24 * 60 * 60 * 1000;
-  const sessionCutoff = now - 7 * day;
-  const tokenCutoff = now - 7 * day;
-  const rateLimitCutoff = now - day;
-  const eventCutoff = now - 90 * day;
+  const now = d1NowMillisecondsSql();
+  const sessionCutoff = `(${now} - ${7 * day})`;
+  const tokenCutoff = `(${now} - ${7 * day})`;
+  const rateLimitCutoff = `(${now} - ${day})`;
+  const eventCutoff = `(${now} - ${90 * day})`;
   return [
     `DELETE FROM sessions WHERE expires_at < ${sessionCutoff} OR (revoked_at IS NOT NULL AND revoked_at < ${sessionCutoff})`,
     `DELETE FROM verification_tokens WHERE expires_at < ${tokenCutoff} OR (used_at IS NOT NULL AND used_at < ${tokenCutoff}) OR (revoked_at IS NOT NULL AND revoked_at < ${tokenCutoff})`,
@@ -2820,7 +3219,12 @@ async function commandRecovery(
   cwd: string,
   runner: CommandRunner,
 ): Promise<string> {
-  const context = await d1CommandContext(parsed, cwd, "Remote recovery");
+  const context = await d1CommandContext(
+    parsed,
+    cwd,
+    runner,
+    "Remote recovery",
+  );
   if (parsed.command === "users") {
     return commandUsers(parsed, cwd, runner, context);
   }
@@ -2841,7 +3245,7 @@ function commandUsers(
   if (!identifier) {
     throw new Error("users command requires a user id or email.");
   }
-  const now = Date.now();
+  const now = d1NowMillisecondsSql();
   const target = userWhereClause(identifier);
   const sql =
     action === "disable"
@@ -2876,7 +3280,7 @@ function commandSessions(
   }
   const target = userWhereClause(parsed.flags.user);
   if (action === "revoke") {
-    const now = Date.now();
+    const now = d1NowMillisecondsSql();
     const sql = `UPDATE sessions SET revoked_at = ${now} WHERE user_id IN (SELECT id FROM users WHERE ${target}) AND revoked_at IS NULL`;
     if (parsed.flags["dry-run"]) {
       return "Dry run only. Would revoke matched user sessions without printing tokens, hashes, cookies, raw IPs, or raw user agents.";
@@ -2942,6 +3346,7 @@ interface D1CommandContext {
 async function d1CommandContext(
   parsed: ParsedArgs,
   cwd: string,
+  runner: CommandRunner,
   remoteErrorPrefix: string,
 ): Promise<D1CommandContext> {
   const target = targetMode(parsed);
@@ -2959,8 +3364,19 @@ async function d1CommandContext(
   }
   if (target.remote) {
     assertRemoteAuthEnvironment(config, envName, remoteErrorPrefix);
+    if (!parsed.flags["dry-run"]) {
+      assertRemoteAccountAccess(
+        config,
+        envName,
+        cwd,
+        runner,
+        remoteErrorPrefix,
+      );
+    }
   }
-  const database = selectD1(config, envName);
+  const database = selectD1(config, envName, {
+    remote: target.remote && !parsed.flags["dry-run"],
+  });
   return {
     databaseName: database.database_name,
     remote: target.remote,
@@ -3124,6 +3540,13 @@ function targetMode(parsed: ParsedArgs): { local: boolean; remote: boolean } {
   return { local, remote };
 }
 
+interface D1Binding {
+  binding: string;
+  database_name: string;
+  database_id?: string;
+  migrations_dir?: string;
+}
+
 interface WranglerConfig {
   $schema?: string;
   name?: string;
@@ -3136,12 +3559,7 @@ interface WranglerConfig {
   };
   vars?: Record<string, string>;
   send_email?: Array<{ name: string; remote?: boolean }>;
-  d1_databases?: Array<{
-    binding: string;
-    database_name: string;
-    database_id?: string;
-    migrations_dir?: string;
-  }>;
+  d1_databases?: D1Binding[];
   env?: Record<string, WranglerConfig>;
 }
 
@@ -3149,9 +3567,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-async function readLocalMigrationVersions(cwd: string): Promise<string[]> {
+async function readLocalMigrationVersions(
+  cwd: string,
+  database: Pick<D1Binding, "migrations_dir">,
+): Promise<string[]> {
   try {
-    const files = await readdir(join(cwd, "migrations"));
+    const directory = resolve(
+      cwd,
+      database.migrations_dir?.trim() || "migrations",
+    );
+    await walkSafeDirectory(directory, false);
+    const files = await readdir(directory);
     return files
       .flatMap((file) => {
         const match = file.match(/^(\d+)_.*\.sql$/);
@@ -3164,18 +3590,57 @@ async function readLocalMigrationVersions(cwd: string): Promise<string[]> {
 }
 
 async function readWrangler(cwd: string): Promise<WranglerConfig> {
-  const path = wranglerPath(cwd);
-  const text = await readFile(path, "utf8");
+  const path =
+    (await existingWranglerPathForWrite(cwd)) ?? join(cwd, "wrangler.json");
+  const text = await safeReadFile(path);
   return parseWranglerConfig(text, path);
 }
 
-function selectD1(config: WranglerConfig, envName?: string) {
+function selectD1(
+  config: WranglerConfig,
+  envName?: string,
+  options: { remote?: boolean } = {},
+): D1Binding {
+  const database = selectD1ForProvisioning(config, envName);
+  if (!database.database_id?.trim()) {
+    throw new Error("D1 binding AUTH_DB database_id is missing.");
+  }
+  if (options.remote && isPlaceholderD1DatabaseId(database.database_id)) {
+    throw new Error(
+      "D1 binding AUTH_DB database_id is still a placeholder; run cf-auth provision --env <name>.",
+    );
+  }
+  return database;
+}
+
+function selectD1ForProvisioning(
+  config: WranglerConfig,
+  envName?: string,
+): D1Binding {
   const selectedResult = selectWranglerEnvironment(config, envName);
-  const selected = selectedResult.ok ? selectedResult.config : undefined;
-  const database = Array.isArray(selected?.d1_databases)
-    ? selected.d1_databases.find(isAuthD1Binding)
-    : undefined;
-  if (!database) throw new Error("D1 binding AUTH_DB is missing.");
+  if (!selectedResult.ok) throw new Error(selectedResult.message);
+  const selected = selectedResult.config;
+  if (!Array.isArray(selected.d1_databases)) {
+    throw new Error("Wrangler d1_databases must be an array.");
+  }
+  const matches = selected.d1_databases.filter(
+    (item) => isRecord(item) && item.binding === "AUTH_DB",
+  );
+  if (matches.length !== 1) {
+    throw new Error(
+      "Wrangler config must contain exactly one AUTH_DB D1 binding.",
+    );
+  }
+  const database = matches[0];
+  if (!isAuthD1Binding(database) || !database.database_name?.trim()) {
+    throw new Error("D1 binding AUTH_DB database_name is missing or invalid.");
+  }
+  if (
+    database.migrations_dir !== undefined &&
+    !database.migrations_dir.trim()
+  ) {
+    throw new Error("D1 binding AUTH_DB migrations_dir must not be empty.");
+  }
   return database;
 }
 
@@ -3352,9 +3817,13 @@ async function repairWranglerConfig(
   cwd: string,
   appName: string,
   options: { backupExisting?: boolean } = {},
-): Promise<{ changed: boolean; backupPath?: string }> {
+): Promise<{
+  changed: boolean;
+  backupPath?: string;
+  backupCreated?: boolean;
+}> {
   const path = wranglerPath(cwd);
-  const text = await readFile(path, "utf8");
+  const text = await safeReadFile(path);
   const config = parseWranglerConfig(text, path);
   let changed = false;
 
@@ -3424,19 +3893,27 @@ async function repairWranglerConfig(
   }
 
   let backupPath: string | undefined;
+  let backupCreated = false;
   if (changed) {
     if (options.backupExisting) {
-      backupPath = await writeConfigBackup(path);
+      const backup = await writeConfigBackup(path);
+      backupPath = backup.path;
+      backupCreated = backup.created;
     }
-    await writeFile(path, JSON.stringify(config, null, 2) + "\n");
+    await safeAtomicWriteFile(path, JSON.stringify(config, null, 2) + "\n");
   }
-  return backupPath ? { changed, backupPath } : { changed };
+  return backupPath ? { changed, backupPath, backupCreated } : { changed };
 }
 
-async function writeConfigBackup(path: string): Promise<string> {
+async function writeConfigBackup(
+  path: string,
+): Promise<{ path: string; created: boolean }> {
   const backupPath = `${path}.cf-auth-backup`;
-  if (!existsSync(backupPath)) await copyFile(path, backupPath);
-  return backupPath;
+  const source = await safeFileInfo(path);
+  const created = await writeIfMissing(backupPath, await safeReadFile(path), {
+    mode: source.mode & 0o777,
+  });
+  return { path: backupPath, created };
 }
 
 function ensureWranglerSchema(config: WranglerConfig): boolean {
@@ -3504,7 +3981,18 @@ function ensureD1Binding(
     config.d1_databases = [];
     changed = true;
   }
-  let binding = config.d1_databases.find(isAuthD1Binding);
+  const matches = config.d1_databases.filter(
+    (item) => isRecord(item) && item.binding === "AUTH_DB",
+  );
+  if (matches.length > 1) {
+    throw new Error(
+      "Wrangler config must contain exactly one AUTH_DB D1 binding.",
+    );
+  }
+  let binding = matches[0];
+  if (binding && !isAuthD1Binding(binding)) {
+    throw new Error("D1 binding AUTH_DB has invalid fields.");
+  }
   if (!binding) {
     binding = {
       binding: "AUTH_DB",
@@ -3533,9 +4021,203 @@ function ensureD1Binding(
   return changed;
 }
 
-async function writeIfMissing(path: string, contents: string): Promise<void> {
-  if (existsSync(path)) return;
-  await writeFile(path, contents);
+async function lstatIfPresent(path: string) {
+  try {
+    return await lstat(path);
+  } catch (error) {
+    if (hasErrorCode(error, "ENOENT")) return null;
+    throw error;
+  }
+}
+
+async function safeFileInfo(path: string): Promise<Stats>;
+async function safeFileInfo(
+  path: string,
+  allowMissing: true,
+): Promise<Stats | null>;
+async function safeFileInfo(
+  path: string,
+  allowMissing = false,
+): Promise<Stats | null> {
+  const info = await lstatIfPresent(path);
+  if (!info) {
+    if (allowMissing) return null;
+    const error = new Error(
+      `${path}: file is missing`,
+    ) as NodeJS.ErrnoException;
+    error.code = "ENOENT";
+    throw error;
+  }
+  if (info.isSymbolicLink()) {
+    throw new Error(`${path}: symbolic links are not allowed`);
+  }
+  if (!info.isFile()) {
+    throw new Error(`${path}: expected a regular file`);
+  }
+  return info;
+}
+
+async function walkSafeDirectory(path: string, create: boolean): Promise<void> {
+  const absolute = resolve(path);
+  const root = parse(absolute).root;
+  let current = root;
+  const parts = absolute.slice(root.length).split(sep).filter(Boolean);
+  for (const part of parts) {
+    current = join(current, part);
+    let info = await lstatIfPresent(current);
+    if (!info && create) {
+      try {
+        await mkdir(current);
+      } catch (error) {
+        if (!hasErrorCode(error, "EEXIST")) throw error;
+      }
+      info = await lstatIfPresent(current);
+    }
+    if (!info) throw new Error(`${current}: directory is missing`);
+    if (info.isSymbolicLink()) {
+      throw new Error(`${current}: symbolic-link directories are not allowed`);
+    }
+    if (!info.isDirectory()) {
+      throw new Error(`${current}: expected a directory`);
+    }
+  }
+}
+
+async function ensureSafeDirectory(path: string): Promise<void> {
+  await walkSafeDirectory(path, true);
+}
+
+async function safeReadFile(path: string): Promise<string> {
+  await walkSafeDirectory(dirname(path), false);
+  const before = await safeFileInfo(path);
+  const flags = fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0);
+  const handle = await open(path, flags);
+  try {
+    const opened = await handle.stat();
+    if (
+      before.dev !== opened.dev ||
+      (before.ino !== 0 && opened.ino !== 0 && before.ino !== opened.ino)
+    ) {
+      throw new Error(`${path}: file changed while it was being opened`);
+    }
+    return await handle.readFile("utf8");
+  } finally {
+    await handle.close();
+  }
+}
+
+async function safeChmodFile(path: string, mode: number): Promise<void> {
+  await walkSafeDirectory(dirname(path), false);
+  const before = await safeFileInfo(path);
+  const flags = fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0);
+  const handle = await open(path, flags);
+  try {
+    const opened = await handle.stat();
+    if (
+      before.dev !== opened.dev ||
+      (before.ino !== 0 && opened.ino !== 0 && before.ino !== opened.ino)
+    ) {
+      throw new Error(`${path}: file changed while it was being opened`);
+    }
+    await handle.chmod(mode);
+  } finally {
+    await handle.close();
+  }
+}
+
+async function safeCreateFile(
+  path: string,
+  contents: string,
+  mode: number,
+): Promise<void> {
+  await walkSafeDirectory(dirname(path), false);
+  const flags =
+    fsConstants.O_WRONLY |
+    fsConstants.O_CREAT |
+    fsConstants.O_EXCL |
+    (fsConstants.O_NOFOLLOW ?? 0);
+  const handle = await open(path, flags, mode);
+  try {
+    await handle.writeFile(contents, "utf8");
+    await handle.chmod(mode);
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+}
+
+async function safeAtomicWriteFile(
+  path: string,
+  contents: string,
+  options: { mode?: number } = {},
+): Promise<void> {
+  await walkSafeDirectory(dirname(path), false);
+  const existing = await safeFileInfo(path, true);
+  const mode = options.mode ?? (existing ? existing.mode & 0o777 : 0o644);
+  const temporaryPath = join(
+    dirname(path),
+    `.${basename(path)}.cf-auth-${process.pid}-${randomBytes(8).toString("hex")}.tmp`,
+  );
+  try {
+    await safeCreateFile(temporaryPath, contents, mode);
+    await safeFileInfo(path, true);
+    await rename(temporaryPath, path);
+  } catch (error) {
+    try {
+      await unlink(temporaryPath);
+    } catch (cleanupError) {
+      if (!hasErrorCode(cleanupError, "ENOENT")) throw cleanupError;
+    }
+    throw error;
+  }
+}
+
+async function writeIfMissing(
+  path: string,
+  contents: string,
+  options: { mode?: number; enforceMode?: boolean } = {},
+): Promise<boolean> {
+  const existing = await safeFileInfo(path, true);
+  if (existing) {
+    if (options.enforceMode && options.mode !== undefined) {
+      await safeChmodFile(path, options.mode);
+    }
+    return false;
+  }
+  await safeCreateFile(path, contents, options.mode ?? 0o644);
+  return true;
+}
+
+async function ensureGitignoreEntries(path: string): Promise<void> {
+  const required = gitignoreTemplate().trimEnd().split("\n");
+  const existing = await safeFileInfo(path, true);
+  if (!existing) {
+    await safeCreateFile(path, gitignoreTemplate(), 0o644);
+    return;
+  }
+  const text = await safeReadFile(path);
+  const present = new Set(
+    text
+      .split(/\r?\n/u)
+      .map((line) => line.trim())
+      .filter(Boolean),
+  );
+  const missing = required.filter((entry) => !present.has(entry));
+  if (missing.length === 0) return;
+  const separator = text.length === 0 || text.endsWith("\n") ? "" : "\n";
+  await safeAtomicWriteFile(path, `${text}${separator}${missing.join("\n")}\n`);
+}
+
+async function existingWranglerPathForWrite(
+  cwd: string,
+): Promise<string | null> {
+  for (const path of [
+    join(cwd, "wrangler.jsonc"),
+    join(cwd, "wrangler.json"),
+  ]) {
+    if (await safeFileInfo(path, true)) return path;
+  }
+  return null;
 }
 
 function packageNameFromTarget(target: string): string {
@@ -3578,7 +4260,7 @@ function templatePackageJson(name: string, template: InitTemplate) {
           "@cf-auth/email-cloudflare": generatedPackageVersion,
           "@cf-auth/hono": generatedPackageVersion,
           "@cf-auth/worker": generatedPackageVersion,
-          hono: "4.12.18",
+          hono: "4.12.29",
         }
       : {
           "@cf-auth/email-cloudflare": generatedPackageVersion,
@@ -3596,8 +4278,8 @@ function templatePackageJson(name: string, template: InitTemplate) {
     dependencies,
     devDependencies: {
       typescript: "7.0.2",
-      wrangler: "4.90.1",
-      vitest: "4.1.6",
+      wrangler: supportedWranglerVersion,
+      vitest: "4.1.10",
     },
     engines: { node: ">=22.13.0" },
     pnpm: {
@@ -3613,14 +4295,16 @@ async function writeOrPatchPackageJson(
   name: string,
   template: InitTemplate,
 ): Promise<PackageJsonPatchResult> {
-  if (!existsSync(path)) {
-    await writeFile(
+  const existing = await safeFileInfo(path, true);
+  if (!existing) {
+    await safeCreateFile(
       path,
       JSON.stringify(templatePackageJson(name, template), null, 2) + "\n",
+      0o644,
     );
     return "created";
   }
-  const pkg = parsePackageJsonObject(await readFile(path, "utf8"), path);
+  const pkg = parsePackageJsonObject(await safeReadFile(path), path);
   let changed = false;
   const dependencies = readPackageDependencySection(pkg, "dependencies", path);
   const devDependencies = readPackageDependencySection(
@@ -3646,7 +4330,7 @@ async function writeOrPatchPackageJson(
   if (!changed) return "unchanged";
   pkg.dependencies = dependencies;
   pkg.devDependencies = devDependencies;
-  await writeFile(path, JSON.stringify(pkg, null, 2) + "\n");
+  await safeAtomicWriteFile(path, JSON.stringify(pkg, null, 2) + "\n");
   return "updated";
 }
 
@@ -3790,7 +4474,7 @@ function wranglerTemplate(appName: string): string {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "${appName}-dev",
   "main": "src/index.ts",
-  "compatibility_date": "2026-05-15",
+  "compatibility_date": "2026-07-11",
   "compatibility_flags": ["nodejs_compat"],
   "observability": {
     "enabled": true,

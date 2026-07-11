@@ -1,6 +1,6 @@
 # Platform Assumptions
 
-Date rechecked: May 15, 2026
+Date rechecked: July 11, 2026
 
 These are volatile platform, package-manager, browser, and security assumptions
 that affect release readiness. Recheck this page before public beta and before

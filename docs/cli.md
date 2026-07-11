@@ -22,6 +22,58 @@ changing existing app source. When an existing Wrangler config is patched,
 `init` writes a sibling `.cf-auth-backup` file first. `init --repair` reruns the
 same safe repair path. Supported templates are `hono-basic` and `worker-basic`.
 
+Before creating `.dev.vars`, `init` merges the required `.gitignore` entries
+without removing project-specific entries. It creates `.dev.vars` with mode
+`0600` on platforms with POSIX permissions and tightens an existing regular
+`.dev.vars` to that mode without replacing its contents. Writes to package,
+Wrangler config, backup, and local-secret paths reject symbolic-link targets;
+new files use exclusive creation and updates use same-directory atomic
+replacement. Unsafe symbolic-link child directories are also rejected.
+
+New projects pin Hono `4.12.29`, TypeScript `7.0.2`, Wrangler `4.110.0`, and
+Vitest `4.1.10`, and use Workers compatibility date `2026-07-11` with
+`nodejs_compat`.
+
+## Provision Production D1
+
+```bash
+npx --package @cf-auth/cli@latest cf-auth provision --env production
+npx --package @cf-auth/cli@latest cf-auth provision --env production --location weur
+npx --package @cf-auth/cli@latest cf-auth provision --env production --jurisdiction eu
+npx --package @cf-auth/cli@latest cf-auth provision --dry-run --env production
+```
+
+`provision` requires exactly one `AUTH_DB` binding in the selected environment.
+It lists D1 databases in the selected account, adopts the single exact
+`database_name` match, or creates the database and re-discovers its UUID. It
+then writes a sibling `.cf-auth-backup` and atomically patches `database_id`.
+Repeated runs are idempotent. A configured, usable ID that disagrees with the
+selected account is rejected instead of silently retargeted.
+
+The patched config is normalized to JSON, so JSONC comments are not copied into
+the updated file. A newly created backup preserves the original bytes, including
+comments. If the sibling backup already exists, it is left untouched and the
+CLI reports that the existing backup was preserved rather than claiming to have
+written a new one.
+
+`--location` accepts Wrangler's current D1 location hints: `weur`, `eeur`,
+`apac`, `oc`, `wnam`, or `enam`. `--jurisdiction` accepts `eu` or `fedramp`.
+The two flags are mutually exclusive. Dry-run prints the list/create/patch plan
+without calling Wrangler or changing files.
+
+All non-dry-run remote commands select an account deterministically and verify
+that it appears in `wrangler whoami --json` before mutation. Precedence is:
+
+1. `env.<selected>.account_id`
+2. root `account_id`
+3. `CLOUDFLARE_ACCOUNT_ID`
+
+When none is set, only `provision` may use Wrangler's account list, and only
+when exactly one account is accessible; it then records that account in the
+root config. Other remote commands require an explicit selection. This avoids
+silently mutating a different account when Wrangler credentials can access
+multiple accounts.
+
 ## Migrations
 
 ```bash
@@ -33,7 +85,10 @@ npx --package @cf-auth/cli@latest cf-auth migrate --dry-run --remote --env produ
 ```
 
 Remote migrations require `--env` when the Wrangler config has named
-environments. `--dry-run` prints the exact Wrangler command without running it.
+environments. The CLI reads migration versions from the selected `AUTH_DB`
+binding's `migrations_dir` (default `migrations`) when verifying the applied
+schema. Exactly one complete `AUTH_DB` binding is required. `--dry-run` prints
+the exact Wrangler command without running it or performing account discovery.
 
 ## Doctor And Deploy
 
@@ -48,8 +103,13 @@ npx --package @cf-auth/cli@latest cf-auth deploy --env production
 
 `doctor --report` emits redaction-safe JSON matching
 `schemas/doctor-report.schema.json`. `doctor` checks the required Workers
-compatibility date and `nodejs_compat` flag. `deploy` always runs `doctor`
-first.
+compatibility date and `nodejs_compat` flag. It also warns when `.dev.vars`
+allows group or other access and recommends `chmod 600 .dev.vars`. Reports
+written with `--output` use mode `0600` on platforms with POSIX permissions,
+reject symbolic-link targets, and are atomically replaced. `deploy` always runs
+`doctor` first. `deploy --migrate` treats an uninitialized D1 auth schema as
+pending, applies migration `0001` and later migrations, verifies the resulting
+schema, and only then deploys.
 
 Add `--verbose` to log the wrapped Wrangler commands to stderr. Verbose output
 redacts SQL passed through `wrangler d1 execute` so `doctor --report` remains
@@ -76,7 +136,14 @@ npx --package @cf-auth/cli@latest cf-auth rotate-secret --apply --previous-from-
 ```
 
 Do not pass old raw secrets as command-line arguments. Use stdin or an
-environment variable so shell history does not capture the value.
+environment variable so shell history does not capture the value. Apply mode
+sends one JSON document to `wrangler secret bulk`, so `AUTH_SECRET` and
+`AUTH_SECRET_PREVIOUS` change atomically. When no previous secret is supplied,
+the bulk document sets `AUTH_SECRET_PREVIOUS` to `null`, removing an old value
+in the same operation; existing sessions and email tokens will be invalidated.
+Wrangler creates and deploys a Worker version for a bulk secret update. On a
+fresh installation, apply D1 migrations before this command; on an existing
+installation, treat it as an immediate production deployment.
 
 ## Cleanup
 
@@ -88,7 +155,8 @@ npx --package @cf-auth/cli@latest cf-auth clean --remote --env production
 
 Cleanup removes expired sessions, expired, used, or revoked verification tokens,
 expired rate-limit rows, and old auth events using the documented retention
-windows.
+windows. Cutoffs are derived from D1's `strftime('now')` server clock rather
+than the operator machine's clock.
 
 ## Recovery Helpers
 
@@ -103,4 +171,5 @@ Recovery helpers redact SQL output and never print tokens, token hashes,
 cookies, raw IPs, or raw user agents. Add `--dry-run` to mutating commands
 before executing production changes. Remote cleanup and recovery commands should
 use `--env production`; without `--env`, the top-level Wrangler config must set
-`vars.AUTH_ENV=production`.
+`vars.AUTH_ENV=production`. Disable, enable, and revoke timestamps are derived
+from the D1 server clock.
